@@ -1,0 +1,27 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<int4> DataIn;
+AppendStructuredBuffer<uint4> DrawingThings;
+
+
+#define CHUNK_SIZE 16
+
+int T3(uint3 id)
+{
+	return id.x + id.y * CHUNK_SIZE + id.z * CHUNK_SIZE*CHUNK_SIZE;
+}
+
+
+[numthreads(8,8,8)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	int blockVal = DataIn[T3(id)].x;
+	// 0 is air
+	if (blockVal != 0)
+	{
+		DrawingThings.Append(uint4(id.x, id.y, id.z, blockVal));
+	}
+}
