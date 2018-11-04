@@ -66,7 +66,7 @@ public class PVector3
     }
 }
 
-public class LVector3
+public struct LVector3
 {
     public long x, y, z;
     public LVector3(long x, long y, long z)
@@ -97,12 +97,48 @@ public class LVector3
 
     public override bool Equals(object obj)
     {
-        if (obj.GetType() == this.GetType())
+        if (obj == null)
         {
-            LVector3 other = (LVector3)obj;
-            return other.x == x && other.y == y && other.z == z;
+            return false;
         }
-        return false;
+        if (obj is LVector3)
+        {
+            LVector3 item = (LVector3)obj;
+            return (this.x == item.x) && (this.y == item.y) && (this.z == item.z);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public bool Equals(LVector3 other)
+    {
+        return (other.x == x) && (other.y == y) && (other.z == z);
+    }
+
+    // see https://msdn.microsoft.com/en-us/library/ms173147.aspx
+    public static bool operator ==(LVector3 a, LVector3 b)
+    {
+        // If both are null, or both are same instance, return true.
+        if (System.Object.ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        // If one is null, but not both, return false.
+        if (((object)a == null) || ((object)b == null))
+        {
+            return false;
+        }
+
+        // Return true if the fields match:
+        return a.x == b.x && a.y == b.y && a.z == b.z;
+    }
+
+    public static bool operator !=(LVector3 a, LVector3 b)
+    {
+        return !(a == b);
     }
 
     public override int GetHashCode()
@@ -178,6 +214,103 @@ public class BlocksPlayer : MonoBehaviour {
 
     }
 
+    public Vector3 VectorProjection(Vector3 a, Vector3 b)
+    {
+        float a1 = Vector3.Dot(a, b.normalized);
+        return a1 * b.normalized;
+    }
+
+    public Vector3 VectorRejection(Vector3 a, Vector3 b)
+    {
+        return a - VectorProjection(a, b);
+    }
+
+    bool TryToMoveBody(Vector3 offset, out Vector3 hitNormal, out Vector3 recommendedOffset)
+    {
+        bool hitSomething = false;
+        // do 20 points around a circle (basically pretend we are a cylinder, body/head fatter than feet)
+        float shortestDist = offset.magnitude;
+        Vector3 resPos = transform.position + offset;
+        int numSteps = 20;
+        hitNormal = new Vector3(1, 1, 1).normalized;
+        for (int i = 0; i < numSteps+1; i++)
+        {
+            float p = i / (numSteps - 1.0f);
+            float xDiff = Mathf.Sin(p * 2 * Mathf.PI);
+            float zDiff = Mathf.Cos(p * 2 * Mathf.PI);
+            // also do a 0-width one in case we are on something very thin (somehow?)
+            if (i == numSteps)
+            {
+                xDiff = 0;
+                zDiff = 0;
+            }
+            Vector3 bodyOffset = (new Vector3(xDiff, 0, zDiff)).normalized * playerWidth;
+            Vector3 feetOffset = (new Vector3(xDiff, 0, zDiff)).normalized * feetWidth + (new Vector3(0, -heightBelowHead, 0));
+            Vector3 headOffset = (new Vector3(xDiff, 0, zDiff)).normalized * feetWidth + (new Vector3(0, heightAboveHead, 0)); // heads are basically feet? this is probably a bad idea but I don't want more hyperparams and it should work good enough
+            LVector3 hitBlock, prevBeforeHitBlock;
+            Vector3 hitPos;
+            Vector3 normal;
+            // does our body run into anything?
+            if (RayCast(transform.position + bodyOffset, offset.normalized, out hitBlock, offset.magnitude, out prevBeforeHitBlock, out hitPos, out normal))
+            {
+                Vector3 curResPos = hitPos - bodyOffset;
+                float curDist = Vector3.Distance(curResPos, transform.position);
+                if (curDist < shortestDist)
+                {
+                    shortestDist = curDist;
+                    resPos = curResPos;
+                    hitNormal = normal;
+                    hitSomething = true;
+                }
+            }
+
+            // does our feet run into anything?
+            if (RayCast(transform.position + feetOffset, offset.normalized, out hitBlock, offset.magnitude, out prevBeforeHitBlock, out hitPos, out normal))
+            {
+                Vector3 curResPos = hitPos - feetOffset;
+                float curDist = Vector3.Distance(curResPos, transform.position);
+                if (curDist < shortestDist)
+                {
+                    shortestDist = curDist;
+                    resPos = curResPos;
+                    hitNormal = normal;
+                    hitSomething = true;
+                }
+            }
+
+            // does our head run into anything?
+            if (RayCast(transform.position + headOffset, offset.normalized, out hitBlock, offset.magnitude, out prevBeforeHitBlock, out hitPos, out normal))
+            {
+                Vector3 curResPos = hitPos - headOffset;
+                float curDist = Vector3.Distance(curResPos, transform.position);
+                if (curDist < shortestDist)
+                {
+                    shortestDist = curDist;
+                    resPos = curResPos;
+                    hitNormal = normal;
+                    hitSomething = true;
+                }
+            }
+
+
+
+            /*
+            if (Vector3.Dot(desiredOffset, curOffset) > 0) // if that offset is in the same direction we are going, test to see if it moves us into a block
+            {
+                if (IntersectingBodyExceptFeet(transform.position + curOffset))
+                {
+                    // vector rejection
+                    goodOffset = goodOffset - Vector3.Project(goodOffset, curOffset);
+                }
+            }
+            */
+        }
+
+        Vector3 resOffset = resPos - transform.position;
+        recommendedOffset = resOffset;
+        //Debug.Log("moving shortest dist " + shortestDist + " with offset " + resOffset + " actual desired dist was " + offset.magnitude + " with offset " + offset);
+        return hitSomething;
+    }
 
     bool IntersectingBody(Vector3 desiredOffset, out Vector3 goodOffset)
     {
@@ -248,15 +381,19 @@ public class BlocksPlayer : MonoBehaviour {
         long eyesY = (long)Mathf.Floor(position.y / world.worldScale);
         long eyesZ = (long)Mathf.Floor(position.z / world.worldScale);
         long feetX = (long)Mathf.Floor(position.x / world.worldScale);
-        long feetY = (long)Mathf.Floor((position.y - heightBelowHead * 0.8f) / world.worldScale);
+        long feetY = (long)Mathf.Floor((position.y - heightBelowHead * 0.9f) / world.worldScale);
         long feetZ = (long)Mathf.Floor(position.z / world.worldScale);
         long headX = (long)Mathf.Floor(position.x / world.worldScale);
         long headY = (long)Mathf.Floor((position.y + heightAboveHead) / world.worldScale);
         long headZ = (long)Mathf.Floor(position.z / world.worldScale);
+        long bodyX = (long)Mathf.Floor(position.x / world.worldScale);
+        long bodyY = (long)Mathf.Floor((position.y + heightAboveHead/2.0f) / world.worldScale);
+        long bodyZ = (long)Mathf.Floor(position.z / world.worldScale);
         int atHead = world.world[headX, headY, headZ];
         int atEyes = world.world[eyesX, eyesY, eyesZ];
         int atFeet = world.world[feetX, feetY, feetZ];
-        return atHead != 0 || atEyes != 0 || atFeet != 0;
+        int atBody = world.world[bodyX, bodyY, bodyZ];
+        return atHead != 0 || atEyes != 0 || atFeet != 0 || atBody != 0;
     }
 
 
@@ -290,13 +427,11 @@ public class BlocksPlayer : MonoBehaviour {
 
     }
 
+
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
-    bool MouseCast(out LVector3 hitPos, float maxDist, out LVector3 posBeforeHit)
+    bool RayCast(Vector3 origin, Vector3 dir, out LVector3 hitPos, float maxDist, out LVector3 posBeforeHit, out Vector3 surfaceHitPos, out Vector3 normal, int maxSteps=10)
     {
 
-        Ray ray = mainCamera.ScreenPointToRay(new Vector3(Screen.width / 2.0f, Screen.height / 2.0f, 0.01f));
-
-        Vector3 origin = ray.origin + ray.direction * -playerWidth / 2.0f;
         long camX = (long)Mathf.Floor(origin.x / world.worldScale);
         long camY = (long)Mathf.Floor(origin.y / world.worldScale);
         long camZ = (long)Mathf.Floor(origin.z / world.worldScale);
@@ -304,10 +439,15 @@ public class BlocksPlayer : MonoBehaviour {
         // start slightly back in case we are very very close to a block
         float[] curPosF = new float[] { origin.x, origin.y, origin.z };
         LVector3 curPosL = LVector3.FromUnityVector3(world, new Vector3(curPosF[0], curPosF[1], curPosF[2]));
-        float[] rayDir = new float[] { ray.direction.x, ray.direction.y, ray.direction.z };
+        float[] rayDir = new float[] { dir.x, dir.y, dir.z };
         hitPos = new LVector3(camX, camY, camZ);
+        surfaceHitPos = new Vector3(origin.x, origin.y, origin.z);
         posBeforeHit = new LVector3(camX, camY, camZ);
-        int maxSteps = 10;
+        normal = new Vector3(1, 1, 1).normalized;
+        if (maxSteps == -1)
+        {
+            maxSteps = 10000;
+        }
         for (int i = 0; i < maxSteps; i++)
         {
             float minT = float.MaxValue;
@@ -325,8 +465,8 @@ public class BlocksPlayer : MonoBehaviour {
                     float nextWall;
                     if (rayDir[d] > 0)
                     {
-                        nextWall = Mathf.Ceil(curPosF[d]/world.worldScale);
-                        if (Mathf.Abs(nextWall - curPosF[d]/world.worldScale) < 0.0001f)
+                        nextWall = Mathf.Ceil(curPosF[d] / world.worldScale);
+                        if (Mathf.Abs(nextWall - curPosF[d] / world.worldScale) < 0.0001f)
                         {
                             nextWall += 1.0f;
                         }
@@ -355,7 +495,7 @@ public class BlocksPlayer : MonoBehaviour {
                     //float nearestPointFive = Mathf.Round(curPosF[d]/world.worldScale) + offsetSign * 0.5f;
                     //float dist = Mathf.Abs(curPosF[d] / world.worldScale - nearestPointFive);
                     //float dist = Mathf.Abs(curPosF[d] / world.worldScale - dest);
-                    float dist = Mathf.Abs(curPosF[d]/world.worldScale - nextWall);
+                    float dist = Mathf.Abs(curPosF[d] / world.worldScale - nextWall);
                     float tToPlane = dist / Mathf.Abs(rayDir[d]);
                     if (tToPlane > maxDist) // too far
                     {
@@ -382,16 +522,31 @@ public class BlocksPlayer : MonoBehaviour {
             }
             // step towards it and check if block
             Vector3 prevPosF = new Vector3(curPosF[0], curPosF[1], curPosF[2]);
-            Vector3 resPosF = prevPosF + ray.direction * minT*world.worldScale;
+            Vector3 resPosF = prevPosF + dir * minT * world.worldScale;
             Vector3 midPoint = (prevPosF + resPosF) / 2.0f;
             LVector3 newCurPosL = LVector3.FromUnityVector3(world, midPoint);
             //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF);
             curPosL = LVector3.FromUnityVector3(world, resPosF);
+
+            if (Vector3.Distance(prevPosF, origin) > maxDist) // too far
+            {
+                return false;
+            }
+
             if (world.world[newCurPosL.x, newCurPosL.y, newCurPosL.z] != 0)
             {
                 hitPos = newCurPosL;
+                surfaceHitPos = prevPosF;
                 posBeforeHit = new LVector3(newCurPosL.x, newCurPosL.y, newCurPosL.z);
                 posBeforeHit[prevMinD] -= (long)Mathf.Sign(rayDir[prevMinD]);
+                float[] normalArr = new float[] { 0, 0, 0 };
+                normalArr[prevMinD] = -Mathf.Sign(rayDir[prevMinD]);
+                if (Mathf.Sign(rayDir[prevMinD]) == 0)
+                {
+                    Debug.Log("spooky why u 0");
+                    normalArr[prevMinD] = 0.0f;
+                }
+                normal = new Vector3(normalArr[0], normalArr[1], normalArr[2]);
                 return true;
             }
             prevMinD = minD;
@@ -400,6 +555,15 @@ public class BlocksPlayer : MonoBehaviour {
             curPosF[2] = resPosF.z;
         }
         return false;
+    }
+
+    bool MouseCast(out LVector3 hitPos, float maxDist, out LVector3 posBeforeHit, out Vector3 surfaceHitPos)
+    {
+        Ray ray = mainCamera.ScreenPointToRay(new Vector3(Screen.width / 2.0f, Screen.height / 2.0f, 0.01f));
+
+        Vector3 origin = ray.origin + ray.direction * -playerWidth / 2.0f;
+        Vector3 normal;
+        return RayCast(origin, ray.direction, out hitPos, maxDist, out posBeforeHit, out surfaceHitPos, out normal);
     }
 
     bool MouseCastOldBad(out LVector3 hitPos, float maxDist, out LVector3 posBeforeHit)
@@ -496,8 +660,9 @@ public class BlocksPlayer : MonoBehaviour {
 
             LVector3 hitPos;
             LVector3 posBeforeHit;
+            Vector3 surfaceHitPos;
 
-            if (MouseCast(out hitPos, reachRange/world.worldScale, out posBeforeHit))
+            if (MouseCast(out hitPos, reachRange * world.worldScale, out posBeforeHit, out surfaceHitPos))
             {
                 //Debug.Log("hit at pos " + hitPos);
                 world.world[hitPos.x, hitPos.y, hitPos.z] = 0;
@@ -515,11 +680,20 @@ public class BlocksPlayer : MonoBehaviour {
 
             LVector3 hitPos;
             LVector3 posBeforeHit;
+            Vector3 surfaceHitPos;
 
-            if (MouseCast(out hitPos, reachRange / world.worldScale, out posBeforeHit))
+            if (MouseCast(out hitPos, reachRange * world.worldScale, out posBeforeHit, out surfaceHitPos))
             {
+                // don't let you place a block in yourself
+                LVector3 myPos = LVector3.FromUnityVector3(world, transform.position);
+                LVector3 myFeetPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, -heightBelowHead, 0));
+                LVector3 myBodyPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, -heightBelowHead/2.0f, 0));
+                LVector3 myHeadPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, heightAboveHead, 0));
+                if (posBeforeHit != myPos && posBeforeHit != myFeetPos && posBeforeHit != myHeadPos && posBeforeHit != myBodyPos)
+                {
+                    world.world[posBeforeHit.x, posBeforeHit.y, posBeforeHit.z] = World.GRASS;
+                }
                 //Debug.Log("hit at pos " + hitPos);
-                world.world[posBeforeHit.x, posBeforeHit.y, posBeforeHit.z] = World.GRASS;
             }
             else
             {
@@ -552,7 +726,7 @@ public class BlocksPlayer : MonoBehaviour {
         Vector3 goodDiff;
         if (!IntersectingBody(desiredDiff, out goodDiff))
         {
-            transform.position += goodDiff;
+           transform.position += goodDiff;
         }
 
 
@@ -587,7 +761,57 @@ public class BlocksPlayer : MonoBehaviour {
         }
         else
         {
-            transform.position += velDiff;
+            LVector3 a, b;
+            Vector3 c, d;
+            float maxMag = velDiff.magnitude + heightBelowHead;
+            if (!RayCast(transform.position, new Vector3(0, -1, 0), out a, maxMag, out b, out c, out d, maxSteps:-1))
+            {
+                transform.position += velDiff;
+            }
+            else
+            {
+                float dist = Vector3.Distance(transform.position, c);
+                if (dist <= velDiff.magnitude + heightBelowHead + 0.01f)
+                {
+                    //Debug.Log("touching land with normal " + hitNormal + " and magnitude " + velDiff.magnitude + " and offset " + velDiff);
+                    vel.y = 0;
+                    transform.position = c + new Vector3(0, heightBelowHead - 0.01f, 0);
+                }
+                else
+                {
+                    transform.position += velDiff;
+                }
+            }
+            /*
+            Vector3 hitNormal;
+            //if (!IntersectingBody(velDiff, out goodDiff))
+            // {
+            //    transform.position += goodDiff;
+            // }
+
+            Vector3 recommendedOffset;
+            if (TryToMoveBody(velDiff, out hitNormal, out recommendedOffset))
+            {
+                if (hitNormal.y != 0)
+                {
+                    Debug.Log("hit with normal " + hitNormal + " and magnitude " + velDiff.magnitude + " and offset " + velDiff);
+                    transform.position += recommendedOffset;
+                    
+                    //vel = VectorRejection(vel, hitNormal);
+                }
+                else
+                {
+                    transform.position += velDiff;
+                }
+            }
+            else
+            {
+                transform.position += velDiff;
+            }
+            */
+            
         }
     }
 }
+
+// digging down deeper could give you better materials for building

@@ -316,7 +316,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mouseLook: {fileID: 282840812}
-  heightBelowHead: 3
+  heightBelowHead: 2.5
   heightAboveHead: 0.2
   playerWidth: 0.5
   feetWidth: 0.2
