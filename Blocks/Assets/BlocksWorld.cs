@@ -91,6 +91,15 @@ public class Chunk
     public World world;
 
 
+
+    public void AddBlockUpdate(long i, long j, long k)
+    {
+        long relativeX = i - cx * chunkSize;
+        long relativeY = j - cy * chunkSize;
+        long relativeZ = k - cz * chunkSize;
+        chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
+    }
+
     public Chunk(World world, long chunkX, long chunkY, long chunkZ, int chunkSize)
     {
         this.world = world;
@@ -105,29 +114,64 @@ public class Chunk
         long baseY = chunkY * chunkSize;
         long baseZ = chunkZ * chunkSize;
 
-        for (long x = baseX; x < baseX+this.chunkSize; x++)
+        generating = true;
+        for (long x = baseX; x < baseX + this.chunkSize; x++)
         {
-            for (long y = baseY; y < baseY+this.chunkSize; y++)
+            for (long y = baseY; y < baseY + this.chunkSize; y++)
             {
-                for (long z = baseZ; z < baseZ+this.chunkSize; z++)
+                for (long z = baseZ; z < baseZ + this.chunkSize; z++)
                 {
                     if (y > 3 && y < 5)
                     {
                         this[x, y, z] = World.DIRT;
                     }
-                    else if(y <= 3)
+                    else if (y <= 3)
                     {
                         this[x, y, z] = World.STONE;
                     }
                 }
             }
         }
+
+
+
+        generating = false;
     }
 
     public void Tick()
     {
         this.chunkRenderer.Tick();
+
+        if (chunkData.blocksNeedUpdating.Count != 0)
+        {
+            int[] oldBlocksNeedUpdating = new int[chunkData.blocksNeedUpdating.Count];
+            int i = 0;
+            foreach (int ind in chunkData.blocksNeedUpdating)
+            {
+                oldBlocksNeedUpdating[i] = ind;
+                i += 1;
+            }
+            chunkData.blocksNeedUpdating.Clear();
+            for (i = 0; i < oldBlocksNeedUpdating.Length; i++)
+            {
+                long ind = (long)oldBlocksNeedUpdating[i];
+                long x, y, z;
+                chunkData.to3D(ind, out x, out y, out z);
+                long wx = x + cx * chunkSize;
+                long wy = y + cy * chunkSize;
+                long wz = z + cz * chunkSize;
+                int resState;
+                bool needsAnotherUpdate;
+                int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z), out resState, out needsAnotherUpdate);
+                chunkData.SetState(x, y, z, resState, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
+                chunkData.SetBlock(x, y, z, resBlock, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
+            }
+        }
     }
+
+
+    public bool generating = true;
+
 
     public int this[long x, long y, long z]
     {
@@ -143,9 +187,14 @@ public class Chunk
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
+            if (!generating)
+            {
+                world.AddBlockUpdateToNeighbors(x, y, z);
+            }
             chunkData[relativeX, relativeY, relativeZ] = value;
         }
     }
+
 
     bool cleanedUp = false;
     public void Dispose()
@@ -162,6 +211,7 @@ public class Chunk
 public class ChunkData
 {
     public bool needToBeUpdated = false;
+    public HashSet<int> blocksNeedUpdating = new HashSet<int>();
     int[] data;
     int chunkSize, chunkSize_2, chunkSize_3;
     public ChunkData(int chunkSize)
@@ -169,13 +219,90 @@ public class ChunkData
         this.chunkSize = chunkSize;
         this.chunkSize_2 = chunkSize* chunkSize;
         this.chunkSize_3 = chunkSize* chunkSize* chunkSize;
-        data = new int[chunkSize * chunkSize * chunkSize*4];
+        data = new int[chunkSize * chunkSize * chunkSize * 4];
     }
 
 
     public int[] GetRawData()
     {
         return data;
+    }
+
+    // from https://stackoverflow.com/a/34363187/2924421
+    public void to3D(int ind, out int x, out int y, out int z)
+    {
+        z = ind / (chunkSize_2);
+        ind -= (z * chunkSize_2);
+        y = ind / chunkSize;
+        x = ind % chunkSize;
+    }
+
+    public int to1D(int x, int y, int z)
+    {
+        return x + y * chunkSize + z * chunkSize_2;
+    }
+
+    public void to3D(long ind, out long x, out long y, out long z)
+    {
+        z = ind / (chunkSize_2);
+        ind -= (z * chunkSize_2);
+        y = ind / chunkSize;
+        x = ind % chunkSize;
+    }
+
+    public long to1D(long x, long y, long z)
+    {
+        return x + y * chunkSize + z * chunkSize_2;
+    }
+
+    public int GetState(long i, long j, long k)
+    {
+        long ind = to1D(i, j, k);
+        return data[ind * 4 + 1];
+    }
+
+    public void SetState(long i, long j, long k, int state, bool needBlockUpdate = true, bool forceBlockUpdate = false)
+    {
+        long ind = to1D(i, j, k);
+        if (data[ind * 4 + 1] == state && !forceBlockUpdate)
+        {
+            return;
+        }
+
+        needToBeUpdated = true;
+        data[ind * 4 + 1] = state;
+        if (needBlockUpdate)
+        {
+            blocksNeedUpdating.Add((int)ind);
+        }
+    }
+
+
+    public void AddBlockUpdate(long i, long j, long k)
+    {
+        blocksNeedUpdating.Add((int)to1D(i, j, k));
+    }
+
+    public int GetBlock(long i, long j, long k)
+    {
+        long ind = to1D(i, j, k);
+        return data[ind * 4 + 1];
+    }
+
+    public void SetBlock(long i, long j, long k, int block, bool needBlockUpdate=true, bool forceBlockUpdate = false)
+    {
+        long ind = to1D(i, j, k);
+        if (data[ind * 4] == block && !forceBlockUpdate)
+        {
+            return;
+        }
+
+        needToBeUpdated = true;
+        data[ind * 4] = block;
+        if (needBlockUpdate)
+        {
+            blocksNeedUpdating.Add((int)ind);
+        }
     }
 
     public int this[int i, int j, int k]
@@ -186,10 +313,18 @@ public class ChunkData
         }
         set
         {
+            long ind = to1D(i, j, k);
+            if (data[ind * 4] == value)
+            {
+                return;
+            }
+
             needToBeUpdated = true;
-            data[(i + j * chunkSize + k * chunkSize_2)*4] = value;
+            data[ind * 4] = value;
+            blocksNeedUpdating.Add((int)ind);
         }
     }
+
     public int this[long i, long j, long k]
     {
         get
@@ -198,8 +333,15 @@ public class ChunkData
         }
         set
         {
+            long ind = to1D(i, j, k);
+            if (data[ind * 4] == value)
+            {
+                return;
+            }
+
             needToBeUpdated = true;
-            data[(i + j * chunkSize + k * chunkSize_2)*4] = value;
+            data[ind * 4] = value;
+            blocksNeedUpdating.Add((int)ind);
         }
     }
 
@@ -248,7 +390,90 @@ public class World
         GenerateChunk(0, 0, 0);
     }
 
+    public bool NeedsInitialUpdate(int block)
+    {
+        if (block == World.GRASS)
+        {
+            return true;
+        }
+        return false;
+    }
 
+    public int UpdateBlock(long wx, long wy, long wz, int block, int state, out int resState, out bool needsAnotherUpdate)
+    {
+        needsAnotherUpdate = false;
+        resState = 0;
+        //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
+        if (block == World.GRASS)
+        {
+            float prGrass = 0.0005f;
+            //Debug.Log("updating grass block " + wx + " " + wy + " " + wz + " " + block + " " + state);
+            if (this[wx, wy + 1, wz] == AIR)
+            {
+                for (int y = -1; y <= 1; y++)
+                {
+                    if (this[wx + 1, wy+y, wz] == DIRT)
+                    {
+                        if (Random.value < prGrass)
+                        {
+                            this[wx + 1, wy + y, wz] = GRASS;
+                        }
+                        else
+                        {
+                            needsAnotherUpdate = true;
+                        }
+                    }
+
+                    if (this[wx - 1, wy + y, wz] == DIRT)
+                    {
+                        if (Random.value < prGrass)
+                        {
+                            this[wx - 1, wy + y, wz] = GRASS;
+                        }
+                        else
+                        {
+                            needsAnotherUpdate = true;
+                        }
+                    }
+
+                    if (this[wx, wy + y, wz + 1] == DIRT)
+                    {
+                        if (Random.value < prGrass)
+                        {
+                            this[wx, wy + y, wz + 1] = GRASS;
+                        }
+                        else
+                        {
+                            needsAnotherUpdate = true;
+                        }
+                    }
+
+                    if (this[wx, wy + y, wz - 1] == DIRT)
+                    {
+                        if (Random.value < prGrass)
+                        {
+                            this[wx, wy + y, wz - 1] = GRASS;
+                        }
+                        else
+                        {
+                            needsAnotherUpdate = true;
+                        }
+                    }
+
+                }
+                //Debug.Log("updating grass block " + needsAnotherUpdate + " <- needs update? with air above " + wx + " " + wy + " " + wz + " " + block + " " + state);
+                return GRASS;
+            }
+            else
+            {
+                return DIRT;
+            }
+        }
+        else
+        {
+            return block;
+        }
+    }
     // fixes issues with not doing floor.
     // for example,
     // 5/2 = 2.5, but is truncated towards zero to 2
@@ -362,7 +587,6 @@ public class World
         }
     }
 
-
     public Chunk GenerateChunk(long chunkX, long chunkY, long chunkZ, bool checkIfExists=true)
     {
         if (checkIfExists)
@@ -428,6 +652,27 @@ public class World
         */
     }
 
+
+    public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors=true)
+    {
+        GetOrGenerateChunk(divWithFloor(i, chunkSize), divWithFloor(j, chunkSize), divWithFloor(k, chunkSize)).AddBlockUpdate(i, j, k);
+        if (alsoToNeighbors)
+        {
+            AddBlockUpdateToNeighbors(i, j, k);
+        }
+    }
+
+    public void AddBlockUpdateToNeighbors(long i, long j, long k)
+    {
+        AddBlockUpdate(i-1, j, k, alsoToNeighbors: false);
+        AddBlockUpdate(i+1, j, k, alsoToNeighbors: false);
+        AddBlockUpdate(i, j-1, k, alsoToNeighbors: false);
+        AddBlockUpdate(i, j+1, k, alsoToNeighbors: false);
+        AddBlockUpdate(i, j, k-1, alsoToNeighbors: false);
+        AddBlockUpdate(i, j, k+1, alsoToNeighbors: false);
+    }
+
+
     bool cleanedUp = false;
     public void Dispose()
     {
@@ -464,7 +709,9 @@ public class World
 
     public void Tick()
     {
-        foreach (Chunk chunk in allChunks)
+        List<Chunk> allChunksHere = new List<Chunk>(allChunks);
+
+        foreach (Chunk chunk in allChunksHere)
         {
             chunk.Tick();
         }
@@ -742,6 +989,7 @@ public class BlocksWorld : MonoBehaviour {
         long pointZ = (long)Mathf.Floor(pos.x / worldScale);
         return world[pointX, pointY, pointZ];
     }
+
 
     public Vector3 UnityPointToBlockWorldPoint(Vector3 pos)
     {
