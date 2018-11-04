@@ -651,6 +651,8 @@ public class BlocksPlayer : MonoBehaviour {
         }
         return didHit;
     }
+
+    int blockPlacing = World.GRASS;
 	
 	// Update is called once per frame
 	void Update () {
@@ -691,7 +693,7 @@ public class BlocksPlayer : MonoBehaviour {
                 LVector3 myHeadPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, heightAboveHead, 0));
                 if (posBeforeHit != myPos && posBeforeHit != myFeetPos && posBeforeHit != myHeadPos && posBeforeHit != myBodyPos)
                 {
-                    world.world[posBeforeHit.x, posBeforeHit.y, posBeforeHit.z] = World.GRASS;
+                    world.world[posBeforeHit.x, posBeforeHit.y, posBeforeHit.z] = blockPlacing;
                 }
                 //Debug.Log("hit at pos " + hitPos);
             }
@@ -701,6 +703,24 @@ public class BlocksPlayer : MonoBehaviour {
                 //Debug.Log("mouse cast failed " + hitPos);
             }
         }
+
+
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            blockPlacing = 1;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            blockPlacing = 2;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            blockPlacing = 3;
+        }
+
+
         Pose curPose = new Pose(transform.position, transform.rotation);
         curPose.rotation = Quaternion.Euler(0, curPose.rotation.eulerAngles.y, 0);
         Vector3 desiredPosition = transform.position;

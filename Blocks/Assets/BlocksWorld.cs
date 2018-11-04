@@ -406,7 +406,7 @@ public class World
         //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
         if (block == World.GRASS)
         {
-            float prGrass = 0.0005f;
+            float prGrass = 0.05f;
             //Debug.Log("updating grass block " + wx + " " + wy + " " + wz + " " + block + " " + state);
             if (this[wx, wy + 1, wz] == AIR)
             {
@@ -745,6 +745,15 @@ public class BlocksWorld : MonoBehaviour {
 
     public World world;
 
+
+    // from https://stackoverflow.com/a/4016511/2924421
+    public long millis()
+    {
+        return System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond;
+    }
+
+    long lastTick = 0;
+    public float ticksPerSecond = 20.0f;
     void SetupRendering()
     {
         LoadMaterials();
@@ -960,6 +969,7 @@ public class BlocksWorld : MonoBehaviour {
     void Start () {
         SetupRendering();
         world = new World(this, chunkSize);
+        lastTick = 0;
     }
 
     int ax = 0;
@@ -979,7 +989,12 @@ public class BlocksWorld : MonoBehaviour {
                 ay = 5;
             }
         }
-        world.Tick();
+        float millisPerTick = 1000.0f / ticksPerSecond;
+        if (millis() - lastTick > millisPerTick)
+        {
+            lastTick = millis();
+            world.Tick();
+        }
 	}
 
     public int BlockAtUnityPoint(Vector3 pos)
