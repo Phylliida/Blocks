@@ -35,7 +35,6 @@ Shader "Unlit/SandDrawer" {
 	sampler2D _MainTex;
 	float4 _MainTex_TexelSize;
 	float4 _MainTex_ST;
-
 	StructuredBuffer<uint4> DrawingThings;
 	//StructuredBuffer<float4> PixelData;
 	float4x4 localToWorld;
@@ -53,8 +52,9 @@ Shader "Unlit/SandDrawer" {
 		// from https://answers.unity.com/questions/678193/is-it-possible-to-access-the-dimensions-of-a-textu.html
 		//_MainTex_TexelSize.z //contains width
 		//_MainTex_TexelSize.w //contains height
+		int numBlocks = 5;
 		uvOffset.y /= 3.0f;
-		uvOffset.y += idI / 3.0f;
+		uvOffset.y += (idI - 1) / (float)numBlocks;
 		float3 pos = (idPt + offset*0.98 + 0.01) * ptCloudScale;
 		v2f o;
 		//o.col = col;

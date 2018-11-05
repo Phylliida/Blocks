@@ -688,11 +688,12 @@ public class BlocksPlayer : MonoBehaviour {
             {
                 // don't let you place a block in yourself
                 LVector3 myPos = LVector3.FromUnityVector3(world, transform.position);
-                LVector3 myFeetPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, -heightBelowHead, 0));
+                LVector3 myFeetPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, -heightBelowHead+0.02f, 0));
                 LVector3 myBodyPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, -heightBelowHead/2.0f, 0));
                 LVector3 myHeadPos = LVector3.FromUnityVector3(world, transform.position + new Vector3(0, heightAboveHead, 0));
                 if (posBeforeHit != myPos && posBeforeHit != myFeetPos && posBeforeHit != myHeadPos && posBeforeHit != myBodyPos)
                 {
+                    Debug.Log((myPos == posBeforeHit) + " " + (myFeetPos == posBeforeHit) + " " + (myHeadPos == posBeforeHit) + " " + (myBodyPos == posBeforeHit));
                     world.world[posBeforeHit.x, posBeforeHit.y, posBeforeHit.z] = blockPlacing;
                 }
                 //Debug.Log("hit at pos " + hitPos);
@@ -707,17 +708,33 @@ public class BlocksPlayer : MonoBehaviour {
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            blockPlacing = 1;
+            blockPlacing = World.GRASS;
+            Debug.Log("placing grass");
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            blockPlacing = 2;
+            blockPlacing = World.DIRT;
+            Debug.Log("placing dirt");
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha3))
         {
-            blockPlacing = 3;
+            blockPlacing = World.STONE;
+            Debug.Log("placing stone");
+        }
+
+
+        if (Input.GetKeyDown(KeyCode.Alpha4))
+        {
+            blockPlacing = World.SAND;
+            Debug.Log("placing sand");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha5))
+        {
+            blockPlacing = World.BEDROCK;
+            Debug.Log("placing bedrock");
         }
 
 
@@ -744,10 +761,21 @@ public class BlocksPlayer : MonoBehaviour {
 
         Vector3 desiredDiff = desiredPosition - transform.position;
         Vector3 goodDiff;
+
+        bool wasTouchingGround = TouchingLand();
+
         if (!IntersectingBody(desiredDiff, out goodDiff))
         {
-           transform.position += goodDiff;
+            transform.position += goodDiff;
         }
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+        {
+            if (wasTouchingGround && !TouchingLand())
+            {
+                transform.position -= goodDiff;
+            }
+        }
+
 
 
         if (!TouchingLand())

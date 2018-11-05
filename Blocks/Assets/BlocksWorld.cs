@@ -123,12 +123,17 @@ public class Chunk
                 {
                     if (y > 3 && y < 5)
                     {
-                        this[x, y, z] = World.DIRT;
+                        this[x, y, z] = World.BEDROCK;
                     }
-                    else if (y <= 3)
+                    else if (y <= 3 && y >= 10)
                     {
                         this[x, y, z] = World.STONE;
                     }
+                    else if (y < 10)
+                    {
+                        this[x, y, z] = World.BEDROCK;
+                    }
+                    SetState(x, y, z, World.maxCapacities[this[x, y, z]], 2);
                 }
             }
         }
@@ -160,10 +165,12 @@ public class Chunk
                 long wx = x + cx * chunkSize;
                 long wy = y + cy * chunkSize;
                 long wz = z + cz * chunkSize;
-                int resState;
+                int resState1;
+                int resState2;
                 bool needsAnotherUpdate;
-                int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z), out resState, out needsAnotherUpdate);
-                chunkData.SetState(x, y, z, resState, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
+                int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z, 1), chunkData.GetState(x, y, z, 2), out resState1, out resState2, out needsAnotherUpdate);
+                chunkData.SetState(x, y, z, resState1, 1, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
+                chunkData.SetState(x, y, z, resState2, 2, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
                 chunkData.SetBlock(x, y, z, resBlock, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
             }
         }
@@ -172,6 +179,21 @@ public class Chunk
 
     public bool generating = true;
 
+
+    public void SetState(long x, long y, long z, int state, int stateI)
+    {
+        long relativeX = x - cx * chunkSize;
+        long relativeY = y - cy * chunkSize;
+        long relativeZ = z - cz * chunkSize;
+        chunkData.SetState(relativeX, relativeY, relativeZ, state, stateI, true, true);
+    }
+    public int GetState(long x, long y, long z, int stateI)
+    {
+        long relativeX = x - cx * chunkSize;
+        long relativeY = y - cy * chunkSize;
+        long relativeZ = z - cz * chunkSize;
+        return chunkData.GetState(relativeX, relativeY, relativeZ, stateI);
+    }
 
     public int this[long x, long y, long z]
     {
@@ -255,22 +277,30 @@ public class ChunkData
         return x + y * chunkSize + z * chunkSize_2;
     }
 
-    public int GetState(long i, long j, long k)
+    public int GetState(long i, long j, long k, int stateI)
     {
+        if (stateI <= 0 || stateI >= 3)
+        {
+            throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
+        }
         long ind = to1D(i, j, k);
-        return data[ind * 4 + 1];
+        return data[ind * 4 + stateI];
     }
 
-    public void SetState(long i, long j, long k, int state, bool needBlockUpdate = true, bool forceBlockUpdate = false)
+    public void SetState(long i, long j, long k, int state, int stateI, bool needBlockUpdate = true, bool forceBlockUpdate = false)
     {
         long ind = to1D(i, j, k);
-        if (data[ind * 4 + 1] == state && !forceBlockUpdate)
+        if (stateI <= 0 || stateI >= 3)
+        {
+            throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
+        }
+        if (data[ind * 4 + stateI] == state && !forceBlockUpdate)
         {
             return;
         }
 
         needToBeUpdated = true;
-        data[ind * 4 + 1] = state;
+        data[ind * 4 + stateI] = state;
         if (needBlockUpdate)
         {
             blocksNeedUpdating.Add((int)ind);
@@ -304,6 +334,8 @@ public class ChunkData
             blocksNeedUpdating.Add((int)ind);
         }
     }
+
+
 
     public int this[int i, int j, int k]
     {
@@ -356,10 +388,12 @@ public class World
 {
 
 
-
-    public const int GRASS = 1;
-    public const int DIRT = 2;
-    public const int STONE = 3;
+    public static int numBlocks = 5;
+    public const int BEDROCK = 5;
+    public const int DIRT = 4;
+    public const int GRASS = 3;
+    public const int STONE = 2;
+    public const int SAND = 1;
     public const int AIR = 0;
     public BlocksWorld blocksWorld;
 
@@ -373,6 +407,7 @@ public class World
     public ComputeBuffer argBuffer;
 
     public List<Chunk> allChunks;
+    public static Dictionary<int, int> maxCapacities;
 
     public World(BlocksWorld blocksWorld, int chunkSize)
     {
@@ -387,6 +422,15 @@ public class World
 
         allChunks = new List<Chunk>();
 
+        maxCapacities = new Dictionary<int, int>();
+        maxCapacities[DIRT] = 3;
+        maxCapacities[STONE] = 5;
+        maxCapacities[GRASS] = 4;
+        maxCapacities[SAND] = 0;
+        maxCapacities[AIR] = 0;
+        maxCapacities[BEDROCK] = 6;
+        numBlocks = maxCapacities.Count;
+
         GenerateChunk(0, 0, 0);
     }
 
@@ -399,14 +443,188 @@ public class World
         return false;
     }
 
-    public int UpdateBlock(long wx, long wy, long wz, int block, int state, out int resState, out bool needsAnotherUpdate)
+
+    public void SetState(long i, long j, long k, int state, int stateI)
+    {
+        long chunkX = divWithFloor(i, chunkSize);
+        long chunkY = divWithFloor(j, chunkSize);
+        long chunkZ = divWithFloor(k, chunkSize);
+        Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+        chunk.SetState(i, j, k, state, stateI);
+    }
+    public int GetState(long i, long j, long k, int stateI)
+    {
+        long chunkX = divWithFloor(i, chunkSize);
+        long chunkY = divWithFloor(j, chunkSize);
+        long chunkZ = divWithFloor(k, chunkSize);
+        Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+        return chunk.GetState(i, j, k, stateI);
+    }
+
+
+    public int TrickleSupportPowerUp(int blockFrom, int powerFrom, int blockTo)
+    {
+        int maxCapacityTo = maxCapacities[blockTo];
+        if (blockTo == AIR)
+        {
+            return 0;
+        }
+        if (blockFrom == AIR)
+        {
+            return 0;
+        }
+        return System.Math.Min(powerFrom, maxCapacityTo); // doesn't lose support power if stacked on top of each other, but certain types of blocks can only hold so much support power
+        return powerFrom; // or we just carry max power for up?
+    }
+    public int TrickleSupportPowerSidewaysOrDown(int blockFrom, int powerFrom, int blockTo)
+    {
+        if (blockTo == AIR)
+        {
+            return 0;
+        }
+        if (blockFrom == AIR)
+        {
+            return 0;
+        }
+        int maxCapacityTo = maxCapacities[blockTo];
+        return System.Math.Max(0, System.Math.Min(powerFrom-1, maxCapacityTo)); // loses 1 support power if not up, also some blocks are more "sturdy" than others
+    }
+
+    public static int[] sidewaysNeighborsX = new int[] { -1, 1, 0, 0 };
+    public static int[] sidewaysNeighborsZ = new int[] { 0, 0, -1, 1 };
+
+
+
+
+    public IEnumerable<LVector3> SidewaysNeighbors()
+    {
+        yield return new LVector3(-1, 0, 0);
+        yield return new LVector3(1, 0, 0);
+        yield return new LVector3(0, 0, -1);
+        yield return new LVector3(0, 0, 1);
+    }
+    public IEnumerable<LVector3> AllNeighborsExceptDown()
+    {
+        yield return new LVector3(-1, 0, 0);
+        yield return new LVector3(1, 0, 0);
+        yield return new LVector3(0, 0, -1);
+        yield return new LVector3(0, 0, 1);
+        yield return new LVector3(0, 1, 0);
+    }
+    public IEnumerable<LVector3> AllNeighbors()
+    {
+        yield return new LVector3(-1, 0, 0);
+        yield return new LVector3(1, 0, 0);
+        yield return new LVector3(0, 0, -1);
+        yield return new LVector3(0, 0, 1);
+        yield return new LVector3(0, -1, 0);
+        yield return new LVector3(0, 1, 0);
+    }
+
+    public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, out int resState1, out int resState2, out bool needsAnotherUpdate)
     {
         needsAnotherUpdate = false;
-        resState = 0;
+        resState1 = state1;
+        resState2 = state2;
         //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
+        if (block == AIR)
+        {
+            resState1 = 0;
+            resState2 = 0;
+            needsAnotherUpdate = false;
+            return AIR;
+        }
+
+        if (state1 > 1)
+        {
+            if (block == AIR)
+            {
+                //Debug.Log("bad " + block + " " + state1);
+                resState1 = 0;
+                return block;
+            }
+            else
+            {
+                needsAnotherUpdate = true;
+                resState1 = state1 - 1;
+                return block;
+            }
+        }
+
+        int supportPower = state2;
+        if (block == BEDROCK)
+        {
+            supportPower = maxCapacities[BEDROCK];
+        }
+        else if (block != AIR)
+        {
+            int greatestNeighborSupportPower = 0;
+            if (this[wx, wy - 1, wz] != AIR)
+            {
+                int belowSupportPower = GetState(wx, wy - 1, wz, 2);
+                greatestNeighborSupportPower = TrickleSupportPowerUp(this[wx, wy - 1, wz], belowSupportPower, block);
+                /*
+                if (resSupportPower != supportPower)
+                {
+                    needsAnotherUpdate = true;
+                    supportPower = resSupportPower;
+                    AddBlockUpdateToNeighbors(wx, wy, wz);
+                    //Debug.Log("got support power of " + resSupportPower + " from below");
+                }
+                */
+            }
+            foreach (LVector3 neighbor in AllNeighborsExceptDown())
+            {
+                int neighborBlock = this[wx + neighbor.x, wy + neighbor.y, wz + neighbor.z];
+                int neighborSupportPower = GetState(wx + neighbor.x, wy + neighbor.y, wz + neighbor.z, 2);
+                int trickleSupportPower = TrickleSupportPowerSidewaysOrDown(neighborBlock, neighborSupportPower, block);
+                //Debug.Log("neighbor " + neighbor + " has support power " + neighborSupportPower + " and is block " + neighborBlock + " and trickled " + trickleSupportPower + " support power to me");
+                if (trickleSupportPower > greatestNeighborSupportPower)
+                {
+                    greatestNeighborSupportPower = trickleSupportPower;
+                }
+            }
+            //Debug.Log("updating power from neighbors " + block + " with support power " + supportPower + " and greatest neighbor power " + greatestNeighborSupportPower);
+            if (supportPower != greatestNeighborSupportPower)
+            {
+                needsAnotherUpdate = true;
+                AddBlockUpdateToNeighbors(wx, wy, wz);
+                supportPower = greatestNeighborSupportPower;
+                //Debug.Log("is new value");
+            }
+            else
+            {
+                needsAnotherUpdate = false;
+                //Debug.Log("is not new value");
+            }
+        }
+
+        if (state1 == 1)
+        {
+            supportPower = 0;
+        }
+
+        resState2 = supportPower;
+
+        if (supportPower <= 0 && this[wx, wy-1, wz] == AIR)
+        {
+            Debug.Log("rip me support power is not good enough and I have air below");
+            this[wx, wy - 1, wz] = block;
+            SetState(wx, wy - 1, wz, 2, 1); // don't update again until next tick
+            resState1 = 0;
+            resState2 = 0;
+            needsAnotherUpdate = true;
+            AddBlockUpdateToNeighbors(wx, wy, wz);
+            return AIR;
+        }
+        else
+        {
+            resState1 = 0;
+        }
+
         if (block == World.GRASS)
         {
-            float prGrass = 0.05f;
+            float prGrass = 0.005f;
             //Debug.Log("updating grass block " + wx + " " + wy + " " + wz + " " + block + " " + state);
             if (this[wx, wy + 1, wz] == AIR)
             {
@@ -467,6 +685,35 @@ public class World
             else
             {
                 return DIRT;
+            }
+        }
+        else if (block == SAND)
+        {
+            if (state1 <= 0)
+            {
+                // if air below, fall
+                if (this[wx, wy - 1, wz] == AIR)
+                {
+                    this[wx, wy - 1, wz] = SAND;
+                    SetState(wx, wy - 1, wz, 1, 1); // don't update again until next tick
+                    resState1 = 0; 
+                    needsAnotherUpdate = true;
+                    return AIR;
+                }
+                // block below, don't fall
+                else
+                {
+                    resState1 = 0;
+                    needsAnotherUpdate = false;
+                    return SAND;
+                }
+            }
+            // we already moved this tick, set our state to zero so we can try moving again next tick
+            else
+            {
+                needsAnotherUpdate = true;
+                resState1 = state1 - 1;
+                return SAND;
             }
         }
         else
@@ -862,7 +1109,7 @@ public class BlocksWorld : MonoBehaviour {
 
 
             texOffsets[i * 4] = texOffset.x/2.0f;
-            texOffsets[i * 4 + 1] = texOffset.y/3.0f;
+            texOffsets[i * 4 + 1] = texOffset.y/(float)World.numBlocks;
             texOffsets[i * 4 + 2] = 0;
             texOffsets[i * 4 + 3] = 0;
         }
