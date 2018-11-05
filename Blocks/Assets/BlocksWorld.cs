@@ -386,7 +386,7 @@ public class ChunkData
 
 public class World
 {
-
+    public static World mainWorld;
 
     public static int numBlocks = 5;
     public const int BEDROCK = 5;
@@ -396,6 +396,17 @@ public class World
     public const int SAND = 1;
     public const int AIR = 0;
     public BlocksWorld blocksWorld;
+    public float worldScale
+    {
+        get
+        {
+            return blocksWorld.worldScale;
+        }
+        set
+        {
+            blocksWorld.worldScale = value;
+        }
+    }
 
     int chunkSize;
     Dictionary<long, List<Chunk>> chunksPerX;
@@ -411,6 +422,7 @@ public class World
 
     public World(BlocksWorld blocksWorld, int chunkSize)
     {
+        World.mainWorld = this;
         this.blocksWorld = blocksWorld;
         this.chunkSize = chunkSize;
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -756,6 +768,18 @@ public class World
         }
     }
 
+
+    public int this[LVector3 pos]
+    {
+        get
+        {
+            return this[pos.x, pos.y, pos.z];
+        }
+        set
+        {
+            this[pos.x, pos.y, pos.z] = value;
+        }
+    }
     public int this[long x, long y, long z]
     {
         get

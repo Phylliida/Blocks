@@ -1,0 +1,65 @@
+Ideas:
+
+
+-Heavy things: requires 2 or more power instead of 1, but can still pass it on
+-Less/no caves?
+-Aquifers/underground caves would be cool
+-Rivers flow from springs/mountains to lakes
+-Dirt with grass should have more support than dirt without grass
+-Trees have roots? Suck up water? Grow with water?
+
+
+
+tag - mobs go chunks 1-8 like a normal world torus, you are in weird scott world, mobs in different permutations
+
+hot or cold or wet or dry continuity
+
+
+generate temperatures, then generate valid biomes in those temperatures
+
+
+
+// digging down deeper could give you better materials for building
+
+It would be cool to have dwarf fortress like npcs
+
+animals should also have a trust level (so they would run away from you always once you hit them) - also a default trust level that varies
+domesticating should be high enough trust levels - animals should have a base trust: if one person lowers their, it'll lower their base trust
+baby inherits trust
+domesticating enemies would be hard could be possible
+
+potion effect - easier to make them trust you - or a temporary trust boost (snow white)
+
+wild animals breed on their own - population count per chunk, new babies spawn proportional to how many adults in the region - with caps
+some ecosystem - predators and depending on plants and such as well
+
+small chance of neighboring biome (migrated), very small chance random biome (migrated very far, will probably die soon)
+
+non-earth things?
+
+procedural generation - edible thing, leaves shaped like, color, etc. - name would be ??? at first, then they would have to taste or something and then they'd get a name of it (or even let you name it yourself)
+
+automation later in game would be cool - through 
+
+more plants would be nice for early
+or ranged weapons or traps
+
+
+
+Difference between salt water (not as good for drinking) and clean water
+brackish water - salty but not very salty (salinity) - extra salty lakes 
+
+
+Salt water -> boil in furnace for salt - very important trade good
+Eventually desalination machines
+rain catcher - bucket fill up with water in rain
+
+pumping water up hill would be nice - power with something
+
+scythe - cutting long grass faster and harvesting crops faster (maybe also an ok weapon)
+
+Colder biomes - staying warm might be relevant
+Warmer biomes - staying cold enough might be relevent
+termperature varies during the day and night
+
+

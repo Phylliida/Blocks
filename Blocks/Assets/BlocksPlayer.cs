@@ -3,198 +3,139 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-// This allows us to have a very large world while not having any rounding error worse than if we were in -16.0f to 16.0f
-// Unfortunately unity still requires us to output a floating point position for the camera, but internally we will work with this
-// We can get around unity's limitation by moving the world around, which while that is supported by moving the rendering root, I don't like it because multiplayer/multiple entities could cause weird issues
-// so we will just do this, and accept that rendering rounding error will happen for now
-// we could use doubles here, but unity does everything with floats and so I'll stick with floats to avoid the annoyance of always having to remember to worry about precision issues when converting
-public class PVector3
+public class BlocksPlayer : MonoBehaviour
 {
-    public static float chunkSize = 16.0f;
-
-    public long cx, cy, cz;
-    public float lx, ly, lz;
-
-    public PVector3(long cx, long cy, long cz, float lx, float ly, float lz)
-    {
-        this.cx = cx; this.cy = cy; this.cz = cz;
-        this.lx = lx; this.ly = ly; this.lz = lz;
-    }
-
-    public Vector3 ToVec()
-    {
-        return new Vector3(chunkSize * cx + lx, chunkSize * cy + ly, chunkSize * cz + lz);
-    }
-
-    public long chunk(int d)
-    {
-        if (d == 0)
-        {
-            return cx;
-        }
-        else if (d == 1)
-        {
-            return cy;
-        }
-        else if (d == 2)
-        {
-            return cz;
-        }
-        else
-        {
-            throw new System.ArgumentOutOfRangeException("we are only working in 3 dimensions (0,1, or 2) but d=" + d + " which is not 0,1, or 2");
-        }
-    }
-    public float localPos(int d)
-    {
-        if (d == 0)
-        {
-            return lx;
-        }
-        else if (d == 1)
-        {
-            return ly;
-        }
-        else if (d == 2)
-        {
-            return lz;
-        }
-        else
-        {
-            throw new System.ArgumentOutOfRangeException("we are only working in 3 dimensions (0,1, or 2) but d=" + d + " which is not 0,1, or 2");
-        }
-    }
-}
-
-public struct LVector3
-{
-    public long x, y, z;
-    public LVector3(long x, long y, long z)
-    {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-
-
-    public static LVector3 operator +(LVector3 a, LVector3 b)
-    {
-        return new LVector3(a.x + b.x, a.y + b.y, a.z + b.z);
-    }
-    public static LVector3 operator -(LVector3 a, LVector3 b)
-    {
-        return a + (-b);
-    }
-    public static LVector3 operator -(LVector3 a)
-    {
-        return new LVector3(-a.x, -a.y, -a.z);
-    }
-
-    public static LVector3 FromUnityVector3(BlocksWorld world, Vector3 vec)
-    {
-        return new LVector3((long)Mathf.Floor(vec.x / world.worldScale), (long)Mathf.Floor(vec.y / world.worldScale), (long)Mathf.Floor(vec.z / world.worldScale));
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (obj == null)
-        {
-            return false;
-        }
-        if (obj is LVector3)
-        {
-            LVector3 item = (LVector3)obj;
-            return (this.x == item.x) && (this.y == item.y) && (this.z == item.z);
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    public bool Equals(LVector3 other)
-    {
-        return (other.x == x) && (other.y == y) && (other.z == z);
-    }
-
-    // see https://msdn.microsoft.com/en-us/library/ms173147.aspx
-    public static bool operator ==(LVector3 a, LVector3 b)
-    {
-        // If both are null, or both are same instance, return true.
-        if (System.Object.ReferenceEquals(a, b))
-        {
-            return true;
-        }
-
-        // If one is null, but not both, return false.
-        if (((object)a == null) || ((object)b == null))
-        {
-            return false;
-        }
-
-        // Return true if the fields match:
-        return a.x == b.x && a.y == b.y && a.z == b.z;
-    }
-
-    public static bool operator !=(LVector3 a, LVector3 b)
-    {
-        return !(a == b);
-    }
-
-    public override int GetHashCode()
-    {
-        return x.GetHashCode() ^ y.GetHashCode() ^ z.GetHashCode();
-    }
-    public long this[int index]
-    {
-        get
-        {
-            if (index == 0)
-            {
-                return x;
-            }
-            else if (index == 1)
-            {
-                return y;
-            }
-            else if (index == 2)
-            {
-                return z;
-            }
-            else
-            {
-                throw new System.IndexOutOfRangeException("index of LVector 3 needs to be 0,1, or 2, is " + index + " instead");
-            }
-        }
-
-        set
-        {
-            if (index == 0)
-            {
-                x = value;
-            }
-            else if (index == 1)
-            {
-                y = value;
-            }
-            else if (index == 2)
-            {
-                z = value;
-            }
-            else
-            {
-                throw new System.IndexOutOfRangeException("index of LVector 3 needs to be 0,1, or 2, is " + index + " instead");
-            }
-        }
-    }
-    public override string ToString()
-    {
-        return "(" + x + ", " + y + ", " + z + ")";
-    }
-}
-public class BlocksPlayer : MonoBehaviour {
-
     public SmoothMouseLook mouseLook;
+    public MovingEntity body;
+    public Camera mainCamera;
+    public float reachRange = 6.0f;
+
+    int blockPlacing;
+
+    public void Start()
+    {
+        blockPlacing = World.GRASS;
+    }
+    public void Update()
+    {
+
+        if (Input.GetMouseButtonDown(0) && mouseLook.prevCapturing)
+        {
+            LVector3 hitPos;
+            LVector3 posBeforeHit;
+            Vector3 surfaceHitPos;
+
+
+            RaycastResults hitResults;
+
+            if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange*World.mainWorld.worldScale, out hitResults))
+            {
+                //Debug.Log("hit at pos " + hitPos);
+                World.mainWorld[hitResults.hitBlock] = 0;
+            }
+            else
+            {
+
+                //Debug.Log("mouse cast failed " + hitPos);
+            }
+        }
+
+        if (Input.GetMouseButtonDown(1) && mouseLook.prevCapturing)
+        {
+            //Debug.Log("made click");
+
+
+            RaycastResults hitResults;
+
+            if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
+            {
+                // don't let you place a block in yourself
+                LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+                LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
+                LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
+                LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
+                if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                {
+                    World.mainWorld[hitResults.blockBeforeHit] = blockPlacing;
+                }
+                //Debug.Log("hit at pos " + hitPos);
+            }
+            else
+            {
+
+                //Debug.Log("mouse cast failed " + hitPos);
+            }
+        }
+
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+        {
+            body.usingShift = true;
+        }
+        else
+        {
+            body.usingShift = false;
+        }
+
+        body.jumping = Input.GetKey(KeyCode.Space);
+
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            blockPlacing = World.GRASS;
+            Debug.Log("placing grass");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            blockPlacing = World.DIRT;
+            Debug.Log("placing dirt");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            blockPlacing = World.STONE;
+            Debug.Log("placing stone");
+        }
+
+
+        if (Input.GetKeyDown(KeyCode.Alpha4))
+        {
+            blockPlacing = World.SAND;
+            Debug.Log("placing sand");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha5))
+        {
+            blockPlacing = World.BEDROCK;
+            Debug.Log("placing bedrock");
+        }
+
+        Vector3 desiredMove = Vector3.zero;
+        if (Input.GetKey(KeyCode.W))
+        {
+            desiredMove += Vector3.forward;
+        }
+
+        if (Input.GetKey(KeyCode.S))
+        {
+            desiredMove -= Vector3.forward;
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            desiredMove -= Vector3.right;
+        }
+        if (Input.GetKey(KeyCode.D))
+        {
+            desiredMove += Vector3.right;
+        }
+
+        body.SetRelativeDesiredMove(desiredMove);
+    }
+
+
+}
+
+
+    /*
 
     public float heightBelowHead = 1.8f;
     public float heightAboveHead = 0.2f;
@@ -206,7 +147,6 @@ public class BlocksPlayer : MonoBehaviour {
     public float reachRange = 6.0f;
     public BlocksWorld world;
     public Vector3 vel;
-    public Camera mainCamera;
 
 	// Use this for initialization
 	void Start () {
@@ -294,7 +234,7 @@ public class BlocksPlayer : MonoBehaviour {
 
 
 
-            /*
+            / *
             if (Vector3.Dot(desiredOffset, curOffset) > 0) // if that offset is in the same direction we are going, test to see if it moves us into a block
             {
                 if (IntersectingBodyExceptFeet(transform.position + curOffset))
@@ -303,8 +243,8 @@ public class BlocksPlayer : MonoBehaviour {
                     goodOffset = goodOffset - Vector3.Project(goodOffset, curOffset);
                 }
             }
-            */
-        }
+            * /
+}
 
         Vector3 resOffset = resPos - transform.position;
         recommendedOffset = resOffset;
@@ -483,13 +423,13 @@ public class BlocksPlayer : MonoBehaviour {
                     }
                     long dest;
                     long offset;
-                    /*
+                    / *
                     // if on first step, try just going to the next face without an offset if it is ahead
                     if (Mathf.Sign(curPosL[d] - curPosF[d] / world.worldScale) == offsetSign && i == 0)
                     {
                         dest = curPosL[d];
                     }
-                    */
+                    * /
 
 
                     //float nearestPointFive = Mathf.Round(curPosF[d]/world.worldScale) + offsetSign * 0.5f;
@@ -830,7 +770,7 @@ public class BlocksPlayer : MonoBehaviour {
                     transform.position += velDiff;
                 }
             }
-            /*
+            / *
             Vector3 hitNormal;
             //if (!IntersectingBody(velDiff, out goodDiff))
             // {
@@ -856,10 +796,10 @@ public class BlocksPlayer : MonoBehaviour {
             {
                 transform.position += velDiff;
             }
-            */
+            * /
             
         }
     }
 }
 
-// digging down deeper could give you better materials for building
+*/
