@@ -63,3 +63,6 @@ Warmer biomes - staying cold enough might be relevent
 termperature varies during the day and night
 
 
+
+
+dryer biomes will have some pr of water evaporating

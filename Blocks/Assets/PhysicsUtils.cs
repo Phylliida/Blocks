@@ -114,6 +114,16 @@ public struct LVector3
             World.mainWorld.SetState(x, y, z, value, 2);
         }
     }
+
+    public static LVector3 operator *(long a, LVector3 b)
+    {
+        return new LVector3(b.x * a, b.y * a, b.z * a);
+    }
+    public static LVector3 operator *(LVector3 a, long b)
+    {
+        return b * a;
+    }
+
     public static LVector3 operator +(LVector3 a, LVector3 b)
     {
         return new LVector3(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -282,7 +292,178 @@ public class PhysicsUtils  {
         return RayCast(origin, ray.direction, maxDist, out hitResults, maxSteps);
     }
 
+    public delegate bool IsBlockValidForSearch(int block, long x, long y, long z);
 
+
+    static int searchCounter = int.MaxValue;
+
+    static int[] visited;
+    static int curMaxSteps;
+
+    static Queue<int> xOffsets;
+    static Queue<int> yOffsets;
+    static Queue<int> zOffsets;
+    public static int xStep, yStep, zStep;
+    public static void InitializeGlobalSearchVars(int maxSteps)
+    {
+        searchCounter -= 1;
+        if (curMaxSteps < maxSteps || visited == null || searchCounter == 0)
+        {
+            curMaxSteps = maxSteps;
+            visited = new int[(maxSteps*2+1) * (maxSteps * 2 + 1) * (maxSteps * 2 + 1)];
+            if (searchCounter <= 0)
+            {
+                searchCounter = int.MaxValue;
+            }
+            xStep = 1;
+            yStep = (maxSteps * 2 + 1);
+            zStep = (maxSteps * 2 + 1) * (maxSteps * 2 + 1);
+        }
+        if (xOffsets == null)
+        {
+            xOffsets = new Queue<int>(maxSteps);
+        }
+        if (yOffsets == null)
+        {
+            yOffsets = new Queue<int>(maxSteps);
+        }
+        if (zOffsets == null)
+        {
+            zOffsets = new Queue<int>(maxSteps);
+        }
+        xOffsets.Clear();
+        yOffsets.Clear();
+        zOffsets.Clear();
+    }
+
+    // from https://stackoverflow.com/a/34363187/2924421
+    public void to3D(int ind, int width, out int x, out int y, out int z)
+    {
+        z = ind / (width);
+        ind -= (z * width);
+        y = ind / width;
+        x = ind % width;
+    }
+
+    public static int to1D(int x, int y, int z, int width)
+    {
+        return x + y * width + z * width*width;
+    }
+
+    public static bool RunOnNeighbor(long curX, long curY, long curZ, int ind, int xOffset, int yOffset, int zOffset, int nx, int ny, int nz, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult)
+    {
+        // if is not visited
+        if (visited[ind + nx * xStep + ny * yStep + nz * zStep] != searchCounter)
+        {
+            // mark as visited
+            visited[ind + nx * xStep + ny * yStep + nz * zStep] = searchCounter;
+            int neighborBlock = World.mainWorld[curX + nx, curY + ny, curZ + nz];
+
+            // if is desired result, done
+            if (isBlockDesiredResult(neighborBlock, curX + nx, curY + ny, curZ + nz))
+            {
+                return true;
+            }
+
+            // if is valid add to quue
+            if (isBlockValid(neighborBlock, curX + nx, curY + ny, curZ + nz))
+            {
+                xOffsets.Enqueue(xOffset + nx);
+                yOffsets.Enqueue(yOffset + ny);
+                zOffsets.Enqueue(zOffset + nz);
+            }
+        }
+        return false;
+    }
+    public static int blockPreference = 0;
+    public static bool SearchOutwards(LVector3 start, int maxSteps, bool searchUp, bool searchDown, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult)
+    {
+        World world = World.mainWorld;
+        InitializeGlobalSearchVars(maxSteps);
+        xOffsets.Enqueue(0);
+        yOffsets.Enqueue(0);
+        zOffsets.Enqueue(0);
+        int nSteps = 0;
+        blockPreference = (blockPreference + 1) % 4;
+        while (xOffsets.Count != 0)
+        {
+            int xOffset = xOffsets.Dequeue();
+            int yOffset = yOffsets.Dequeue();
+            int zOffset = zOffsets.Dequeue();
+
+            int xOffsetShifted = xOffset + maxSteps+1;
+            int yOffsetShifted = yOffset + maxSteps+1;
+            int zOffsetShifted = zOffset + maxSteps+1;
+            int ind = to1D(xOffsetShifted, yOffsetShifted, zOffsetShifted, yStep);
+            
+            long curX = start.x + xOffset;
+            long curY = start.y + yOffset;
+            long curZ = start.z + zOffset;
+
+            int nx, ny, nz;
+            
+            if (blockPreference == 0)
+            {
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+            else if(blockPreference == 1)
+            {
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+            else if(blockPreference == 2)
+            {
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+            else if(blockPreference == 3)
+            {
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+
+            if (searchDown)
+            {
+                nx = 0; ny = -1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+
+            if (searchUp)
+            {
+                nx = 0; ny = 1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+            }
+
+            // if not visited yet
+
+            nSteps += 1;
+            if (nSteps >= maxSteps)
+            {
+                break;
+            }
+        }
+
+        return false;
+
+    }
+
+    public static bool IsBlockSolid(int block)
+    {
+        return block != World.AIR && block != World.WATER && block != World.WATER_NOFLOW;
+    }
+
+    public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)
+    {
+        RaycastResults results;
+        return RayCast(origin, dir, maxDist, out results, maxSteps);
+    }
 
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
@@ -308,7 +489,7 @@ public class PhysicsUtils  {
         normal = new Vector3(1, 1, 1).normalized;
         if (maxSteps == -1)
         {
-            maxSteps = 10000;
+            maxSteps = 1000;
         }
         for (int i = 0; i < maxSteps; i++)
         {
@@ -395,7 +576,7 @@ public class PhysicsUtils  {
                 return false;
             }
 
-            if (World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z] != 0)
+            if (IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
             {
                 hitPos = newCurPosL;
                 surfaceHitPos = prevPosF;

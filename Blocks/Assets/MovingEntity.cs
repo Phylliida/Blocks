@@ -4,11 +4,11 @@ using UnityEngine;
 
 public class MovingEntity : MonoBehaviour {
 
-
+    float actualBodyWidth = 0.2f;
     float bodyWidth = 0.5f;
     public float heightBelowHead = 2.5f;
     public float heightAboveHead = 0.2f;
-    float feetWidth = 0.2f;
+    public float feetWidth = 0.2f;
     public float speed = 5.0f;
     float gravity = 37.0f;
     float jumpSpeed = 14.0f;
@@ -50,28 +50,176 @@ public class MovingEntity : MonoBehaviour {
     }
 
 
-	// Update is called once per frame
-	void Update () {
+    float footDepth = 0.1f;
+
+    // how do we solve the issue of "close enough to be touching, but not too close that we are seen as colliding?"
+    // one way: have feet be "deep". So collision is at head - heightBelowHead, but "hit ground" is at head - heightBelowHead - foodDepth
+
+
+
+    public bool IsTouchingGround()
+    {
+        RaycastResults hitResults;
+        return IsTouchingGround(transform.position, out hitResults);
+    }
+
+    public bool IsTouchingGround(Vector3 offset)
+    {
+        RaycastResults hitResults;
+        return IsTouchingGround(transform.position + offset, out hitResults);
+    }
+
+    public RaycastResults BlockStandingOn()
+    {
+        RaycastResults hitResults;
+        if (IsTouchingGround(transform.position, out hitResults))
+        {
+            return hitResults;
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+
+    public bool IsTouchingGround(Vector3 pos, out RaycastResults res)
+    {
+        int iters = 20;
+        res = null;
+        for (int i = -1; i < iters; i++)
+        {
+            float p = i / (iters - 1.0f);
+            float xDiff = Mathf.Sin(p * 2 * Mathf.PI);
+            float yDiff = Mathf.Cos(p * 2 * Mathf.PI);
+            Vector3 curOffset = (new Vector3(xDiff, 0, yDiff)).normalized * feetWidth;
+            if (i == -1) // start with no offset (-1 is just a dumb hack to do this)
+            {
+                curOffset = new Vector3(0, 0, 0);
+            }
+
+            if (PhysicsUtils.RayCast(pos + curOffset, new Vector3(0, -1, 0), heightBelowHead + footDepth, out res))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool RayCastWithWidth(Vector3 origin, Vector3 direction, float width, float maxMag, out RaycastResults hitResults)
+    {
+        int iters = 20;
+        hitResults = null;
+        for (int i = -1; i < iters; i++)
+        {
+            float p = i / (iters - 1.0f);
+            float xDiff = Mathf.Sin(p * 2 * Mathf.PI);
+            float yDiff = Mathf.Cos(p * 2 * Mathf.PI);
+            Vector3 curOffset = (new Vector3(xDiff, 0, yDiff)).normalized * width;
+            if (i == -1) // start with no offset (-1 is just a dumb hack to do this)
+            {
+                curOffset = new Vector3(0, 0, 0);
+            }
+
+            if (PhysicsUtils.RayCast(origin + curOffset, direction, maxMag, out hitResults))
+            {
+                hitResults.hitPos -= curOffset;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool OKToMove(Vector3 offset)
+    {
+        if (IntersectingBody(transform.position + offset))
+        {
+            return false;
+        }
+        else
+        {
+            if (usingShift)
+            {
+                if (IsTouchingGround())
+                {
+                    if (!IsTouchingGround(offset))
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+    }
+
+    // Update is called once per frame
+    void Update () {
         
         Vector3 goodDiff;
         Vector3 desiredDiff = desiredMove * Time.deltaTime * speed;
-        bool wasTouchingGround = TouchingLand();
-
-        if (!IntersectingBody(desiredDiff, out goodDiff))
+        desiredDiff = new Vector3(desiredDiff.x, 0, desiredDiff.z);
+        if (OKToMove(desiredDiff))
         {
-            transform.position += goodDiff;
+            transform.position += desiredDiff;
         }
-        if (usingShift)
+        else if(OKToMove(new Vector3(desiredDiff.x, 0, 0)))
         {
-            if (wasTouchingGround && !TouchingLand())
+            transform.position += new Vector3(desiredDiff.x, 0, 0);
+        }
+        else if(OKToMove(new Vector3(0, 0, desiredDiff.z)))
+        {
+            transform.position += new Vector3(0, 0, desiredDiff.z);
+        }
+
+
+        /*
+        bool wasTouchingGround = IsTouchingGround();
+        if (!IntersectingBody(transform.position+desiredDiff))
+        {
+
+        }
+        else
+        {
+            Vector3 tmpDesiredDiffX = new Vector3(desiredDiff.x, 0, 0);
+            Vector3 tmpDesiredDiffZ = new Vector3(0, 0, desiredDiff.z);
+            if (tmpDesiredDiffX.x != 0 && !IntersectingBody(transform.position + tmpDesiredDiffX))
             {
-                transform.position -= goodDiff;
+                desiredDiff = tmpDesiredDiffX;
+            }
+            else if(tmpDesiredDiffZ.z != 0 && !IntersectingBody(transform.position + tmpDesiredDiffZ))
+            {
+                desiredDiff = tmpDesiredDiffZ;
+            }
+            else
+            {
+                desiredDiff = Vector3.zero;
             }
         }
 
+        transform.position += desiredDiff;
+        if (usingShift)
+        {
+            if (wasTouchingGround && !IsTouchingGround())
+            {
+                transform.position -= desiredDiff;
+            }
+        }
+        */
+
+        //while (LVector3.FromUnityVector3(transform.position - new Vector3(0,heightBelowHead, 0)).Block != World.AIR || LVector3.FromUnityVector3(transform.position).Block != World.AIR)
+        //{
+        //    transform.position += new Vector3(0, 0.1f,0);
+        //}
+        while (IntersectingBody(transform.position))
+        {
+            transform.position += new Vector3(0, 0.1f, 0);
+        }
 
 
-        if (!TouchingLand())
+
+
+
+        if (!IsTouchingGround())
         {
             vel -= Vector3.up * gravity * Time.deltaTime;
         }
@@ -88,7 +236,38 @@ public class MovingEntity : MonoBehaviour {
 
         }
 
+
         Vector3 velDiff = vel * Time.deltaTime;
+        if (vel.y != 0)
+        {
+            if (vel.y > 0)
+            {
+                RaycastResults hitResults;
+                if (RayCastWithWidth(transform.position - new Vector3(0,heightBelowHead,0), (new Vector3(0, 1, 0)).normalized, feetWidth, velDiff.magnitude+ heightAboveHead+ heightBelowHead, out hitResults))
+                {
+                    transform.position = hitResults.hitPos - new Vector3(0, heightAboveHead + 0.1f, 0);
+                    vel.y = 0;
+                }
+                else
+                {
+                    transform.position += velDiff;
+                }
+            }
+            else
+            {
+                RaycastResults hitResults;
+                if (RayCastWithWidth(transform.position, (new Vector3(0, -1, 0)).normalized, feetWidth, velDiff.magnitude+heightBelowHead, out hitResults))
+                {
+                    transform.position = hitResults.hitPos + new Vector3(0, heightBelowHead + footDepth*0.9f, 0);
+                    vel.y = 0;
+                }
+                else
+                {
+                    transform.position += velDiff;
+                }
+            }
+        }
+        /*
         if (vel.y > 0)
         {
             if (!IntersectingHead(transform.position + velDiff))
@@ -114,7 +293,8 @@ public class MovingEntity : MonoBehaviour {
                 {
                     //Debug.Log("touching land with normal " + hitNormal + " and magnitude " + velDiff.magnitude + " and offset " + velDiff);
                     vel.y = 0;
-                    transform.position = hitResults.hitPos + new Vector3(0, heightBelowHead - 0.01f, 0);
+                    ////transform.position = hitResults.hitPos + new Vector3(0, heightBelowHead - 0.01f, 0);
+                    transform.position = hitResults.hitPos + new Vector3(0, heightBelowHead, 0);
                 }
                 else
                 {
@@ -122,12 +302,39 @@ public class MovingEntity : MonoBehaviour {
                 }
             }
         }
+        */
     }
 
 
     bool IntersectingBody(Vector3 position)
     {
+
+        int iters = 20;
+
+        Vector3 topOfHead = position + new Vector3(0, heightAboveHead, 0);
+        Vector3 bottomOfHead = position - new Vector3(0, heightBelowHead, 0);
+        float height = Vector3.Distance(topOfHead, bottomOfHead);
+
+        for (int i = -1; i < iters; i++)
+        {
+            float p = i / (iters - 1.0f);
+            float xDiff = Mathf.Sin(p * 2 * Mathf.PI);
+            float yDiff = Mathf.Cos(p * 2 * Mathf.PI);
+            Vector3 curOffset = (new Vector3(xDiff, 0, yDiff)).normalized * feetWidth;
+            if (i == -1) // start with no offset (-1 is just a dumb hack to do this)
+            {
+                curOffset = new Vector3(0, 0, 0);
+            }
+
+            if (PhysicsUtils.RayCast(topOfHead + curOffset, new Vector3(0, -1, 0), height) || PhysicsUtils.RayCast(bottomOfHead + curOffset, new Vector3(0, 1, 0), height))
+            {
+                return true;
+            }
+        }
+        return false;
         float worldScale = World.mainWorld.worldScale;
+
+
 
         long eyesX = (long)Mathf.Floor(position.x / worldScale);
         long eyesY = (long)Mathf.Floor(position.y / worldScale);

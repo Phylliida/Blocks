@@ -109,6 +109,20 @@ public class BlocksPlayer : MonoBehaviour
             Debug.Log("placing bedrock");
         }
 
+
+        if (Input.GetKeyDown(KeyCode.Alpha6))
+        {
+            blockPlacing = World.WATER;
+            Debug.Log("placing water");
+        }
+
+
+        if (Input.GetKeyDown(KeyCode.Alpha7))
+        {
+            blockPlacing = World.WATER_NOFLOW;
+            Debug.Log("placing pushed water");
+        }
+
         Vector3 desiredMove = Vector3.zero;
         if (Input.GetKey(KeyCode.W))
         {

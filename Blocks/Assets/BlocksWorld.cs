@@ -25,6 +25,7 @@ public class ChunkRenderer
     Chunk chunk;
     int chunkSize;
     public ComputeBuffer drawData;
+    bool using1;
     public int numRendereredCubes;
 
     public ChunkRenderer(Chunk chunk, int chunkSize)
@@ -33,19 +34,19 @@ public class ChunkRenderer
         this.chunkSize = chunkSize;
 
         drawData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
-
     }
 
     public void Tick()
+    {
+
+    }
+    public void Render()
     {
         if (chunk.chunkData.needToBeUpdated)
         {
             chunk.chunkData.needToBeUpdated = false;
             numRendereredCubes = chunk.world.blocksWorld.MakeChunkTris(chunk);
         }
-    }
-    public void Render()
-    {
         chunk.world.blocksWorld.RenderChunk(chunk);
     }
 
@@ -66,6 +67,22 @@ public class ChunkRenderer
     }
 }
 
+public class ChunkBiomeData
+{
+    public float altitude;
+    public long cx, cy, cz;
+    public ChunkBiomeData(long cx, long cy, long cz)
+    {
+        Perlin a = new Perlin();
+        this.cx = cx;
+        this.cy = cy;
+        this.cz = cz;
+        // should be in -1 to 1 range now?
+        altitude = (float)Simplex.Noise.Generate(cx/10.0f, 0, cz/10.0f)*30.0f+40.0f;
+    }
+
+
+}
 
 public class Chunk
 {
@@ -77,6 +94,7 @@ public class Chunk
     int chunkSize;
     public ChunkData chunkData;
     public ChunkRenderer chunkRenderer;
+    public ChunkBiomeData chunkBiomeData;
 
     public Chunk[] posChunks;
     public Chunk xPosChunk { get { return posChunks[0]; } set { posChunks[0] = value; } }
@@ -91,7 +109,7 @@ public class Chunk
     public World world;
 
 
-
+    
     public void AddBlockUpdate(long i, long j, long k)
     {
         long relativeX = i - cx * chunkSize;
@@ -99,12 +117,15 @@ public class Chunk
         long relativeZ = k - cz * chunkSize;
         chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
     }
+    
+
 
     public Chunk(World world, long chunkX, long chunkY, long chunkZ, int chunkSize)
     {
         this.world = world;
         this.chunkSize = chunkSize;
         this.chunkRenderer = new ChunkRenderer(this, chunkSize);
+        this.chunkBiomeData = new ChunkBiomeData(chunkX, chunkY, chunkZ);
         this.chunkPos = new long[] { chunkX, chunkY, chunkZ };
         posChunks = new Chunk[] { null, null, null };
         negChunks = new Chunk[] { null, null, null };
@@ -115,12 +136,50 @@ public class Chunk
         long baseZ = chunkZ * chunkSize;
 
         generating = true;
+
+    }
+
+    public void Generate()
+    {
+        generating = true;
+        long baseX = cx * chunkSize;
+        long baseY = cy * chunkSize;
+        long baseZ = cz * chunkSize;
         for (long x = baseX; x < baseX + this.chunkSize; x++)
         {
-            for (long y = baseY; y < baseY + this.chunkSize; y++)
+            for (long z = baseZ; z < baseZ + this.chunkSize; z++)
             {
-                for (long z = baseZ; z < baseZ + this.chunkSize; z++)
+                long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, c => c.altitude));
+                for (long y = baseY; y < baseY + this.chunkSize; y++)
                 {
+                    if (y <= 0)
+                    {
+                        this[x, y, z] = World.BEDROCK;
+                    }
+                    else if(y >= elevation)
+                    {
+                        // this[x, y, z] = World.AIR;
+                    }
+                    else
+                    {
+
+                        long distFromSurface = elevation - y;
+                        if (distFromSurface == 1)
+                        {
+                            this[x, y, z] = World.GRASS;
+                        }
+                        else if (distFromSurface <= 4)
+                        {
+                            this[x, y, z] = World.DIRT;
+                        }
+                        else
+                        {
+                           this[x, y, z] = World.STONE;
+                        }
+                        
+                    }
+
+                    /*
                     if (y > 3 && y < 5)
                     {
                         this[x, y, z] = World.BEDROCK;
@@ -133,22 +192,37 @@ public class Chunk
                     {
                         this[x, y, z] = World.BEDROCK;
                     }
+                    */
                     SetState(x, y, z, World.maxCapacities[this[x, y, z]], 2);
                 }
             }
         }
-
-
-
+        chunkData.blocksNeedUpdating.Clear();
+        chunkData.blocksNeedUpdatingNextFrame.Clear();
         generating = false;
+    }
+
+    public void TickStart()
+    {
+
+        this.chunkData.TickStart();
     }
 
     public void Tick()
     {
+        if (generating)
+        {
+            Generate();
+
+
+            generating = false;
+        }
         this.chunkRenderer.Tick();
+
 
         if (chunkData.blocksNeedUpdating.Count != 0)
         {
+            /*
             int[] oldBlocksNeedUpdating = new int[chunkData.blocksNeedUpdating.Count];
             int i = 0;
             foreach (int ind in chunkData.blocksNeedUpdating)
@@ -157,9 +231,10 @@ public class Chunk
                 i += 1;
             }
             chunkData.blocksNeedUpdating.Clear();
-            for (i = 0; i < oldBlocksNeedUpdating.Length; i++)
+            */
+            foreach (int i in chunkData.blocksNeedUpdating)
             {
-                long ind = (long)oldBlocksNeedUpdating[i];
+                long ind = (long)(i);
                 long x, y, z;
                 chunkData.to3D(ind, out x, out y, out z);
                 long wx = x + cx * chunkSize;
@@ -167,11 +242,38 @@ public class Chunk
                 long wz = z + cz * chunkSize;
                 int resState1;
                 int resState2;
+                int resState3;
                 bool needsAnotherUpdate;
-                int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z, 1), chunkData.GetState(x, y, z, 2), out resState1, out resState2, out needsAnotherUpdate);
-                chunkData.SetState(x, y, z, resState1, 1, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
-                chunkData.SetState(x, y, z, resState2, 2, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
-                chunkData.SetBlock(x, y, z, resBlock, needBlockUpdate: needsAnotherUpdate, forceBlockUpdate: needsAnotherUpdate);
+                int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z, 1), chunkData.GetState(x, y, z, 2), chunkData.GetState(x, y, z, 3), out resState1, out resState2, out resState3, out needsAnotherUpdate);
+                bool chunkDataAddedBlockUpdate;
+                bool dontCareActually;
+                chunkData.SetState(x, y, z, resState1, 1, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                chunkData.SetState(x, y, z, resState2, 2, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                chunkData.SetState(x, y, z, resState3, 3, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                chunkData.SetBlock(x, y, z, resBlock, out chunkDataAddedBlockUpdate, forceBlockUpdate: needsAnotherUpdate);
+
+
+                if (chunkDataAddedBlockUpdate)
+                {
+                    bool neighborsInsideThisChunk =
+                        (x != 0 && x != chunkSize - 1) &&
+                        (y != 0 && y != chunkSize - 1) &&
+                        (z != 0 && z != chunkSize - 1);
+
+                    if (!neighborsInsideThisChunk)
+                    {
+                        world.AddBlockUpdateToNeighbors(wx, wy, wz);
+                    }
+                    else
+                    {
+                        chunkData.AddBlockUpdate(x - 1, y, z);
+                        chunkData.AddBlockUpdate(x + 1, y, z);
+                        chunkData.AddBlockUpdate(x, y - 1, z);
+                        chunkData.AddBlockUpdate(x, y + 1, z);
+                        chunkData.AddBlockUpdate(x, y, z-1);
+                        chunkData.AddBlockUpdate(x, y, z+1);
+                    }
+                }
             }
         }
     }
@@ -185,7 +287,13 @@ public class Chunk
         long relativeX = x - cx * chunkSize;
         long relativeY = y - cy * chunkSize;
         long relativeZ = z - cz * chunkSize;
-        chunkData.SetState(relativeX, relativeY, relativeZ, state, stateI, true, true);
+        bool addedUpdate;
+        chunkData.SetState(relativeX, relativeY, relativeZ, state, stateI, out addedUpdate);
+        // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
+        if (!generating && addedUpdate)
+        {
+            world.AddBlockUpdateToNeighbors(x, y, z);
+        }
     }
     public int GetState(long x, long y, long z, int stateI)
     {
@@ -209,11 +317,13 @@ public class Chunk
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
-            if (!generating)
+            bool addedUpdate;
+            chunkData.SetBlock(relativeX, relativeY, relativeZ, value, out addedUpdate);
+            // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
+            if (!generating && addedUpdate)
             {
                 world.AddBlockUpdateToNeighbors(x, y, z);
             }
-            chunkData[relativeX, relativeY, relativeZ] = value;
         }
     }
 
@@ -234,6 +344,7 @@ public class ChunkData
 {
     public bool needToBeUpdated = false;
     public HashSet<int> blocksNeedUpdating = new HashSet<int>();
+    public HashSet<int> blocksNeedUpdatingNextFrame = new HashSet<int>();
     int[] data;
     int chunkSize, chunkSize_2, chunkSize_3;
     public ChunkData(int chunkSize)
@@ -244,6 +355,13 @@ public class ChunkData
         data = new int[chunkSize * chunkSize * chunkSize * 4];
     }
 
+    public void TickStart()
+    {
+        HashSet<int> tmp = blocksNeedUpdating;
+        blocksNeedUpdating = blocksNeedUpdatingNextFrame;
+        blocksNeedUpdatingNextFrame = tmp;
+        blocksNeedUpdatingNextFrame.Clear();
+    }
 
     public int[] GetRawData()
     {
@@ -279,7 +397,7 @@ public class ChunkData
 
     public int GetState(long i, long j, long k, int stateI)
     {
-        if (stateI <= 0 || stateI >= 3)
+        if (stateI <= 0 || stateI >= 4)
         {
             throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
         }
@@ -287,30 +405,31 @@ public class ChunkData
         return data[ind * 4 + stateI];
     }
 
-    public void SetState(long i, long j, long k, int state, int stateI, bool needBlockUpdate = true, bool forceBlockUpdate = false)
+    public void SetState(long i, long j, long k, int state, int stateI, out bool addedBlockUpdate, bool forceBlockUpdate = false)
     {
+        addedBlockUpdate = false;
         long ind = to1D(i, j, k);
-        if (stateI <= 0 || stateI >= 3)
+        if (stateI <= 0 || stateI >= 4)
         {
             throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
         }
-        if (data[ind * 4 + stateI] == state && !forceBlockUpdate)
+        if (data[ind * 4 + stateI] != state)
         {
-            return;
+            //needToBeUpdated = true;
+        }
+        if (forceBlockUpdate || (data[ind * 4 + stateI] != state && stateI != 3))
+        {
+            addedBlockUpdate = true;
+            blocksNeedUpdatingNextFrame.Add((int)ind);
         }
 
-        needToBeUpdated = true;
         data[ind * 4 + stateI] = state;
-        if (needBlockUpdate)
-        {
-            blocksNeedUpdating.Add((int)ind);
-        }
     }
 
 
     public void AddBlockUpdate(long i, long j, long k)
     {
-        blocksNeedUpdating.Add((int)to1D(i, j, k));
+        blocksNeedUpdatingNextFrame.Add((int)to1D(i, j, k));
     }
 
     public int GetBlock(long i, long j, long k)
@@ -319,43 +438,23 @@ public class ChunkData
         return data[ind * 4 + 1];
     }
 
-    public void SetBlock(long i, long j, long k, int block, bool needBlockUpdate=true, bool forceBlockUpdate = false)
+    public void SetBlock(long i, long j, long k, int block, out bool addedBlockUpdate, bool forceBlockUpdate = false)
     {
+        addedBlockUpdate = false;
         long ind = to1D(i, j, k);
-        if (data[ind * 4] == block && !forceBlockUpdate)
+        if (data[ind * 4] != block)
         {
-            return;
-        }
-
-        needToBeUpdated = true;
-        data[ind * 4] = block;
-        if (needBlockUpdate)
-        {
-            blocksNeedUpdating.Add((int)ind);
-        }
-    }
-
-
-
-    public int this[int i, int j, int k]
-    {
-        get
-        {
-            return data[(i + j * chunkSize + k * chunkSize_2)*4];
-        }
-        set
-        {
-            long ind = to1D(i, j, k);
-            if (data[ind * 4] == value)
-            {
-                return;
-            }
-
             needToBeUpdated = true;
-            data[ind * 4] = value;
-            blocksNeedUpdating.Add((int)ind);
         }
+        if (forceBlockUpdate || data[ind * 4] != block)
+        {
+            addedBlockUpdate = true;
+            blocksNeedUpdatingNextFrame.Add((int)ind);
+        }
+
+        data[ind * 4] = block;
     }
+
 
     public int this[long i, long j, long k]
     {
@@ -365,15 +464,8 @@ public class ChunkData
         }
         set
         {
-            long ind = to1D(i, j, k);
-            if (data[ind * 4] == value)
-            {
-                return;
-            }
-
-            needToBeUpdated = true;
-            data[ind * 4] = value;
-            blocksNeedUpdating.Add((int)ind);
+            bool addedBlockUpdate;
+            SetBlock(i, j, k, value, out addedBlockUpdate);
         }
     }
 
@@ -388,7 +480,9 @@ public class World
 {
     public static World mainWorld;
 
-    public static int numBlocks = 5;
+    public static int numBlocks = 7;
+    public const int WATER_NOFLOW = 7;
+    public const int WATER = 6;
     public const int BEDROCK = 5;
     public const int DIRT = 4;
     public const int GRASS = 3;
@@ -420,6 +514,9 @@ public class World
     public List<Chunk> allChunks;
     public static Dictionary<int, int> maxCapacities;
 
+    public List<Chunk> chunkCache;
+    int cacheSize = 20;
+
     public World(BlocksWorld blocksWorld, int chunkSize)
     {
         World.mainWorld = this;
@@ -434,17 +531,59 @@ public class World
 
         allChunks = new List<Chunk>();
 
+        chunkCache = new List<Chunk>(cacheSize);
+
         maxCapacities = new Dictionary<int, int>();
         maxCapacities[DIRT] = 3;
         maxCapacities[STONE] = 5;
         maxCapacities[GRASS] = 4;
         maxCapacities[SAND] = 0;
         maxCapacities[AIR] = 0;
+        maxCapacities[WATER] = 0;
+        maxCapacities[WATER_NOFLOW] = 0;
         maxCapacities[BEDROCK] = 6;
         numBlocks = maxCapacities.Count;
 
-        GenerateChunk(0, 0, 0);
+        int viewDist = 3;
+        for (int i = -viewDist; i <= viewDist; i++)
+        {
+            for (int j = -viewDist; j <= viewDist; j++)
+            {
+                for (int k = -viewDist; k <= viewDist; k++)
+                {
+                    GenerateChunk(i,j,k);
+                }
+            }
+        }
     }
+
+
+
+
+    public delegate float ChunkValueGetter(ChunkBiomeData chunk);
+
+    public float AverageChunkValues(long x, long y, long z, ChunkValueGetter getChunkValue)
+    {
+        ChunkBiomeData chunkx1z1 = new ChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        ChunkBiomeData chunkx2z1 = new ChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        ChunkBiomeData chunkx1z2 = new ChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+        ChunkBiomeData chunkx2z2 = new ChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+
+        long x1Weight = x - chunkx1z1.cx * chunkSize;
+        long x2Weight = chunkx2z1.cx * chunkSize - x;
+        long z1Weight = z - chunkx1z1.cz * chunkSize;
+        long z2Weight = chunkx2z1.cz * chunkSize - z;
+
+        float px = x1Weight / (float)chunkSize;
+        float pz = z1Weight / (float)chunkSize;
+
+
+        float valZ1 = getChunkValue(chunkx1z1) * (1 - px) + getChunkValue(chunkx2z1) * px;
+        float valZ2 = getChunkValue(chunkx1z2) * (1 - px) + getChunkValue(chunkx2z2) * px;
+
+        return valZ1 * (1 - pz) + valZ2 * pz;
+    }
+
 
     public bool NeedsInitialUpdate(int block)
     {
@@ -508,12 +647,93 @@ public class World
 
 
 
-    public IEnumerable<LVector3> SidewaysNeighbors()
+    public IEnumerable<LVector3> SidewaysNeighbors(bool up=false, bool down=false)
     {
-        yield return new LVector3(-1, 0, 0);
-        yield return new LVector3(1, 0, 0);
-        yield return new LVector3(0, 0, -1);
-        yield return new LVector3(0, 0, 1);
+        globalPreference = (globalPreference + 1) % 4;
+        if (globalPreference == 0)
+        {
+            yield return new LVector3(-1, 0, 0);
+            yield return new LVector3(1, 0, 0);
+            yield return new LVector3(0, 0, -1);
+            yield return new LVector3(0, 0, 1);
+        }
+        else if (globalPreference == 1)
+        {
+            yield return new LVector3(1, 0, 0);
+            yield return new LVector3(0, 0, -1);
+            yield return new LVector3(0, 0, 1);
+            yield return new LVector3(-1, 0, 0);
+        }
+        else if (globalPreference == 2)
+        {
+            yield return new LVector3(0, 0, -1);
+            yield return new LVector3(0, 0, 1);
+            yield return new LVector3(-1, 0, 0);
+            yield return new LVector3(1, 0, 0);
+        }
+        else if (globalPreference == 3)
+        {
+            yield return new LVector3(0, 0, 1);
+            yield return new LVector3(-1, 0, 0);
+            yield return new LVector3(1, 0, 0);
+            yield return new LVector3(0, 0, -1);
+        }
+
+        if (down)
+        {
+            yield return new LVector3(0, -1, 0);
+        }
+        if (up)
+        {
+            yield return new LVector3(0, 1, 0);
+        }
+    }
+
+
+    public IEnumerable<LVector3> SidewaysNeighborsRelative(LVector3 pos, bool vertical=false)
+    {
+        globalPreference = (globalPreference + 1) % 4;
+        if (globalPreference == 0)
+        {
+            yield return new LVector3(pos.x - 1, pos.y, pos.z);
+            yield return new LVector3(pos.x + 1, pos.y, pos.z);
+            yield return new LVector3(pos.x, pos.y, pos.z + 1);
+            yield return new LVector3(pos.x, pos.y, pos.z - 1);
+        }
+        else if (globalPreference == 1)
+        {
+            yield return new LVector3(pos.x + 1, pos.y, pos.z);
+            yield return new LVector3(pos.x, pos.y, pos.z + 1);
+            yield return new LVector3(pos.x, pos.y, pos.z - 1);
+            yield return new LVector3(pos.x - 1, pos.y, pos.z);
+        }
+        else if (globalPreference == 2)
+        {
+            yield return new LVector3(pos.x, pos.y, pos.z + 1);
+            yield return new LVector3(pos.x, pos.y, pos.z - 1);
+            yield return new LVector3(pos.x - 1, pos.y, pos.z);
+            yield return new LVector3(pos.x + 1, pos.y, pos.z);
+        }
+        else if (globalPreference == 3)
+        {
+            yield return new LVector3(pos.x, pos.y, pos.z - 1);
+            yield return new LVector3(pos.x - 1, pos.y, pos.z);
+            yield return new LVector3(pos.x + 1, pos.y, pos.z);
+            yield return new LVector3(pos.x, pos.y, pos.z + 1);
+        }
+
+        if (vertical)
+        {
+            yield return new LVector3(pos.x, pos.y - 1, pos.z);
+            yield return new LVector3(pos.x, pos.y + 1, pos.z);
+        }
+    }
+
+    static int globalPreference = 4;
+
+    public IEnumerable<LVector3> AllNeighborsRelative(LVector3 pos)
+    {
+        return SidewaysNeighborsRelative(pos, vertical: true);
     }
     public IEnumerable<LVector3> AllNeighborsExceptDown()
     {
@@ -533,11 +753,112 @@ public class World
         yield return new LVector3(0, 1, 0);
     }
 
-    public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, out int resState1, out int resState2, out bool needsAnotherUpdate)
+
+    delegate bool MeetsCondition(LVector3 block);
+
+    int RandomlyChooseNeighborMeetingCondition(LVector3 center, MeetsCondition conditionFunc, out LVector3 neighborRes, bool allowUpDown)
+    {
+        List<LVector3> goods = new List<LVector3>();
+        foreach (LVector3 neighbor in SidewaysNeighborsRelative(center))
+        {
+            if (conditionFunc(neighbor))
+            {
+                goods.Add(neighbor);
+            }
+        }
+        if (goods.Count == 0)
+        {
+            neighborRes = new LVector3(center.x, center.y, center.z);
+            return goods.Count;
+        }
+        else
+        {
+            neighborRes = goods[Random.Range(0, goods.Count)];
+            return goods.Count;
+        }
+        /*
+
+        bool forwardOpen = conditionFunc(new LVector3(center.x, center.y, center.z+1));
+        bool backOpen = conditionFunc(new LVector3(center.x, center.y, center.z-1));
+        bool upOpen = false;
+        bool downOpen = false;
+        if (allowUpDown)
+        {
+            upOpen = conditionFunc(new LVector3(center.x, center.y, center.z));
+            downOpen = conditionFunc(new LVector3(center.x, center.y, center.z));
+        }
+        bool leftOpen = conditionFunc(new LVector3(center.x, center.y, center.z));
+        bool rightOpen = conditionFunc(new LVector3(center.x, center.y, center.z));
+        bool leftOpen = this[wx, wy, wz + 1] == AIR;
+        bool forwadOpen = this[wx + 1, wy, wz] == AIR;
+        bool backOpen = this[wx - 1, wy, wz] == AIR;
+        int numBlocks = 0;
+        if (leftOpen) numBlocks += 1;
+        if (rightOpen) numBlocks += 1;
+        if (forwadOpen) numBlocks += 1;
+        if (backOpen) numBlocks += 1;
+
+        if (numBlocks > 0)
+        {
+            float[] weights = new float[] { leftOpen ? 1.0f / numBlocks : 0, rightOpen ? 1.0f / numBlocks : 0, forwadOpen ? 1.0f / numBlocks : 0, backOpen ? 1.0f / numBlocks : 0 };
+            float[] weights1 = new float[] { leftOpen ? 1.0f / numBlocks : 0, rightOpen ? 1.0f / numBlocks : 0, forwadOpen ? 1.0f / numBlocks : 0, backOpen ? 1.0f / numBlocks : 0 };
+            long[] xOffsets = new long[] { 0, 0, 1, -1 };
+            long[] zOffsets = new long[] { -1, 1, 0, 0 };
+            float val = Random.value;
+            float sum = 0.0f;
+            for (int i = 0; i < weights.Length; i++)
+            {
+                sum += weights[i];
+                weights1[i] = sum;
+
+            }
+            for (int i = 0; i < weights.Length; i++)
+            {
+                if (weights1[i] >= val && weights[i] != 0.0f)
+                {
+                    this[wx + xOffsets[i], wy, wz + zOffsets[i]] = WATER;
+                    return AIR;
+                }
+            }
+        }
+        */
+    }
+
+
+
+    // for water
+    // if a block is "pushed", pathfind until find an open block with y level < current pos
+    //     if found, tp there, replace self with air
+    //        if that position has water below it, tp there as pushed
+    //        else tp there as unpushed
+    //     if not found, replace self with "not pushed"
+    
+    // if a unpushed water block gets an update, flood fill back and replace all water on top of water with pushed water
+     
+
+    public bool IsWater(int block)
+    {
+        return block == WATER || block == WATER_NOFLOW;
+    }
+    
+    public int GetNumAirNeighbors(long wx, long wy, long wz)
+    {
+        return
+            (this[wx + 1, wy, wz] == AIR ? 1 : 0) +
+            (this[wx - 1, wy, wz] == AIR ? 1 : 0) +
+            (this[wx, wy + 1, wz] == AIR ? 1 : 0) +
+            (this[wx, wy - 1, wz] == AIR ? 1 : 0) +
+            (this[wx, wy, wz + 1] == AIR ? 1 : 0) +
+            (this[wx, wy, wz - 1] == AIR ? 1 : 0);
+
+    }
+
+    public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, int state3, out int resState1, out int resState2, out int resState3, out bool needsAnotherUpdate)
     {
         needsAnotherUpdate = false;
         resState1 = state1;
         resState2 = state2;
+        resState3 = state3;
         //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
         if (block == AIR)
         {
@@ -546,6 +867,421 @@ public class World
             needsAnotherUpdate = false;
             return AIR;
         }
+
+        if (block == SAND)
+        {
+            if (this[wx, wy-1, wz] == WATER || this[wx, wy-1, wz] == WATER_NOFLOW)
+            {
+                this[wx, wy - 1, wz] = WATER;
+                needsAnotherUpdate = true;
+                resState1 = 1 - state1;
+                SetState(wx, wy - 1, wz, resState1, 1);
+                return block;
+            }
+            else if(this[wx, wy-1, wz] == AIR)
+            {
+                this[wx, wy - 1, wz] = WATER;
+                //SetState(wx, wy - 1, wz, 1, 3);
+                return block;
+            }
+        }
+
+
+
+
+        if (block == WATER || block == WATER_NOFLOW)
+        {
+
+            needsAnotherUpdate = false;
+
+
+            // if we are WATER without water above and with water below, pathfind to look for open space
+            if (block == WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
+            {
+                // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
+                if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz) =>
+                    {
+                        return by < wy && (b == WATER || b == WATER_NOFLOW);
+                    },
+                   isBlockDesiredResult: (b, bx, by, bz) =>
+                   {
+                       if (b == AIR && by < wy)
+                       {
+                           this[bx, by, bz] = WATER;
+                           SetState(bx, by, bz, GetNumAirNeighbors(bx, by, bz), 3);
+                           return true;
+                       }
+                       return false;
+                   }
+                ))
+                {
+                    resState3 = 0;
+                    return AIR;
+                }
+                else
+                {
+                    needsAnotherUpdate = true;
+                    return WATER_NOFLOW;
+                }
+                /*
+                HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
+                Queue<LVector3> nodes = new Queue<LVector3>();
+                LVector3 myPos = new LVector3(wx, wy, wz);
+                nodes.Enqueue(myPos);
+                nodesSoFar.Add(myPos);
+                int steps = 0;
+                int maxSteps = 10;
+                while (nodes.Count > 0)
+                {
+                    LVector3 curNode = nodes.Dequeue();
+                    foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
+                    {
+                        // only consider blocks with y level lower than us
+                        if (neighbor.y >= myPos.y)
+                        {
+                            continue;
+                        }
+                        int neighborBlock = neighbor.Block;
+                        // if we found a valid air block, flow WATER into there and replace us with AIR
+                        if (neighborBlock == AIR)
+                        {
+                            resState3 = 0;
+                            this[neighbor.x, neighbor.y, neighbor.z] = WATER;
+                            SetState(neighbor.x, neighbor.y, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y, neighbor.z), 3);
+                            return AIR;
+                        }
+                        // otherwise, keep searching through other water blocks
+                        else if (!nodesSoFar.Contains(neighbor) && IsWater(neighborBlock))
+                        {
+                            nodes.Enqueue(neighbor);
+                            nodesSoFar.Add(neighbor);
+                        }
+                    }
+                    steps += 1;
+                    if (steps >= maxSteps)
+                    {
+                        break;
+                    }
+                }
+                */
+                needsAnotherUpdate = true;
+                //resState3 = GetNumAirNeighbors(wx, wy, wz);
+                // failed to find, set us to WATER_NOFLOW
+                return WATER_NOFLOW;
+            }
+            else
+            {
+                int prevNumAirNeighbors = state3;
+                int curNumAirNeighbors = GetNumAirNeighbors(wx, wy, wz);
+                resState3 = curNumAirNeighbors;
+                // if we have a more air neighbors, flood fill back and set valid blocks that have WATER_NOFLOW back to WATER so they can try again
+                if (curNumAirNeighbors > prevNumAirNeighbors)
+                {
+                    LVector3 airNeighbor = new LVector3(wx, wy, wz);
+                    foreach (LVector3 neighbor in AllNeighborsRelative(new LVector3(wx, wy, wz)))
+                    {
+                        if (neighbor.Block == AIR)
+                        {
+                            airNeighbor = neighbor;
+                            break;
+                        }
+                    }
+
+                    // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
+                    if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz) =>
+                    {
+                        return (b == WATER || b == WATER_NOFLOW);
+                    },
+                       isBlockDesiredResult: (b, bx, by, bz) =>
+                       {
+                           if (b == WATER_NOFLOW && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
+                           {
+                               this[bx, by, bz] = AIR;
+                               return true;
+                           }
+                           return false;
+                       }
+                    ))
+                    {
+
+                        this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = WATER;
+                        SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
+                        resState3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
+                        return WATER;
+                    }
+                    else
+                    {
+                        needsAnotherUpdate = true;
+                        return WATER_NOFLOW;
+                    }
+                }
+            }
+            /*
+
+                    HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
+                    Queue<LVector3> nodes = new Queue<LVector3>();
+                    LVector3 myPos = new LVector3(wx, wy, wz);
+                    nodes.Enqueue(myPos);
+                    nodesSoFar.Add(myPos);
+                    int steps  = 0;
+                    int maxSteps = 10;
+                    while (nodes.Count > 0)
+                    {
+                        LVector3 curNode = nodes.Dequeue();
+                        foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
+                        {
+                            int neighborBlock = neighbor.Block;
+                            // if we found a valid air block, flow WATER into there and replace us with AIR
+                            if (!nodesSoFar.Contains(neighbor) && IsWater(neighborBlock))
+                            {
+                                nodes.Enqueue(neighbor);
+                                nodesSoFar.Add(neighbor);
+
+                                if (this[neighbor.x, neighbor.y, neighbor.z] == WATER_NOFLOW && IsWater(this[neighbor.x, neighbor.y-1, neighbor.z])  && !IsWater(this[neighbor.x, neighbor.y+1, neighbor.z]))
+                                {
+                                    foreach (LVector3 myAirNeighbor in AllNeighborsRelative(myPos))
+                                    {
+                                        if (myAirNeighbor.Block == AIR)
+                                        {
+                                            this[neighbor.x, neighbor.y, neighbor.z] = AIR;
+                                            this[myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z] = WATER;
+                                            SetState(myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z, GetNumAirNeighbors(myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z), 3); // tell it to trickle more if it fails
+                                            steps = maxSteps;
+                                            break;
+                                        }
+                                    }
+                                    //this[neighbor.x, neighbor.y, neighbor.z] = WATER;
+                                }
+                            }
+                        }
+                        steps += 1;
+                        if (steps >= maxSteps)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            */
+
+
+            // if air below, set below = water and us = air
+            if (this[wx, wy - 1, wz] == AIR)
+            {
+                this[wx, wy - 1, wz] = WATER;
+                resState3 = 0;
+                SetState(wx, wy - 1, wz, GetNumAirNeighbors(wx, wy - 1, wz)+1, 3); // +1 because we are now air instead of water
+                return AIR;
+            }
+            else
+            {
+                // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
+                foreach (LVector3 neighbor in SidewaysNeighbors())
+                {
+                    LVector3 pos = new LVector3(wx, wy, wz);
+                    LVector3 nPos = pos + neighbor;
+                    LVector3 nPos2 = pos + neighbor * 2;
+                    if ((nPos.Block == AIR && (this[nPos.x, nPos.y-1, nPos.z] == AIR || (nPos2.Block == AIR && this[nPos2.x, nPos2.y-1, nPos2.z] == AIR))))
+                    {
+                        this[nPos.x, nPos.y, nPos.z] = WATER;
+                        resState3 = 0;
+                        SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
+                        return AIR;
+                    }
+                }
+            }
+            return block;
+
+        }
+        /*
+        if (block == WATER_NOFLOW)
+        {
+            needsAnotherUpdate = false;
+            if (this[wx, wy - 1, wz] == AIR)
+            {
+                HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
+                Queue<LVector3> nodes = new Queue<LVector3>();
+                LVector3 myPos = new LVector3(wx, wy, wz);
+                nodes.Enqueue(myPos);
+                nodesSoFar.Add(myPos);
+                int steps = 0;
+                int maxSteps = 2000;
+                while (nodes.Count > 0)
+                {
+                    LVector3 curNode = nodes.Dequeue();
+                    foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
+                    {
+                        if (!nodesSoFar.Contains(neighbor) && (neighbor.Block == WATER || neighbor.Block == WATER_NOFLOW))
+                        {
+                            nodes.Enqueue(neighbor);
+                            nodesSoFar.Add(neighbor);
+                            this[neighbor.x, neighbor.y, neighbor.z] = WATER;
+                        }
+                    }
+                    steps += 1;
+                    if (steps >= maxSteps)
+                    {
+                        break;
+                    }
+                }
+                //resState3 = 0;
+                this[wx, wy - 1, wz] = WATER;
+                //if (state1 == 0)
+                //{
+                //SetState(wx, wy - 1, wz, 1, 3);
+                return AIR;
+            }
+            return WATER_NOFLOW;
+
+        }
+        if (block == WATER)
+        {
+            / *
+            if (state3 > 0)
+            {
+                needsAnotherUpdate = true;
+                resState3 = state3 - 1;
+            }
+            else if (state3 == 0)
+            {
+                resState3 = state3 - 1;
+                needsAnotherUpdate = false;
+            }
+            else
+            {
+                resState3 = 0;
+                needsAnotherUpdate = true;
+            }
+            * /
+            if (this[wx, wy - 1, wz] == AIR)
+            {
+                //resState3 = 0;
+                this[wx, wy - 1, wz] = WATER;
+                //SetState(wx, wy - 1, wz, 1, 3);
+                return AIR;
+            }
+            else if (this[wx, wy - 1, wz] == WATER || this[wx, wy-1, wz] == WATER_NOFLOW)
+            {
+                //if (state1 == 0)
+                //{
+                
+            }
+            needsAnotherUpdate = false;
+            Debug.Log("water update " + wx + " " + wy + " " + wz + " " + resState3);
+            return WATER_NOFLOW;
+            
+            return WATER;
+        }
+
+            /*
+
+
+           // }
+            resState1 = 0;
+            if (this[wx, wy-1, wz] == AIR)
+            {
+                this[wx, wy - 1, wz] = PUSHED_WATER;
+                SetState(wx, wy - 1, wz, 0, 1);
+                resState3 = DOWN;
+                //AddBlockUpdateToNeighbors(wx, wy, wz);
+                return AIR;
+            }
+
+            if(this[wx, wy-1, wz] == WATER)
+            {
+                this[wx, wy - 1, wz] = PUSHED_WATER;
+                SetState(wx, wy - 1, wz, 0, 1);
+                return WATER;
+            }
+
+            if (block == PUSHED_WATER)
+            {
+
+                LVector3 neighbor;
+                
+                int nNeighbors = RandomlyChooseNeighborMeetingCondition(new LVector3(wx, wy, wz), val => val.Block == AIR, out neighbor, false);
+                if (nNeighbors > 0)
+                {
+                    this[neighbor] = WATER;
+                    return AIR;
+                }
+
+                
+                foreach (LVector3 waterNeighbor in SidewaysNeighborsRelative(new LVector3(wx, wy, wz)))
+                {
+                    if (waterNeighbor.Block == WATER)
+                    {
+                        this[waterNeighbor] = PUSHED_WATER;
+                    }
+                }
+                / *
+                nNeighbors = RandomlyChooseNeighborMeetingCondition(new LVector3(wx, wy, wz), val => val.Block == WATER, out neighbor, false);
+                if (nNeighbors > 0)
+                {
+                    this[neighbor] = PUSHED_WATER;
+                    return WATER;
+                }
+                * /
+                / *
+                if (!madePushed && this[wx, wy + 1, wz] == WATER)
+                {
+                    this[wx, wy + 1, wz] = PUSHED_WATER;
+                    AddBlockUpdateToNeighbors(wx, wy + 1, wz);
+                    needsAnotherUpdate = true;
+                    return PUSHED_WATER;
+                }
+                if (this[wx, wy+1, wz] == AIR && !madePushed)
+                {
+                    this[wx, wy + 1, wz] = WATER;
+                    SetState(wx, wy + 1, wz, 6, 1);
+                    AddBlockUpdateToNeighbors(wx, wy - 1, wz);
+                    AddBlockUpdateToNeighbors(wx, wy + 1, wz);
+                    AddBlockUpdate(wx, wy + 1, wz);
+                    needsAnotherUpdate = false;
+                    return AIR;
+                }
+                AddBlockUpdateToNeighbors(wx, wy, wz);
+                * /
+                / *
+                // random pr of flowing up if failed to flow sideways and pushed
+                if (!madePushed && (this[wx, wy + 1, wz] == AIR || this[wx, wy + 1, wz] == WATER))
+                {
+                    if (Random.value < 0.1f)
+                    {
+                        if (this[wx, wy + 1, wz] == AIR && this[wx, wy-1, wz] == PUSHED_WATER)
+                        {
+                            int depth = 0;
+                            while(this[wx, wy-depth, wz] == PUSHED_WATER)
+                            {
+                                depth += 1;
+                            }
+                            depth -= 1;
+                            for (int i = 0; i < depth; i++)
+                            {
+                                this[wx, wy - i, wz] = WATER;
+                            }
+                            this[wx, wy + 1, wz] = WATER;
+                            this[wx, wy - depth, wz] = AIR;
+                            AddBlockUpdate(wx+1, wy - depth, wz);
+                            AddBlockUpdate(wx-1, wy - depth, wz);
+                            AddBlockUpdate(wx, wy - depth, wz+1);
+                            AddBlockUpdate(wx, wy - depth, wz-1);
+                            return AIR;
+                        }
+                        else if(this[wx, wy + 1, wz] == WATER)
+                        {
+
+                            this[wx, wy + 1, wz] = PUSHED_WATER;
+                            AddBlockUpdate(wx, wy + 1, wz);
+                            return PUSHED_WATER;
+                        }
+                    }
+                    else
+                    {
+                        needsAnotherUpdate = true;
+                    }
+                }
+        */
 
         if (state1 > 1)
         {
@@ -642,7 +1378,7 @@ public class World
             {
                 for (int y = -1; y <= 1; y++)
                 {
-                    if (this[wx + 1, wy+y, wz] == DIRT)
+                    if (this[wx + 1, wy+y, wz] == DIRT && this[wx + 1, wy + y+1, wz] == AIR)
                     {
                         if (Random.value < prGrass)
                         {
@@ -654,7 +1390,7 @@ public class World
                         }
                     }
 
-                    if (this[wx - 1, wy + y, wz] == DIRT)
+                    if (this[wx - 1, wy + y, wz] == DIRT && this[wx - 1, wy + y + 1, wz] == AIR)
                     {
                         if (Random.value < prGrass)
                         {
@@ -666,7 +1402,7 @@ public class World
                         }
                     }
 
-                    if (this[wx, wy + y, wz + 1] == DIRT)
+                    if (this[wx, wy + y, wz + 1] == DIRT && this[wx, wy + y + 1, wz+1] == AIR)
                     {
                         if (Random.value < prGrass)
                         {
@@ -678,7 +1414,7 @@ public class World
                         }
                     }
 
-                    if (this[wx, wy + y, wz - 1] == DIRT)
+                    if (this[wx, wy + y, wz - 1] == DIRT && this[wx, wy + y + 1, wz-1] == AIR)
                     {
                         if (Random.value < prGrass)
                         {
@@ -768,6 +1504,25 @@ public class World
         }
     }
 
+    long divWithCeil(long a, long b)
+    {
+        if (a % b == 0)
+        {
+            return a / b;
+        }
+        else
+        {
+            if ((a < 0 && b < 0) || (a > 0 && b > 0))
+            {
+                return a / b + 1; // if a and b have the same, this rounds down, round up instead (in other words, always ceil)
+            }
+            else
+            {
+                return a / b;
+            }
+        }
+    }
+
 
     public int this[LVector3 pos]
     {
@@ -818,6 +1573,17 @@ public class World
 
     Chunk GetChunk(long[] pos)
     {
+        int numInCache = chunkCache.Count;
+        for (int i = 0; i < numInCache; i++)
+        {
+            Chunk chunk = chunkCache[i];
+            if (chunk.cx == pos[0] && chunk.cy == pos[1] && chunk.cz == pos[2])
+            {
+                return chunk;
+            }
+        }
+
+
         long minDim = -1;
         long minNumInDict = long.MaxValue;
         for (int d = 0; d < DIM; d++)
@@ -840,6 +1606,16 @@ public class World
         {
             foreach (Chunk chunk in chunksPer[minDim][pos[minDim]])
             {
+                if (chunk.cx == pos[0] && chunk.cy == pos[1] && chunk.cz == pos[2])
+                {
+                    while (chunkCache.Count >= cacheSize)
+                    {
+                        chunkCache.RemoveAt(0);
+                    }
+                    chunkCache.Add(chunk);
+                    return chunk;
+                }
+                /*
                 bool failed = false;
                 for (int d = 0; d < DIM; d++)
                 {
@@ -853,6 +1629,7 @@ public class World
                 {
                     return chunk;
                 }
+                */
             }
             return null;
         }
@@ -923,7 +1700,16 @@ public class World
         */
     }
 
+    public Chunk GetOrGenerateChunkAtPos(long x, long y, long z)
+    {
+        long chunkX = divWithFloor(x, chunkSize);
+        long chunkY = divWithFloor(y, chunkSize);
+        long chunkZ = divWithFloor(z, chunkSize);
+        Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+        return chunk;
+    }
 
+    
     public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors=true)
     {
         GetOrGenerateChunk(divWithFloor(i, chunkSize), divWithFloor(j, chunkSize), divWithFloor(k, chunkSize)).AddBlockUpdate(i, j, k);
@@ -932,6 +1718,7 @@ public class World
             AddBlockUpdateToNeighbors(i, j, k);
         }
     }
+    
 
     public void AddBlockUpdateToNeighbors(long i, long j, long k)
     {
@@ -980,7 +1767,14 @@ public class World
 
     public void Tick()
     {
+        // what direction is checked first: goes in a weird order after that
+        globalPreference = (globalPreference + 1) % 4;
         List<Chunk> allChunksHere = new List<Chunk>(allChunks);
+
+        foreach (Chunk chunk in allChunksHere)
+        {
+            chunk.TickStart();
+        }
 
         foreach (Chunk chunk in allChunksHere)
         {
@@ -1247,8 +2041,12 @@ public class BlocksWorld : MonoBehaviour {
     int ay = 0;
     int az = 0;
 
+
+    public int numChunksTotal;
     // Update is called once per frame
     void Update () {
+
+        numChunksTotal = world.allChunks.Count;
         for (int i = 0; i < 20; i++)
         {
             //world[ax, ay, az] = World.DIRT;
@@ -1265,6 +2063,14 @@ public class BlocksWorld : MonoBehaviour {
         {
             lastTick = millis();
             world.Tick();
+        }
+
+
+
+        BlocksPlayer player = FindObjectOfType<BlocksPlayer>();
+        if (player != null)
+        {
+            //Chunk playerChunk = world.GetOrGenerateChunkAtPos()
         }
 	}
 
@@ -1289,7 +2095,7 @@ public class BlocksWorld : MonoBehaviour {
         chunk.chunkRenderer.drawData.SetCounterValue(0);
         chunkBlockData.SetData(chunk.chunkData.GetRawData());
         cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawData);
-        cullBlocksShader.Dispatch(0, 2, 2, 2);
+        cullBlocksShader.Dispatch(0, chunkSize/8, chunkSize / 8, chunkSize / 8);
         int[] args = new int[] { 0 };
         ComputeBuffer.CopyCount(chunk.chunkRenderer.drawData, world.argBuffer, 0);
         world.argBuffer.GetData(args);

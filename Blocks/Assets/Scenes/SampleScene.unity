@@ -200,7 +200,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 183012524}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5, y: 20, z: 5}
+  m_LocalPosition: {x: 5, y: 38.88, z: 5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 342654145}
@@ -333,6 +333,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   heightBelowHead: 2.5
   heightAboveHead: 0.2
+  feetWidth: 0.2
   speed: 5
   desiredMove: {x: 0, y: 0, z: 0}
   usingShift: 0
@@ -634,18 +635,18 @@ Prefab:
     - {fileID: 0}
   m_ParentPrefab: {fileID: 100100000, guid: b2d6538d3dc065f4aa63743b569c851d, type: 2}
   m_IsPrefabParent: 0
---- !u!1 &1487115150
+--- !u!1 &1273376210
 GameObject:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   serializedVersion: 5
   m_Component:
-  - component: {fileID: 1487115155}
-  - component: {fileID: 1487115154}
-  - component: {fileID: 1487115153}
-  - component: {fileID: 1487115152}
-  - component: {fileID: 1487115151}
+  - component: {fileID: 1273376215}
+  - component: {fileID: 1273376214}
+  - component: {fileID: 1273376213}
+  - component: {fileID: 1273376212}
+  - component: {fileID: 1273376211}
   m_Layer: 0
   m_Name: Cube (1)
   m_TagString: Untagged
@@ -653,27 +654,28 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1487115151
+--- !u!114 &1273376211
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1487115150}
-  m_Enabled: 1
+  m_GameObject: {fileID: 1273376210}
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3090cba4e2c25c1429501b98a933b2c0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   mobType: 0
-  body: {fileID: 1487115152}
-  pathfindsPerSecond: 2
+  body: {fileID: 1273376212}
+  blocksHeight: 2
+  pathfindsPerSecond: 0.5
   lastPathfind: 0
---- !u!114 &1487115152
+--- !u!114 &1273376212
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1487115150}
+  m_GameObject: {fileID: 1273376210}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
@@ -681,16 +683,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   heightBelowHead: 2.5
   heightAboveHead: 0.2
-  speed: 6
+  feetWidth: 0.2
+  speed: 8
   desiredMove: {x: 0, y: 0, z: 0}
   usingShift: 0
   jumping: 0
---- !u!23 &1487115153
+--- !u!23 &1273376213
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1487115150}
+  m_GameObject: {fileID: 1273376210}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -700,7 +703,7 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RenderingLayerMask: 4294967295
   m_Materials:
-  - {fileID: 15303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -720,19 +723,19 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
---- !u!33 &1487115154
+--- !u!33 &1273376214
 MeshFilter:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1487115150}
+  m_GameObject: {fileID: 1273376210}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &1487115155
+--- !u!4 &1273376215
 Transform:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 1487115150}
+  m_GameObject: {fileID: 1273376210}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 14.02, y: 24.83, z: 21.098585}
   m_LocalScale: {x: 1, y: 2.5, z: 1}
@@ -808,6 +811,114 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!1 &1987926142
+GameObject:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  serializedVersion: 5
+  m_Component:
+  - component: {fileID: 1987926147}
+  - component: {fileID: 1987926146}
+  - component: {fileID: 1987926145}
+  - component: {fileID: 1987926144}
+  - component: {fileID: 1987926143}
+  m_Layer: 0
+  m_Name: Cube (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1987926143
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1987926142}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3090cba4e2c25c1429501b98a933b2c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mobType: 0
+  body: {fileID: 1987926144}
+  blocksHeight: 2
+  pathfindsPerSecond: 0.5
+  lastPathfind: 0
+--- !u!114 &1987926144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1987926142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  heightBelowHead: 2.5
+  heightAboveHead: 0.2
+  feetWidth: 0.2
+  speed: 2
+  desiredMove: {x: 0, y: 0, z: 0}
+  usingShift: 0
+  jumping: 0
+--- !u!23 &1987926145
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1987926142}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RenderingLayerMask: 4294967295
+  m_Materials:
+  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 0
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+--- !u!33 &1987926146
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1987926142}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &1987926147
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1987926142}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 14.02, y: 24.83, z: 21.098585}
+  m_LocalScale: {x: 1, y: 2.5, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 5
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2094522184
 GameObject:
   m_ObjectHideFlags: 0
@@ -833,14 +944,15 @@ MonoBehaviour:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 2094522184}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3090cba4e2c25c1429501b98a933b2c0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   mobType: 0
   body: {fileID: 2094522186}
-  pathfindsPerSecond: 2
+  blocksHeight: 1
+  pathfindsPerSecond: 0.5
   lastPathfind: 0
 --- !u!114 &2094522186
 MonoBehaviour:
@@ -853,8 +965,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  heightBelowHead: 2.5
+  heightBelowHead: 1
   heightAboveHead: 0.2
+  feetWidth: 0.2
   speed: 4
   desiredMove: {x: 0, y: 0, z: 0}
   usingShift: 0
@@ -909,7 +1022,7 @@ Transform:
   m_GameObject: {fileID: 2094522184}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 14.02, y: 24.83, z: 21.098585}
-  m_LocalScale: {x: 1, y: 2.5, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 3

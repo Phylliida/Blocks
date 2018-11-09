@@ -16,6 +16,8 @@ public class BlockMob : MonoBehaviour {
 
     Vector3 offset;
 
+    public int blocksHeight = 2;
+
 
 
     PathNode curPath;
@@ -36,9 +38,45 @@ public class BlockMob : MonoBehaviour {
 
     World world { get  { return World.mainWorld; }   }
 
+    public bool isValid(LVector3 prevPos, LVector3 pos)
+    {
+        bool isCurrentlyValid = true;
+        for (int i = 0; i < blocksHeight; i++)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == World.AIR;
+        }
+        // bad:
+        // X  
+        //    2
+        // 1
+        // good:
+        // 
+        //     2
+        // 1 
+        if (pos.y > prevPos.y)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == World.AIR;
+        }
+        else if(pos.y < prevPos.y)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == World.AIR;
+        }
+        if (prevPos.y == pos.y && pos.z != prevPos.z && pos.x != prevPos.x)
+        {
+            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == World.AIR || world[pos.x, prevPos.y, prevPos.z] == World.AIR);
+        }
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != World.AIR;
+    }
+
+
     public bool isValid(LVector3 pos)
     {
-        return world[pos] == World.AIR && world[pos.x, pos.y + 1, pos.z] == World.AIR && world[pos.x, pos.y - 1, pos.z] != World.AIR;
+        bool isCurrentlyValid = true;
+        for (int i = 0; i < blocksHeight; i++)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == World.AIR;
+        }
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != World.AIR;
     }
 
 
@@ -46,6 +84,10 @@ public class BlockMob : MonoBehaviour {
     {
         yield return new LVector3(pos.x + 1, pos.y, pos.z);
         yield return new LVector3(pos.x - 1, pos.y, pos.z);
+        yield return new LVector3(pos.x + 1, pos.y, pos.z + 1);
+        yield return new LVector3(pos.x - 1, pos.y, pos.z + 1);
+        yield return new LVector3(pos.x + 1, pos.y, pos.z - 1);
+        yield return new LVector3(pos.x - 1, pos.y, pos.z - 1);
         yield return new LVector3(pos.x + 1, pos.y + 1, pos.z);
         yield return new LVector3(pos.x - 1, pos.y + 1, pos.z);
         yield return new LVector3(pos.x + 1, pos.y - 1, pos.z);
@@ -58,15 +100,14 @@ public class BlockMob : MonoBehaviour {
         yield return new LVector3(pos.x, pos.y, pos.z - 1);
     }
 
-    public void Pathfind(LVector3 goalPos, int maxSteps = 100)
+    public void Pathfind(LVector3 startPos, LVector3 goalPos, int maxSteps = 100)
     {
-        Debug.Log((new LVector3(1, 2, 3)).BlockCentertoUnityVector3() + " is center of 1,2,3");
         HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
         Queue<PathNode> nodes = new Queue<PathNode>();
-        LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+        LVector3 myPos = startPos;
         PathNode closest = new PathNode(myPos, null);
         long closestDist = long.MaxValue;
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 2; i++)
         {
             LVector3 tmpPos = myPos - new LVector3(0, i, 0);
             if (!nodesSoFar.Contains(tmpPos) && isValid(tmpPos))
@@ -92,14 +133,14 @@ public class BlockMob : MonoBehaviour {
             }
             foreach (LVector3 neighbor in AllNeighbors(curNode.pos))
             {
-                if (!nodesSoFar.Contains(neighbor) && isValid(neighbor))
+                if (!nodesSoFar.Contains(neighbor) && isValid(curNode.pos, neighbor))
                 {
                     nodes.Enqueue(new PathNode(neighbor, curNode));
                     nodesSoFar.Add(neighbor);
                 }
             }
             steps += 1;
-            if (steps == maxSteps || dist <= 1)
+            if (steps >= maxSteps || dist <= 1)
             {
                 Debug.Log("found path with dist = " + dist + " in " + steps + " steps");
                 break;
@@ -130,15 +171,91 @@ public class BlockMob : MonoBehaviour {
     public void Update()
     {
 
-        if (PhysicsUtils.millis() - lastPathfind > 1000.0/pathfindsPerSecond && body.TouchingLand())
+        if (PhysicsUtils.millis() - lastPathfind > 1000.0/pathfindsPerSecond)
         {
+            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+            RaycastResults blockStandingOn = body.BlockStandingOn();
+            // if we are using shift and standing over an empty block, but our feet are on a neighboring block, use that neighboring block for pathfinding instead
+            if (blockStandingOn != null)
+            {
+                myPos = blockStandingOn.hitBlock + new LVector3(0, blocksHeight, 0);
+            }
             LVector3 playerPos = LVector3.FromUnityVector3(FindObjectOfType<BlocksPlayer>().transform.position);
-            Pathfind(playerPos, 200);
+            Pathfind(myPos, playerPos, 200);
             lastPathfind = PhysicsUtils.millis();
         }
 
-
+        body.desiredMove = Vector3.zero;
         Vector3 targetPos = transform.position;
+        if (curPath != null)
+        {
+            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+            LVector3 myPosBeforeJump = myPos - new LVector3(0, 1, 0);
+            if (curPath.prevNode != null && (myPos == curPath.prevNode.pos || myPosBeforeJump == curPath.prevNode.pos))
+            {
+
+            }
+            else if (curPath.nextNode != null && (myPos == curPath.nextNode.pos || myPosBeforeJump == curPath.nextNode.pos))
+            {
+                curPath = curPath.nextNode;
+            }
+            else if (myPos == curPath.pos || myPosBeforeJump == curPath.pos)
+            {
+                if (curPath.nextNode != null)
+                {
+                    curPath = curPath.nextNode;
+                }
+            }
+            else if(myPos != curPath.pos && myPosBeforeJump != curPath.pos && curPath.prevNode != null)
+            {
+                //curPath = curPath.prevNode;
+            }
+
+            /*
+            while (myPos != curPath.pos && myPosBeforeJump != curPath.pos)
+            {
+                if (curPath.nextNode == null)
+                {
+                    break;
+                }
+                else
+                {
+                    curPath = curPath.nextNode;
+                }
+            }
+            */
+
+            //if (myPos == curPath.pos || myPosBeforeJump == curPath.pos)
+           // {
+            LVector3 targetBlock = curPath.pos;
+            if (targetBlock.y == LVector3.FromUnityVector3(transform.position).y)
+            {
+                body.usingShift = true;
+            }
+            else
+            {
+                body.usingShift = false;
+            }
+            if (curPath.nextNode != null)
+            {
+                //targetBlock = curPath.nextNode.pos;
+            }
+            if (targetBlock.y > myPos.y)
+            {
+                body.jumping = true;
+            }
+            else
+            {
+                body.jumping = false;
+            }
+            targetPos = targetBlock.BlockCentertoUnityVector3();
+            body.SetAbsoluteDesiredMove((targetPos - transform.position).normalized);
+            //}
+            //else
+            //{
+           // }
+        }
+        /*
         if (curPath != null && curPath.nextNode != null)
         {
             //PathNode next = curPath;
@@ -170,7 +287,7 @@ public class BlockMob : MonoBehaviour {
             body.jumping = false;
         }
         body.SetAbsoluteDesiredMove((targetPos - transform.position)+Random.insideUnitSphere*0.1f);
-
+        */
         /*
         Vector3 curOff = Random.insideUnitCircle;
         offset += curOff * 0.1f;
