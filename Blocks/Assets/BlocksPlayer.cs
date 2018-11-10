@@ -8,6 +8,7 @@ public class BlocksPlayer : MonoBehaviour
     public SmoothMouseLook mouseLook;
     public MovingEntity body;
     public Camera mainCamera;
+    Inventory inventory;
     public float reachRange = 6.0f;
 
     int blockPlacing;
@@ -15,10 +16,46 @@ public class BlocksPlayer : MonoBehaviour
     public void Start()
     {
         blockPlacing = World.GRASS;
+        inventory = new Inventory(16);
     }
+
+    public void GetBlockEntity(BlockEntity blockEntity)
+    {
+        Debug.Log("got block with id = " + blockEntity.blockId);
+        if (inventory.TryToAddBlock(blockEntity.blockId))
+        {
+            GameObject.Destroy(blockEntity.gameObject);
+            Debug.Log("inventory: " + inventory);
+        }
+    }
+
     public void Update()
     {
-
+        BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
+        foreach (BlockEntity blockEntity in entities)
+        {
+            Vector3 grabFromPos = transform.position - Vector3.up * GetComponent<MovingEntity>().heightBelowHead / 3.0f;
+            if (inventory.CanAddBlock(blockEntity.blockId))
+            {
+                if ((Vector3.Distance(blockEntity.transform.position, grabFromPos) < reachRange && blockEntity.playerPulling == null) || blockEntity.playerPulling == GetComponent<MovingEntity>())
+                {
+                    blockEntity.playerPulling = GetComponent<MovingEntity>();
+                    float moveDist = 10.0f * Time.deltaTime;
+                    if (Vector3.Distance(blockEntity.transform.position, grabFromPos) < Mathf.Max(0.2f, moveDist))
+                    {
+                        GetBlockEntity(blockEntity);
+                    }
+                    else
+                    {
+                        blockEntity.transform.position += (grabFromPos - blockEntity.transform.position).normalized * moveDist;
+                    }
+                }
+            }
+            else if(blockEntity.playerPulling == GetComponent<MovingEntity>())
+            {
+                blockEntity.playerPulling = null;
+            }
+        }
         if (Input.GetMouseButtonDown(0) && mouseLook.prevCapturing)
         {
             LVector3 hitPos;
@@ -31,6 +68,7 @@ public class BlocksPlayer : MonoBehaviour
             if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange*World.mainWorld.worldScale, out hitResults))
             {
                 //Debug.Log("hit at pos " + hitPos);
+                World.mainWorld.CreateBlockEntity(hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3());
                 World.mainWorld[hitResults.hitBlock] = 0;
             }
             else

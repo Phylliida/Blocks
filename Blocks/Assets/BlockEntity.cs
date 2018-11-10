@@ -8,6 +8,7 @@ public class BlockEntity : MonoBehaviour {
 
     public int blockId;
     int displayedBlockId = -1;
+    public MovingEntity playerPulling;
 	// Use this for initialization
 	void Start () {
 		
@@ -15,6 +16,10 @@ public class BlockEntity : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
+        if (playerPulling != null)
+        {
+            transform.GetComponent<MovingEntity>().enabled = false;
+        }
 		if (displayedBlockId != blockId)
         {
             transform.GetComponent<MeshFilter>().mesh = BlocksWorld.blockMesh;

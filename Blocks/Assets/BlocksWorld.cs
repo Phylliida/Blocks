@@ -740,6 +740,27 @@ public class World
     public const int AIR = 0;
     public const int WILDCARD = -1;
     public BlocksWorld blocksWorld;
+
+
+    public static string BlockToString(int block)
+    {
+        switch (block)
+        {
+            case LEAF: return "Leaf";;
+            case TRUNK: return "Log";
+            case WATER_NOFLOW: return "Water (no flow)";
+            case WATER: return "Water";
+            case BEDROCK: return "Bedrock";
+            case DIRT: return "Dirt";
+            case GRASS: return "Grass";
+            case STONE: return "Stone";
+            case SAND: return "Sand";
+            case AIR: return "Air";
+            case WILDCARD: return "Wildcard";
+            default: return "unknown";
+        }
+    }
+
     public float worldScale
     {
         get
@@ -751,6 +772,8 @@ public class World
             blocksWorld.worldScale = value;
         }
     }
+
+    public static Dictionary<int, int> stackableSize; 
 
     public int chunkSize;
     Dictionary<long, List<Chunk>> chunksPerX;
@@ -769,11 +792,29 @@ public class World
 
     public List<Structure> unfinishedStructures;
 
+
+    public void CreateBlockEntity(int block, Vector3 position)
+    {
+        GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockEntityPrefab);
+        blockEntity.transform.position = position;
+        blockEntity.GetComponent<BlockEntity>().blockId = block;
+    }
+
     public World(BlocksWorld blocksWorld, int chunkSize)
     {
         World.mainWorld = this;
         this.blocksWorld = blocksWorld;
         this.chunkSize = chunkSize;
+
+
+        stackableSize = new Dictionary<int, int>();
+        stackableSize[DIRT] = 16;
+        stackableSize[STONE] = 45;
+        stackableSize[GRASS] = 64;
+        stackableSize[SAND] = 32;
+        stackableSize[BEDROCK] = 16;
+
+
         chunksPerX = new Dictionary<long, List<Chunk>>();
         chunksPerY = new Dictionary<long, List<Chunk>>();
         chunksPerZ = new Dictionary<long, List<Chunk>>();
@@ -1132,10 +1173,6 @@ public class World
             return AIR;
         }
 
-        if (!World.maxCapacities.ContainsKey(block))
-        {
-            return block;
-        }
 
         if (block == SAND)
         {
@@ -1192,51 +1229,6 @@ public class World
                     needsAnotherUpdate = true;
                     return WATER_NOFLOW;
                 }
-                /*
-                HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
-                Queue<LVector3> nodes = new Queue<LVector3>();
-                LVector3 myPos = new LVector3(wx, wy, wz);
-                nodes.Enqueue(myPos);
-                nodesSoFar.Add(myPos);
-                int steps = 0;
-                int maxSteps = 10;
-                while (nodes.Count > 0)
-                {
-                    LVector3 curNode = nodes.Dequeue();
-                    foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
-                    {
-                        // only consider blocks with y level lower than us
-                        if (neighbor.y >= myPos.y)
-                        {
-                            continue;
-                        }
-                        int neighborBlock = neighbor.Block;
-                        // if we found a valid air block, flow WATER into there and replace us with AIR
-                        if (neighborBlock == AIR)
-                        {
-                            resState3 = 0;
-                            this[neighbor.x, neighbor.y, neighbor.z] = WATER;
-                            SetState(neighbor.x, neighbor.y, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y, neighbor.z), 3);
-                            return AIR;
-                        }
-                        // otherwise, keep searching through other water blocks
-                        else if (!nodesSoFar.Contains(neighbor) && IsWater(neighborBlock))
-                        {
-                            nodes.Enqueue(neighbor);
-                            nodesSoFar.Add(neighbor);
-                        }
-                    }
-                    steps += 1;
-                    if (steps >= maxSteps)
-                    {
-                        break;
-                    }
-                }
-                */
-                needsAnotherUpdate = true;
-                //resState3 = GetNumAirNeighbors(wx, wy, wz);
-                // failed to find, set us to WATER_NOFLOW
-                return WATER_NOFLOW;
             }
             else
             {
@@ -1285,273 +1277,13 @@ public class World
                     }
                 }
             }
-            /*
-
-                    HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
-                    Queue<LVector3> nodes = new Queue<LVector3>();
-                    LVector3 myPos = new LVector3(wx, wy, wz);
-                    nodes.Enqueue(myPos);
-                    nodesSoFar.Add(myPos);
-                    int steps  = 0;
-                    int maxSteps = 10;
-                    while (nodes.Count > 0)
-                    {
-                        LVector3 curNode = nodes.Dequeue();
-                        foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
-                        {
-                            int neighborBlock = neighbor.Block;
-                            // if we found a valid air block, flow WATER into there and replace us with AIR
-                            if (!nodesSoFar.Contains(neighbor) && IsWater(neighborBlock))
-                            {
-                                nodes.Enqueue(neighbor);
-                                nodesSoFar.Add(neighbor);
-
-                                if (this[neighbor.x, neighbor.y, neighbor.z] == WATER_NOFLOW && IsWater(this[neighbor.x, neighbor.y-1, neighbor.z])  && !IsWater(this[neighbor.x, neighbor.y+1, neighbor.z]))
-                                {
-                                    foreach (LVector3 myAirNeighbor in AllNeighborsRelative(myPos))
-                                    {
-                                        if (myAirNeighbor.Block == AIR)
-                                        {
-                                            this[neighbor.x, neighbor.y, neighbor.z] = AIR;
-                                            this[myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z] = WATER;
-                                            SetState(myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z, GetNumAirNeighbors(myAirNeighbor.x, myAirNeighbor.y, myAirNeighbor.z), 3); // tell it to trickle more if it fails
-                                            steps = maxSteps;
-                                            break;
-                                        }
-                                    }
-                                    //this[neighbor.x, neighbor.y, neighbor.z] = WATER;
-                                }
-                            }
-                        }
-                        steps += 1;
-                        if (steps >= maxSteps)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            */
+        }
 
 
-            // if air below, set below = water and us = air
-            if (this[wx, wy - 1, wz] == AIR)
-            {
-                this[wx, wy - 1, wz] = WATER;
-                resState3 = 0;
-                SetState(wx, wy - 1, wz, GetNumAirNeighbors(wx, wy - 1, wz)+1, 3); // +1 because we are now air instead of water
-                return AIR;
-            }
-            else
-            {
-                // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
-                foreach (LVector3 neighbor in SidewaysNeighbors())
-                {
-                    LVector3 pos = new LVector3(wx, wy, wz);
-                    LVector3 nPos = pos + neighbor;
-                    LVector3 nPos2 = pos + neighbor * 2;
-                    if ((nPos.Block == AIR && (this[nPos.x, nPos.y-1, nPos.z] == AIR || (nPos2.Block == AIR && this[nPos2.x, nPos2.y-1, nPos2.z] == AIR))))
-                    {
-                        this[nPos.x, nPos.y, nPos.z] = WATER;
-                        resState3 = 0;
-                        SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
-                        return AIR;
-                    }
-                }
-            }
+        if (!World.maxCapacities.ContainsKey(block))
+        {
             return block;
-
         }
-        /*
-        if (block == WATER_NOFLOW)
-        {
-            needsAnotherUpdate = false;
-            if (this[wx, wy - 1, wz] == AIR)
-            {
-                HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
-                Queue<LVector3> nodes = new Queue<LVector3>();
-                LVector3 myPos = new LVector3(wx, wy, wz);
-                nodes.Enqueue(myPos);
-                nodesSoFar.Add(myPos);
-                int steps = 0;
-                int maxSteps = 2000;
-                while (nodes.Count > 0)
-                {
-                    LVector3 curNode = nodes.Dequeue();
-                    foreach (LVector3 neighbor in AllNeighborsRelative(curNode))
-                    {
-                        if (!nodesSoFar.Contains(neighbor) && (neighbor.Block == WATER || neighbor.Block == WATER_NOFLOW))
-                        {
-                            nodes.Enqueue(neighbor);
-                            nodesSoFar.Add(neighbor);
-                            this[neighbor.x, neighbor.y, neighbor.z] = WATER;
-                        }
-                    }
-                    steps += 1;
-                    if (steps >= maxSteps)
-                    {
-                        break;
-                    }
-                }
-                //resState3 = 0;
-                this[wx, wy - 1, wz] = WATER;
-                //if (state1 == 0)
-                //{
-                //SetState(wx, wy - 1, wz, 1, 3);
-                return AIR;
-            }
-            return WATER_NOFLOW;
-
-        }
-        if (block == WATER)
-        {
-            / *
-            if (state3 > 0)
-            {
-                needsAnotherUpdate = true;
-                resState3 = state3 - 1;
-            }
-            else if (state3 == 0)
-            {
-                resState3 = state3 - 1;
-                needsAnotherUpdate = false;
-            }
-            else
-            {
-                resState3 = 0;
-                needsAnotherUpdate = true;
-            }
-            * /
-            if (this[wx, wy - 1, wz] == AIR)
-            {
-                //resState3 = 0;
-                this[wx, wy - 1, wz] = WATER;
-                //SetState(wx, wy - 1, wz, 1, 3);
-                return AIR;
-            }
-            else if (this[wx, wy - 1, wz] == WATER || this[wx, wy-1, wz] == WATER_NOFLOW)
-            {
-                //if (state1 == 0)
-                //{
-                
-            }
-            needsAnotherUpdate = false;
-            Debug.Log("water update " + wx + " " + wy + " " + wz + " " + resState3);
-            return WATER_NOFLOW;
-            
-            return WATER;
-        }
-
-            /*
-
-
-           // }
-            resState1 = 0;
-            if (this[wx, wy-1, wz] == AIR)
-            {
-                this[wx, wy - 1, wz] = PUSHED_WATER;
-                SetState(wx, wy - 1, wz, 0, 1);
-                resState3 = DOWN;
-                //AddBlockUpdateToNeighbors(wx, wy, wz);
-                return AIR;
-            }
-
-            if(this[wx, wy-1, wz] == WATER)
-            {
-                this[wx, wy - 1, wz] = PUSHED_WATER;
-                SetState(wx, wy - 1, wz, 0, 1);
-                return WATER;
-            }
-
-            if (block == PUSHED_WATER)
-            {
-
-                LVector3 neighbor;
-                
-                int nNeighbors = RandomlyChooseNeighborMeetingCondition(new LVector3(wx, wy, wz), val => val.Block == AIR, out neighbor, false);
-                if (nNeighbors > 0)
-                {
-                    this[neighbor] = WATER;
-                    return AIR;
-                }
-
-                
-                foreach (LVector3 waterNeighbor in SidewaysNeighborsRelative(new LVector3(wx, wy, wz)))
-                {
-                    if (waterNeighbor.Block == WATER)
-                    {
-                        this[waterNeighbor] = PUSHED_WATER;
-                    }
-                }
-                / *
-                nNeighbors = RandomlyChooseNeighborMeetingCondition(new LVector3(wx, wy, wz), val => val.Block == WATER, out neighbor, false);
-                if (nNeighbors > 0)
-                {
-                    this[neighbor] = PUSHED_WATER;
-                    return WATER;
-                }
-                * /
-                / *
-                if (!madePushed && this[wx, wy + 1, wz] == WATER)
-                {
-                    this[wx, wy + 1, wz] = PUSHED_WATER;
-                    AddBlockUpdateToNeighbors(wx, wy + 1, wz);
-                    needsAnotherUpdate = true;
-                    return PUSHED_WATER;
-                }
-                if (this[wx, wy+1, wz] == AIR && !madePushed)
-                {
-                    this[wx, wy + 1, wz] = WATER;
-                    SetState(wx, wy + 1, wz, 6, 1);
-                    AddBlockUpdateToNeighbors(wx, wy - 1, wz);
-                    AddBlockUpdateToNeighbors(wx, wy + 1, wz);
-                    AddBlockUpdate(wx, wy + 1, wz);
-                    needsAnotherUpdate = false;
-                    return AIR;
-                }
-                AddBlockUpdateToNeighbors(wx, wy, wz);
-                * /
-                / *
-                // random pr of flowing up if failed to flow sideways and pushed
-                if (!madePushed && (this[wx, wy + 1, wz] == AIR || this[wx, wy + 1, wz] == WATER))
-                {
-                    if (Random.value < 0.1f)
-                    {
-                        if (this[wx, wy + 1, wz] == AIR && this[wx, wy-1, wz] == PUSHED_WATER)
-                        {
-                            int depth = 0;
-                            while(this[wx, wy-depth, wz] == PUSHED_WATER)
-                            {
-                                depth += 1;
-                            }
-                            depth -= 1;
-                            for (int i = 0; i < depth; i++)
-                            {
-                                this[wx, wy - i, wz] = WATER;
-                            }
-                            this[wx, wy + 1, wz] = WATER;
-                            this[wx, wy - depth, wz] = AIR;
-                            AddBlockUpdate(wx+1, wy - depth, wz);
-                            AddBlockUpdate(wx-1, wy - depth, wz);
-                            AddBlockUpdate(wx, wy - depth, wz+1);
-                            AddBlockUpdate(wx, wy - depth, wz-1);
-                            return AIR;
-                        }
-                        else if(this[wx, wy + 1, wz] == WATER)
-                        {
-
-                            this[wx, wy + 1, wz] = PUSHED_WATER;
-                            AddBlockUpdate(wx, wy + 1, wz);
-                            return PUSHED_WATER;
-                        }
-                    }
-                    else
-                    {
-                        needsAnotherUpdate = true;
-                    }
-                }
-        */
-
         if (state1 > 1)
         {
             if (block == AIR)
@@ -1580,15 +1312,6 @@ public class World
             {
                 int belowSupportPower = GetState(wx, wy - 1, wz, 2);
                 greatestNeighborSupportPower = TrickleSupportPowerUp(this[wx, wy - 1, wz], belowSupportPower, block);
-                /*
-                if (resSupportPower != supportPower)
-                {
-                    needsAnotherUpdate = true;
-                    supportPower = resSupportPower;
-                    AddBlockUpdateToNeighbors(wx, wy, wz);
-                    //Debug.Log("got support power of " + resSupportPower + " from below");
-                }
-                */
             }
             foreach (LVector3 neighbor in AllNeighborsExceptDown())
             {
@@ -2089,6 +1812,7 @@ public class BlocksWorld : MonoBehaviour {
     public Material triMaterial;
     public Transform renderTransform;
 
+    public GameObject blockEntityPrefab;
     ComputeBuffer drawPositions1;
     ComputeBuffer drawPositions2;
     bool isUsing1 = true;

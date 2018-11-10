@@ -369,6 +369,7 @@ MonoBehaviour:
   cullBlocksShader: {fileID: 7200000, guid: 535674d4758b900489a5b18ef9852efd, type: 3}
   triMaterial: {fileID: 2100000, guid: ef482a571724d6544b4296937748b40e, type: 2}
   renderTransform: {fileID: 324794737}
+  blockEntityPrefab: {fileID: 1995304599}
   worldScale: 2
   uiCamera: {fileID: 1850076245}
   ticksPerSecond: 20
@@ -1001,7 +1002,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1995304599}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.6, y: 78.49, z: -0.271}
+  m_LocalPosition: {x: 0.6, y: -10000, z: -0.271}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_Children: []
   m_Father: {fileID: 0}
