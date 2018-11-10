@@ -20,6 +20,46 @@ public class WorldPosition
     }
 }
 
+
+public class Tuple<T1, T2, T3, T4>
+{
+    public T1 a;
+    public T2 b;
+    public T3 c;
+    public T4 d;
+    public Tuple(T1 a, T2 b, T3 c, T4 d)
+    {
+        this.a = a;
+        this.b = b;
+        this.c = c;
+        this.d = d;
+    }
+}
+public class Tuple<T1, T2, T3>
+{
+    public T1 a;
+    public T2 b;
+    public T3 c;
+    public Tuple(T1 a, T2 b, T3 c)
+    {
+        this.a = a;
+        this.b = b;
+        this.c = c;
+    }
+}
+
+public class Tuple<T1, T2>
+{
+    public T1 a;
+    public T2 b;
+    public Tuple(T1 a, T2 b)
+    {
+        this.a = a;
+        this.b = b;
+    }
+}
+
+
 public class ChunkRenderer
 {
     Chunk chunk;
@@ -167,6 +207,29 @@ public class Chunk
                         if (distFromSurface == 1)
                         {
                             this[x, y, z] = World.GRASS;
+                            // low pr of making tree
+                            if (Simplex.Noise.rand(x,y,z) < 0.01f)
+                            {
+                                Structure tree = new Structure("tree", true);
+                                int treeHeight = Mathf.RoundToInt(Simplex.Noise.rand(x, y + 2, z) * 4 + 3);
+                                for (int i = 0; i < treeHeight; i++)
+                                {
+                                    tree[x, y + i, z] = World.TRUNK;
+                                }
+                                PhysicsUtils.SearchOutwards(new LVector3(x, y + treeHeight, z), 3, true, true, (b, bx, by, bz) => b == World.AIR, (b, bx, by, bz) =>
+                                {
+                                    tree[bx, by, bz] = World.LEAF;
+                                    return false;
+                                }, getBlock: (bx, by, bz) => tree[bx, by, bz]);
+
+
+
+                                if (!tree.HasAllChunksGenerated())
+                                {
+                                    World.mainWorld.AddUnfinishedStructure(tree);
+                                }
+                            }
+
                         }
                         else if (distFromSurface <= 4)
                         {
@@ -176,7 +239,6 @@ public class Chunk
                         {
                            this[x, y, z] = World.STONE;
                         }
-                        
                     }
 
                     /*
@@ -193,7 +255,14 @@ public class Chunk
                         this[x, y, z] = World.BEDROCK;
                     }
                     */
-                    SetState(x, y, z, World.maxCapacities[this[x, y, z]], 2);
+                    if (World.maxCapacities.ContainsKey(this[x,y,z]))
+                    {
+                        SetState(x, y, z, World.maxCapacities[this[x, y, z]], 2);
+                    }
+                    else
+                    {
+                        SetState(x, y, z, 8, 2);
+                    }
                 }
             }
         }
@@ -347,12 +416,32 @@ public class ChunkData
     public HashSet<int> blocksNeedUpdatingNextFrame = new HashSet<int>();
     int[] data;
     int chunkSize, chunkSize_2, chunkSize_3;
-    public ChunkData(int chunkSize)
+    public ChunkData(int chunkSize, bool fillWithWildcard = false)
     {
         this.chunkSize = chunkSize;
         this.chunkSize_2 = chunkSize* chunkSize;
         this.chunkSize_3 = chunkSize* chunkSize* chunkSize;
         data = new int[chunkSize * chunkSize * chunkSize * 4];
+        if (fillWithWildcard)
+        {
+            for (int i= 0; i < data.Length; i++)
+            {
+                data[i] = World.WILDCARD;
+            }
+        }
+    }
+
+    public void CopyIntoChunk(Chunk chunk)
+    {
+        int[] chunkData = chunk.chunkData.data;
+        int totalLen = System.Math.Min(data.Length, chunkData.Length);
+        for (int i = 0; i < totalLen; i++)
+        {
+            if (data[i] != World.WILDCARD)
+            {
+                chunkData[i] = data[i];
+            }
+        }
     }
 
     public void TickStart()
@@ -476,11 +565,128 @@ public class ChunkData
     }
 }
 
+public class Structure
+{
+    public string name;
+    public bool madeInGeneration;
+    Dictionary<LVector3,ChunkData> ungeneratedChunkPositions;
+
+    public Dictionary<LVector3, int> block;
+    public Dictionary<LVector3, int> state1;
+    public Dictionary<LVector3, int> state2;
+    public Dictionary<LVector3, int> state3;
+
+    public Structure(string name, bool madeInGeneration)
+    {
+        this.name = name;
+        block = new Dictionary<LVector3, int>();
+        state1 = new Dictionary<LVector3, int>();
+        state2 = new Dictionary<LVector3, int>();
+        state3 = new Dictionary<LVector3, int>();
+        ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
+        this.madeInGeneration = madeInGeneration;
+    }
+
+
+    public bool HasAllChunksGenerated()
+    {
+        return ungeneratedChunkPositions.Count == 0;
+    }
+
+    /// <summary>
+    /// Returns true if filled in all of its chunks, otherwise false
+    /// </summary>
+    /// <param name="chunk"></param>
+    /// <returns></returns>
+    public bool AddNewChunk(Chunk chunk)
+    {
+        LVector3 chunkPos = new LVector3(chunk.cx, chunk.cy, chunk.cz);
+        if (ungeneratedChunkPositions.ContainsKey(chunkPos))
+        {
+            ChunkData chunkData = ungeneratedChunkPositions[chunkPos];
+            chunkData.CopyIntoChunk(chunk);
+            ungeneratedChunkPositions.Remove(chunkPos);
+        }
+        return ungeneratedChunkPositions.Count == 0;
+    }
+
+    public int this[long x, long y, long z]
+    {
+        get
+        {
+            return this[new LVector3(x, y, z)];
+        }
+        set
+        {
+            this[new LVector3(x, y, z)] = value;
+        }
+    }
+
+    public int this[LVector3 pos]
+    {
+        get
+        {
+            if (block.ContainsKey(pos))
+            {
+                return block[pos];
+            }
+            else
+            {
+                if (madeInGeneration)
+                {
+                    return World.WILDCARD;
+                }
+                else
+                {
+                    return World.mainWorld[pos];
+                }
+            }
+        }
+        set
+        {
+            block[pos] = value;
+
+            if (madeInGeneration)
+            {
+                Chunk chunk = World.mainWorld.GetChunkAtPos(pos.x, pos.y, pos.z);
+                if (chunk == null)
+                {
+                    LVector3 chunkPos;
+                    World.mainWorld.GetChunkCoordinatesAtPos(pos, out chunkPos);
+                    int chunkSize = World.mainWorld.chunkSize;
+                    if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
+                    {
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard:true);
+                    }
+                    long localPosX = pos.x - chunkPos.x * chunkSize;
+                    long localPosY = pos.y - chunkPos.y * chunkSize;
+                    long localPosZ = pos.z - chunkPos.z * chunkSize;
+                    ungeneratedChunkPositions[chunkPos][localPosX, localPosY, localPosZ] = value;
+                }
+                else
+                {
+                    bool wasGenerating = chunk.generating;
+                    chunk.generating = true;
+                    chunk[pos.x, pos.y, pos.z] = value;
+                    chunk.generating = wasGenerating;
+                }
+            }
+            else
+            {
+                World.mainWorld[pos] = value;
+            }
+
+        }
+    }
+}
+
 public class World
 {
     public static World mainWorld;
 
-    public static int numBlocks = 7;
+    public static int numBlocks = 9;
+    public const int LEAF = 9;
+    public const int TRUNK = 8;
     public const int WATER_NOFLOW = 7;
     public const int WATER = 6;
     public const int BEDROCK = 5;
@@ -489,6 +695,7 @@ public class World
     public const int STONE = 2;
     public const int SAND = 1;
     public const int AIR = 0;
+    public const int WILDCARD = -1;
     public BlocksWorld blocksWorld;
     public float worldScale
     {
@@ -502,7 +709,7 @@ public class World
         }
     }
 
-    int chunkSize;
+    public int chunkSize;
     Dictionary<long, List<Chunk>> chunksPerX;
     Dictionary<long, List<Chunk>> chunksPerY;
     Dictionary<long, List<Chunk>> chunksPerZ;
@@ -516,6 +723,8 @@ public class World
 
     public List<Chunk> chunkCache;
     int cacheSize = 20;
+
+    public List<Structure> unfinishedStructures;
 
     public World(BlocksWorld blocksWorld, int chunkSize)
     {
@@ -533,18 +742,17 @@ public class World
 
         chunkCache = new List<Chunk>(cacheSize);
 
+        unfinishedStructures = new List<Structure>();
+
         maxCapacities = new Dictionary<int, int>();
         maxCapacities[DIRT] = 3;
         maxCapacities[STONE] = 5;
         maxCapacities[GRASS] = 4;
         maxCapacities[SAND] = 0;
         maxCapacities[AIR] = 0;
-        maxCapacities[WATER] = 0;
-        maxCapacities[WATER_NOFLOW] = 0;
         maxCapacities[BEDROCK] = 6;
-        numBlocks = maxCapacities.Count;
 
-        int viewDist = 3;
+        int viewDist = 5;
         for (int i = -viewDist; i <= viewDist; i++)
         {
             for (int j = -viewDist; j <= viewDist; j++)
@@ -557,6 +765,10 @@ public class World
         }
     }
 
+    public void AddUnfinishedStructure(Structure structure)
+    {
+        unfinishedStructures.Add(structure);
+    }
 
 
 
@@ -615,7 +827,6 @@ public class World
 
     public int TrickleSupportPowerUp(int blockFrom, int powerFrom, int blockTo)
     {
-        int maxCapacityTo = maxCapacities[blockTo];
         if (blockTo == AIR)
         {
             return 0;
@@ -623,6 +834,11 @@ public class World
         if (blockFrom == AIR)
         {
             return 0;
+        }
+        int maxCapacityTo = int.MaxValue;
+        if (maxCapacities.ContainsKey(blockTo))
+        {
+            maxCapacityTo = maxCapacities[blockTo];
         }
         return System.Math.Min(powerFrom, maxCapacityTo); // doesn't lose support power if stacked on top of each other, but certain types of blocks can only hold so much support power
         return powerFrom; // or we just carry max power for up?
@@ -637,7 +853,12 @@ public class World
         {
             return 0;
         }
-        int maxCapacityTo = maxCapacities[blockTo];
+
+        int maxCapacityTo = int.MaxValue;
+        if (maxCapacities.ContainsKey(blockTo))
+        {
+            maxCapacityTo = maxCapacities[blockTo];
+        }
         return System.Math.Max(0, System.Math.Min(powerFrom-1, maxCapacityTo)); // loses 1 support power if not up, also some blocks are more "sturdy" than others
     }
 
@@ -866,6 +1087,11 @@ public class World
             resState2 = 0;
             needsAnotherUpdate = false;
             return AIR;
+        }
+
+        if (!World.maxCapacities.ContainsKey(block))
+        {
+            return block;
         }
 
         if (block == SAND)
@@ -1425,7 +1651,6 @@ public class World
                             needsAnotherUpdate = true;
                         }
                     }
-
                 }
                 //Debug.Log("updating grass block " + needsAnotherUpdate + " <- needs update? with air above " + wx + " " + wy + " " + wz + " " + block + " " + state);
                 return GRASS;
@@ -1688,6 +1913,17 @@ public class World
         }
         allChunks.Add(chunk);
 
+
+        List<Structure> leftoverStructures = new List<Structure>();
+        foreach (Structure structure in unfinishedStructures)
+        {
+            if (!structure.AddNewChunk(chunk))
+            {
+                leftoverStructures.Add(structure);
+            }
+        }
+
+        unfinishedStructures = leftoverStructures;
         /*
         // fun code that makes chunks repeat around in a very non-euclidean way
         if (allChunks.Count > 32)
@@ -1709,7 +1945,24 @@ public class World
         return chunk;
     }
 
-    
+    public void GetChunkCoordinatesAtPos(LVector3 worldPos, out LVector3 chunkPos)
+    {
+        long chunkX = divWithFloor(worldPos.x, chunkSize);
+        long chunkY = divWithFloor(worldPos.y, chunkSize);
+        long chunkZ = divWithFloor(worldPos.z, chunkSize);
+        chunkPos = new LVector3(chunkX, chunkY, chunkZ);
+    }
+
+    public Chunk GetChunkAtPos(long x, long y, long z)
+    {
+        long chunkX = divWithFloor(x, chunkSize);
+        long chunkY = divWithFloor(y, chunkSize);
+        long chunkZ = divWithFloor(z, chunkSize);
+        Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
+        return chunk;
+    }
+
+
     public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors=true)
     {
         GetOrGenerateChunk(divWithFloor(i, chunkSize), divWithFloor(j, chunkSize), divWithFloor(k, chunkSize)).AddBlockUpdate(i, j, k);
@@ -2032,6 +2285,7 @@ public class BlocksWorld : MonoBehaviour {
 
     // Use this for initialization
     void Start () {
+        
         SetupRendering();
         world = new World(this, chunkSize);
         lastTick = 0;

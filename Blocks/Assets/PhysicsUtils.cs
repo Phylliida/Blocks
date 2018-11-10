@@ -275,7 +275,7 @@ public class RaycastResults
 }
 
 
-public class PhysicsUtils  {
+public class PhysicsUtils {
 
 
 
@@ -284,7 +284,7 @@ public class PhysicsUtils  {
     {
         return System.DateTime.Now.Ticks / System.TimeSpan.TicksPerMillisecond;
     }
-    public static bool MouseCast(Camera camera, float playerWidth, float maxDist, out RaycastResults hitResults, int maxSteps=-1)
+    public static bool MouseCast(Camera camera, float playerWidth, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
     {
         Ray ray = camera.ScreenPointToRay(new Vector3(Screen.width / 2.0f, Screen.height / 2.0f, 0.01f));
 
@@ -310,7 +310,7 @@ public class PhysicsUtils  {
         if (curMaxSteps < maxSteps || visited == null || searchCounter == 0)
         {
             curMaxSteps = maxSteps;
-            visited = new int[(maxSteps*2+1) * (maxSteps * 2 + 1) * (maxSteps * 2 + 1)];
+            visited = new int[(maxSteps * 2 + 1) * (maxSteps * 2 + 1) * (maxSteps * 2 + 1)];
             if (searchCounter <= 0)
             {
                 searchCounter = int.MaxValue;
@@ -347,17 +347,26 @@ public class PhysicsUtils  {
 
     public static int to1D(int x, int y, int z, int width)
     {
-        return x + y * width + z * width*width;
+        return x + y * width + z * width * width;
     }
 
-    public static bool RunOnNeighbor(long curX, long curY, long curZ, int ind, int xOffset, int yOffset, int zOffset, int nx, int ny, int nz, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult)
+    public static bool RunOnNeighbor(long curX, long curY, long curZ, int ind, int xOffset, int yOffset, int zOffset, int nx, int ny, int nz, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult, GetBlock getBlock)
     {
         // if is not visited
         if (visited[ind + nx * xStep + ny * yStep + nz * zStep] != searchCounter)
         {
             // mark as visited
             visited[ind + nx * xStep + ny * yStep + nz * zStep] = searchCounter;
-            int neighborBlock = World.mainWorld[curX + nx, curY + ny, curZ + nz];
+            int neighborBlock;
+            if (getBlock == null)
+            {
+                neighborBlock = World.mainWorld[curX + nx, curY + ny, curZ + nz];
+            }
+            else
+            {
+                neighborBlock = getBlock(curX + nx, curY + ny, curZ + nz);
+            }
+           
 
             // if is desired result, done
             if (isBlockDesiredResult(neighborBlock, curX + nx, curY + ny, curZ + nz))
@@ -376,7 +385,10 @@ public class PhysicsUtils  {
         return false;
     }
     public static int blockPreference = 0;
-    public static bool SearchOutwards(LVector3 start, int maxSteps, bool searchUp, bool searchDown, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult)
+
+    public delegate int GetBlock(long x, long y, long z);
+
+    public static bool SearchOutwards(LVector3 start, int maxSteps, bool searchUp, bool searchDown, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult, GetBlock getBlock=null)
     {
         World world = World.mainWorld;
         InitializeGlobalSearchVars(maxSteps);
@@ -404,41 +416,41 @@ public class PhysicsUtils  {
             
             if (blockPreference == 0)
             {
-                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
             else if(blockPreference == 1)
             {
-                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
             else if(blockPreference == 2)
             {
-                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
             else if(blockPreference == 3)
             {
-                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
-                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 0; nz = -1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = -1; ny = 0; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
+                nx = 0; ny = 0; nz = 1; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
 
             if (searchDown)
             {
-                nx = 0; ny = -1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = -1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
 
             if (searchUp)
             {
-                nx = 0; ny = 1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult)) return true;
+                nx = 0; ny = 1; nz = 0; if (RunOnNeighbor(curX, curY, curZ, ind, xOffset, yOffset, zOffset, nx, ny, nz, isBlockValid, isBlockDesiredResult, getBlock)) return true;
             }
 
             // if not visited yet

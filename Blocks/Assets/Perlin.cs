@@ -185,6 +185,104 @@ namespace Simplex
         }
 
 
+        static uint hash(uint x)
+        {
+
+            x += (x << 10);
+            x ^= (x >> 6);
+            x += (x << 3);
+            x ^= (x >> 11);
+            x += (x << 15);
+            return x;
+        }
+        static uint hash(uint x, uint y)
+        {
+            return hash(x ^ hash(y));
+        }
+
+        static uint hash(uint x, uint y, uint z)
+        {
+            return hash(x ^ hash(y) ^ hash(z));
+        }
+
+        static uint hash(uint x, uint y, uint z, uint w)
+        {
+            return hash(x ^ hash(y) ^ hash(z) ^ hash(w));
+        }
+
+
+        public static float rand(float f)
+        {
+            const uint mantissaMask = 0x007FFFFFu;
+            const uint one = 0x3F800000u;
+
+            uint h = hash(asuint(f));
+            h &= mantissaMask;
+            h |= one;
+
+            float r2 = asfloat(h);
+            return r2 - 1.0f;
+        }
+
+        /// <summary>
+        /// Returns a random value from 0.0 to 1.0 (inclusive)
+        /// from some glsl code somewhere i don't remember exactly where
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns></returns>
+        public static float rand(float x, float y)
+        {
+            
+            const uint mantissaMask = 0x007FFFFFu;
+            const uint one = 0x3F800000u;
+
+            uint h = hash(asuint(x), asuint(y));
+            h &= mantissaMask;
+            h |= one;
+
+            float r2 = asfloat(h);
+            return r2 - 1.0f;
+        }
+
+
+        public static float randOffsetX, randOffsetY, randOffsetZ;
+
+        public static float rand(float x, float y, float z)
+        {
+            x += randOffsetX;
+            y += randOffsetY;
+            z += randOffsetZ;
+            const uint mantissaMask = 0x007FFFFFu;
+            const uint one = 0x3F800000u;
+
+            uint h = hash(asuint(x), asuint(y), asuint(z));
+            h &= mantissaMask;
+            h |= one;
+
+            float r2 = asfloat(h);
+            return r2 - 1.0f;
+        }
+
+        public static unsafe uint asuint(float value)
+        {
+            return *(uint*)(&value);
+        }
+        public static unsafe float asfloat(uint value)
+        {
+            return *(float*)(&value);
+        }
+
+
+        public static float randOld(float x, float y, float z)
+        {
+            return (Generate(x, y, z) + 1.0f) / 2.0f;
+        }
+        public static float randOld(long x, long y, long z)
+        {
+            return (Generate((float)x, (float)y, (float)z) + 1.0f) / 2.0f;
+        }
+
         public static float Generate(float x, float y, float z)
         {
             // Simple skewing factors for the 3D case

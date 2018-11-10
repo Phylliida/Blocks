@@ -20,7 +20,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 {
 	int blockVal = DataIn[T3(id)].x;
 	// 0 is air
-	if (blockVal != 0)
+
+	int3 ids = id;
+	bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
+
+	bool hasAirNeighbors =
+		DataIn[T3(ids + int3(0, 0, 1))] == 0 || DataIn[T3(ids + int3(0, 0, -1))] == 0 ||
+		DataIn[T3(ids + int3(0, 1, 0))] == 0 || DataIn[T3(ids + int3(0, -1, 0))] == 0 ||
+		DataIn[T3(ids + int3(1, 0, 0))] == 0 || DataIn[T3(ids + int3(-1, 0, 0))] == 0;
+
+	if (blockVal != 0 && (edge || hasAirNeighbors))
 	{
 		DrawingThings.Append(uint4(id.x, id.y, id.z, blockVal));
 	}
