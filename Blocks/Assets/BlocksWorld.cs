@@ -211,17 +211,60 @@ public class Chunk
                             if (Simplex.Noise.rand(x,y,z) < 0.01f)
                             {
                                 Structure tree = new Structure("tree", true);
-                                int treeHeight = Mathf.RoundToInt(Simplex.Noise.rand(x, y + 2, z) * 4 + 3);
+                                int treeHeight = Mathf.RoundToInt(Simplex.Noise.rand(x, y + 2, z) * 20 + 4);
                                 for (int i = 0; i < treeHeight; i++)
                                 {
-                                    tree[x, y + i, z] = World.TRUNK;
+                                    if (i == 0)
+                                    {
+                                        tree[x, y + i, z] = World.TRUNK;
+                                        continue;
+                                    }
+                                    float pAlong = (i+1) / (float)(treeHeight);
+
+                                    float maxWidth = 3.0f;
+                                    float topWidth = 0.5f;
+                                    float bottomWidth = 0.2f;
+                                    float decreasePoint = 0.3f;
+
+                                    float p;
+                                    float minVal;
+                                    float maxVal;
+                                    if (pAlong < decreasePoint)
+                                    {
+                                        minVal = bottomWidth;
+                                        maxVal = maxWidth;
+                                        p = (decreasePoint - pAlong) / decreasePoint;
+                                    }
+                                    else
+                                    {
+                                        minVal = maxWidth;
+                                        maxVal = topWidth;
+                                        p = 1-(pAlong - decreasePoint) / (1.0f - decreasePoint);
+                                    }
+
+                                    float width = minVal * p + maxVal * (1 - p);
+                                    int widthI = Mathf.FloorToInt(width);
+
+
+
+                                    for (int j = -widthI; j <= widthI; j++)
+                                    {
+                                        for (int k = -widthI; k <= widthI; k++)
+                                        {
+                                            if (Mathf.Sqrt(j*j + k*k) <= width)
+                                            {
+                                                tree[x + j, y + i, z + k] = World.LEAF;
+                                            }
+                                        }
+                                    }
                                 }
-                                PhysicsUtils.SearchOutwards(new LVector3(x, y + treeHeight, z), 3, true, true, (b, bx, by, bz) => b == World.AIR, (b, bx, by, bz) =>
+                                /*
+                                PhysicsUtils.SearchOutwards(new LVector3(x, y + treeHeight, z), 20+ treeHeight, true, true, (b, bx, by, bz) => b == World.AIR || b == World.WILDCARD, (b, bx, by, bz) =>
                                 {
                                     tree[bx, by, bz] = World.LEAF;
                                     return false;
                                 }, getBlock: (bx, by, bz) => tree[bx, by, bz]);
-
+                                */
 
 
                                 if (!tree.HasAllChunksGenerated())
@@ -2072,6 +2115,9 @@ public class BlocksWorld : MonoBehaviour {
 
     long lastTick = 0;
     public float ticksPerSecond = 20.0f;
+
+
+    public static Mesh blockMesh;
     void SetupRendering()
     {
         LoadMaterials();
@@ -2190,6 +2236,30 @@ public class BlocksWorld : MonoBehaviour {
         cubeOffsets.SetData(triOffsets);
         uvOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
         uvOffsets.SetData(texOffsets);
+
+        blockMesh = new Mesh();
+        List<Vector3> blockVertices = new List<Vector3>();
+        List<Vector2> blockUvs = new List<Vector2>();
+        List<int> triangles = new List<int>();
+        for (int i = 0; i < triOffsets.Length/4; i++)
+        {
+            Vector3 vertex = new Vector3(triOffsets[i * 4], triOffsets[i * 4 + 1], triOffsets[i * 4 + 2]) - new Vector3(0.5f, 0.5f, 0.5f);
+            Vector2 uv = new Vector2(texOffsets[i * 4], texOffsets[i * 4 + 1]);
+            blockVertices.Add(vertex);
+            blockUvs.Add(uv);
+            triangles.Add(i);
+        }
+        int[] actualTriangles = new int[triangles.Count];
+        for (int i = 0; i < triangles.Count/3; i++)
+        {
+            actualTriangles[i * 3] = triangles[i * 3 + 2];
+            actualTriangles[i * 3+1] = triangles[i * 3 + 1];
+            actualTriangles[i * 3+2] = triangles[i * 3];
+        }
+
+        blockMesh.SetVertices(blockVertices);
+        blockMesh.SetUVs(0, blockUvs);
+        blockMesh.SetTriangles(actualTriangles, 0);
 
         triMaterial.SetBuffer("cubeOffsets", cubeOffsets);
         triMaterial.SetBuffer("uvOffsets", uvOffsets);
