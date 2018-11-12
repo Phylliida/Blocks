@@ -8,7 +8,8 @@ public class BlocksPlayer : MonoBehaviour
     public SmoothMouseLook mouseLook;
     public MovingEntity body;
     public Camera mainCamera;
-    Inventory inventory;
+    public Inventory inventory;
+    public InventoryGui inventoryGui;
     public float reachRange = 6.0f;
 
     int blockPlacing;
@@ -34,6 +35,10 @@ public class BlocksPlayer : MonoBehaviour
         BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
         foreach (BlockEntity blockEntity in entities)
         {
+            if (!blockEntity.pullable)
+            {
+                continue;
+            }
             Vector3 grabFromPos = transform.position - Vector3.up * GetComponent<MovingEntity>().heightBelowHead / 3.0f;
             if (inventory.CanAddBlock(blockEntity.blockId))
             {
@@ -85,23 +90,31 @@ public class BlocksPlayer : MonoBehaviour
 
             RaycastResults hitResults;
 
-            if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
+            if (inventoryGui != null && inventory != null && inventory.blocks[inventoryGui.selection] != null && inventory.blocks[inventoryGui.selection].count > 0)
             {
-                // don't let you place a block in yourself
-                LVector3 myPos = LVector3.FromUnityVector3(transform.position);
-                LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
-                LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
-                LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-                if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
                 {
-                    World.mainWorld[hitResults.blockBeforeHit] = blockPlacing;
+                    // don't let you place a block in yourself
+                    LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+                    LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
+                    LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
+                    LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
+                    if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                    {
+                        World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
+                        inventory.blocks[inventoryGui.selection].count -= 1;
+                        if (inventory.blocks[inventoryGui.selection].count <= 0)
+                        {
+                            inventory.blocks[inventoryGui.selection] = null;
+                        }
+                    }
+                    //Debug.Log("hit at pos " + hitPos);
                 }
-                //Debug.Log("hit at pos " + hitPos);
-            }
-            else
-            {
+                else
+                {
 
-                //Debug.Log("mouse cast failed " + hitPos);
+                    //Debug.Log("mouse cast failed " + hitPos);
+                }
             }
         }
 

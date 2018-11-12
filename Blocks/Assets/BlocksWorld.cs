@@ -727,7 +727,8 @@ public class World
 {
     public static World mainWorld;
 
-    public static int numBlocks = 9;
+    public static int numBlocks = 10;
+    public const int EMPTY = 10;
     public const int LEAF = 9;
     public const int TRUNK = 8;
     public const int WATER_NOFLOW = 7;
@@ -1813,6 +1814,8 @@ public class BlocksWorld : MonoBehaviour {
     public Transform renderTransform;
 
     public GameObject blockEntityPrefab;
+    public GameObject blockRenderPrefab;
+    public GameObject blockRenderCanvas;
     ComputeBuffer drawPositions1;
     ComputeBuffer drawPositions2;
     bool isUsing1 = true;
