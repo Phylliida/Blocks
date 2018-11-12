@@ -587,6 +587,8 @@ public class PhysicsUtils {
             {
                 return false;
             }
+            //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF + " with distance " + Vector3.Distance(prevPosF, origin) + " and max distance " + maxDist);
+
 
             if (IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
             {

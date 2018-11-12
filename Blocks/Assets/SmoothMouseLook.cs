@@ -30,24 +30,50 @@ public class SmoothMouseLook : MonoBehaviour
     public float frameCounter = 20;
 
     Quaternion originalRotation;
+    public bool allowedToCapture = true;
     bool capturing = false;
     public bool prevCapturing = false;
     void Update()
     {
+        if (!allowedToCapture)
+        {
+            capturing = false;
+            prevCapturing = false;
+            if (Cursor.lockState != CursorLockMode.None)
+            {
+                Cursor.lockState = CursorLockMode.None;
+            }
+            if (!Cursor.visible)
+            {
+                Cursor.visible = true;
+            }
+            return;
+        }
+
         prevCapturing = capturing;
         if (Input.GetMouseButtonDown(0))
         {
             capturing = true;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
         }
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             capturing = false;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
         }
         if (!capturing)
+        {
+            if (Cursor.lockState != CursorLockMode.None || !Cursor.visible)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            return;
+        }
+        if (prevCapturing == capturing)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else
         {
             return;
         }

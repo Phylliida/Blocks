@@ -15,15 +15,13 @@ public class MovingEntity : MonoBehaviour {
 
     // Use this for initialization
     void Start () {
-        desiredMove = Vector3.zero;
-        usingShift = false;
 	}
 
     Vector3 vel;
 
 
     public Vector3 desiredMove;
-    public bool usingShift;
+    public bool usingShift = false;
     public bool jumping;
 
 
@@ -155,6 +153,11 @@ public class MovingEntity : MonoBehaviour {
     // Update is called once per frame
     void Update () {
         
+        // don't do stuff on first three frames to let generation happen
+        if (Time.frameCount < 3)
+        {
+            return;
+        }
         Vector3 goodDiff;
         Vector3 desiredDiff = desiredMove * Time.deltaTime * speed;
         desiredDiff = new Vector3(desiredDiff.x, 0, desiredDiff.z);
@@ -386,10 +389,12 @@ public class MovingEntity : MonoBehaviour {
                 }
             }
         }
+        Debug.Log(desiredOffset + " " + goodOffset + " " + name);
         if (Vector3.Dot(goodOffset.normalized, desiredOffset.normalized) <= 0.0001f)
         {
             return true;
         }
+        Debug.Log(desiredOffset + " " + goodOffset + " " + name);
         return false;
     }
 

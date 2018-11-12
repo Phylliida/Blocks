@@ -22,11 +22,9 @@ public class BlocksPlayer : MonoBehaviour
 
     public void GetBlockEntity(BlockEntity blockEntity)
     {
-        Debug.Log("got block with id = " + blockEntity.blockId);
         if (inventory.TryToAddBlock(blockEntity.blockId))
         {
             GameObject.Destroy(blockEntity.gameObject);
-            Debug.Log("inventory: " + inventory);
         }
     }
 
@@ -35,7 +33,7 @@ public class BlocksPlayer : MonoBehaviour
         BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
         foreach (BlockEntity blockEntity in entities)
         {
-            if (!blockEntity.pullable)
+            if (!blockEntity.pullable || (blockEntity.playerThrowing != null && blockEntity.playerThrowing == GetComponent<MovingEntity>()))
             {
                 continue;
             }

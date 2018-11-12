@@ -794,11 +794,12 @@ public class World
     public List<Structure> unfinishedStructures;
 
 
-    public void CreateBlockEntity(int block, Vector3 position)
+    public BlockEntity CreateBlockEntity(int block, Vector3 position)
     {
         GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockEntityPrefab);
         blockEntity.transform.position = position;
         blockEntity.GetComponent<BlockEntity>().blockId = block;
+        return blockEntity.GetComponent<BlockEntity>();
     }
 
     public World(BlocksWorld blocksWorld, int chunkSize)
@@ -1645,6 +1646,7 @@ public class World
     int off = 0;
     void AddChunkToDataStructures(Chunk chunk)
     {
+        //Debug.Log("adding chunk " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " " + Time.frameCount);
         long[] curPos = new long[] { chunk.cx, chunk.cy, chunk.cz };
         for (int d = 0; d < DIM; d++)
         {

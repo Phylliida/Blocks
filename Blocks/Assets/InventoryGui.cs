@@ -14,6 +14,18 @@ public class InventoryGui : MonoBehaviour {
 
     }
 
+    BlockEntity MakeNewBlockEntity()
+    {
+        BlockEntity res = GameObject.Instantiate(World.mainWorld.blocksWorld.blockRenderPrefab).GetComponent<BlockEntity>();
+        res.GetComponent<UnityEngine.UI.Image>().material = new Material(res.GetComponent<UnityEngine.UI.Image>().material);
+        res.blockId = -1;
+        res.pullable = false;
+        res.transform.SetParent(World.mainWorld.blocksWorld.blockRenderCanvas.transform);
+        res.transform.localScale = new Vector3(10, 10, 10);
+        res.transform.localRotation = Quaternion.identity;
+        return res;
+    }
+
 
     void ShowInventory(int nRows=4, int maxItems=-1)
     {
@@ -24,10 +36,7 @@ public class InventoryGui : MonoBehaviour {
         }
         while (blockItems.Count < numItems)
         {
-            blockItems.Add(GameObject.Instantiate(World.mainWorld.blocksWorld.blockRenderPrefab).GetComponent<BlockEntity>());
-            blockItems[blockItems.Count - 1].GetComponent<UnityEngine.UI.Image>().material = new Material(blockItems[blockItems.Count - 1].GetComponent<UnityEngine.UI.Image>().material);
-            blockItems[blockItems.Count - 1].blockId = -1;
-            blockItems[blockItems.Count - 1].pullable = false;
+            blockItems.Add(MakeNewBlockEntity());
         }
         while (blockItems.Count > numItems)
         {
@@ -83,7 +92,6 @@ public class InventoryGui : MonoBehaviour {
         {
             displayItem.blockId = itemStack.block;
         }
-        displayItem.transform.SetParent(World.mainWorld.blocksWorld.blockRenderCanvas.transform);
         if (itemStack != null && itemStack.count > 1)
         {
             displayItem.GetComponentInChildren<UnityEngine.UI.Text>().text = itemStack.count + "";
@@ -92,8 +100,6 @@ public class InventoryGui : MonoBehaviour {
         {
             displayItem.GetComponentInChildren<UnityEngine.UI.Text>().text = "";
         }
-        displayItem.transform.localScale = new Vector3(10, 10, 10);
-        displayItem.transform.localPosition = Vector3.right * xPos + Vector3.up * yPos;
         if (index == selection)
         {
             displayItem.selected = true;
@@ -102,9 +108,26 @@ public class InventoryGui : MonoBehaviour {
         {
             displayItem.selected = false;
         }
+        displayItem.transform.localPosition = Vector3.right * xPos + Vector3.up * yPos;
     }
-	// Update is called once per frame
-	void Update () {
+
+    public BlockStack blocksHoldingWithMouse = null;
+    public BlockEntity holdingWithMouseEntity = null;
+
+    bool MouseIntersectsBlockEntity(BlockEntity blockEntity)
+    {
+        if (blockEntity.GetComponent<UnityEngine.UI.Image>() != null)
+        {
+            return RectTransformUtility.RectangleContainsScreenPoint(blockEntity.GetComponent<UnityEngine.UI.Image>().rectTransform, Input.mousePosition, player.mainCamera);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    // Update is called once per frame
+    void Update () {
 
 
 
@@ -134,6 +157,123 @@ public class InventoryGui : MonoBehaviour {
                 Debug.Log(Input.mouseScrollDelta.y + " delta");
             }
             ShowInventory(1);
+        }
+
+
+        // click when not capturing
+        if (blocksHoldingWithMouse == null)
+        {
+            if (Input.GetMouseButtonDown(0) && !player.mouseLook.prevCapturing)
+            {
+                for (int i = 0; i < blockItems.Count; i++)
+                {
+                    if (MouseIntersectsBlockEntity(blockItems[i]) && player.inventory.blocks[i] != null)
+                    {
+                        blocksHoldingWithMouse = player.inventory.blocks[i];
+                        holdingWithMouseEntity = MakeNewBlockEntity();
+                        holdingWithMouseEntity.blockStack = player.inventory.blocks[i];
+                        player.inventory.blocks[i] = null;
+                        player.mouseLook.allowedToCapture = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        else if (blocksHoldingWithMouse != null)
+        {
+            player.mouseLook.allowedToCapture = false;
+            Vector3 offset;
+            Ray ray = player.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
+            holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
+            if (Input.GetMouseButtonDown(0))
+            {
+                bool foundCollision = false;
+                for (int i = 0; i < blockItems.Count; i++)
+                {
+                    if (MouseIntersectsBlockEntity(blockItems[i]))
+                    {
+                        foundCollision = true;
+                        bool letGo = false;
+                        if (player.inventory.blocks[i] == null)
+                        {
+                            player.inventory.blocks[i] = blocksHoldingWithMouse;
+                            letGo = true;
+                        }
+                        else
+                        {
+                            if (player.inventory.blocks[i].block == blocksHoldingWithMouse.block)
+                            {
+                                int numMaxStack = 1;
+                                if (World.stackableSize.ContainsKey(blocksHoldingWithMouse.block))
+                                {
+                                    numMaxStack = World.stackableSize[blocksHoldingWithMouse.block];
+                                }
+                                // can fit some in
+                                if (player.inventory.blocks[i].count < numMaxStack)
+                                {
+                                    // can fit all in
+                                    if (player.inventory.blocks[i].count + blocksHoldingWithMouse.count <= numMaxStack)
+                                    {
+                                        player.inventory.blocks[i].count += blocksHoldingWithMouse.count;
+                                        letGo = true;
+                                        blocksHoldingWithMouse = null;
+                                    }
+                                    // can only fit some in
+                                    else
+                                    {
+                                        int numCanFitIn = numMaxStack - player.inventory.blocks[i].count;
+                                        player.inventory.blocks[i].count += numCanFitIn;
+                                        blocksHoldingWithMouse.count -= numCanFitIn;
+                                        if (blocksHoldingWithMouse.count <= 0)
+                                        {
+                                            Debug.LogError("we should have count > 0 when not putting all into block, got count " + blocksHoldingWithMouse.count + " instead");
+                                        }
+                                    }
+                                }
+                                // can't fit any more in, swap
+                                else
+                                {
+                                    player.inventory.blocks[i].count = blocksHoldingWithMouse.count;
+                                    blocksHoldingWithMouse.count = numMaxStack;
+                                }
+                            }
+                            // different things, swap
+                            else
+                            {
+                                BlockStack tmp = player.inventory.blocks[i];
+                                player.inventory.blocks[i] = blocksHoldingWithMouse;
+                                blocksHoldingWithMouse = tmp;
+                                holdingWithMouseEntity.blockStack = tmp;
+                            }
+                        }
+                        if (letGo)
+                        {
+                            blocksHoldingWithMouse = null;
+                            GameObject.Destroy(holdingWithMouseEntity.gameObject);
+                            holdingWithMouseEntity = null;
+                            player.mouseLook.allowedToCapture = true;
+                        }
+                    }
+                }
+                // didn't click on anything, threw on ground instead
+                if (!foundCollision)
+                {
+                    for (int i = 0; i < blocksHoldingWithMouse.count; i++)
+                    {
+                        BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(blocksHoldingWithMouse.block, transform.position + transform.forward*1.0f);
+                        worldEntity.timeThrown = Time.time;
+                        worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(transform.forward);
+                        worldEntity.playerThrowing = player.GetComponent<MovingEntity>();
+                        Debug.Log(transform.forward);
+                    }
+
+                    blocksHoldingWithMouse = null;
+                    GameObject.Destroy(holdingWithMouseEntity.gameObject);
+                    holdingWithMouseEntity = null;
+                    player.mouseLook.allowedToCapture = true;
+                }
+            }
         }
     }
 }
