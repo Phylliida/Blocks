@@ -126,15 +126,69 @@ public class InventoryGui : MonoBehaviour {
         }
     }
 
+    public bool displaying = false;
+
+    void ThrowStuff()
+    {
+        for (int i = 0; i < blocksHoldingWithMouse.count; i++)
+        {
+            BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(blocksHoldingWithMouse.block, transform.position + transform.forward * 1.0f);
+            worldEntity.timeThrown = Time.time;
+            worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(transform.forward);
+            worldEntity.playerThrowing = player.GetComponent<MovingEntity>();
+            Debug.Log(transform.forward);
+        }
+
+        blocksHoldingWithMouse = null;
+        GameObject.Destroy(holdingWithMouseEntity.gameObject);
+        holdingWithMouseEntity = null;
+        player.mouseLook.allowedToCapture = true;
+    }
+    
     // Update is called once per frame
     void Update () {
 
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            if (displaying)
+            {
+                player.mouseLook.allowedToCapture = true;
+                player.mouseLook.capturing = true;
+                if (blocksHoldingWithMouse != null)
+                {
+                    ThrowStuff();
+                }
+            }
+            else
+            {
+                player.mouseLook.allowedToCapture = false;
+            }
+            displaying = !displaying;
+        }
+        int maxItems = player.inventory.capacity;
+        if (!displaying)
+        {
+            maxItems = 8;
+            /*
+            for (int i = 0; i < blockItems.Count; i++)
+            {
+                blockItems[i].GetComponent<UnityEngine.UI.Image>().enabled = false;
+                blockItems[i].GetComponentInChildren<UnityEngine.UI.Text>().enabled = false;
+            }
+            return;
+            */
+        }
 
+        for (int i = 0; i < blockItems.Count; i++)
+        {
+            blockItems[i].GetComponent<UnityEngine.UI.Image>().enabled = true;
+            blockItems[i].GetComponentInChildren<UnityEngine.UI.Text>().enabled = true;
+        }
 
         if (player != null && player.inventory != null)
         {
             inventoryOffset.y = -Screen.height / 2.0f+inventoryHeight*2.0f;
-            int maxSelection = player.inventory.capacity;
+            int maxSelection = Mathf.Max(player.inventory.capacity, maxItems);
             if (Input.GetKeyDown(KeyCode.Alpha1) && 1 <= maxSelection - 1) selection = 1 - 1;
             if (Input.GetKeyDown(KeyCode.Alpha2) && 2 <= maxSelection - 1) selection = 2 - 1;
             if (Input.GetKeyDown(KeyCode.Alpha3) && 3 <= maxSelection - 1) selection = 3 - 1;
@@ -151,19 +205,26 @@ public class InventoryGui : MonoBehaviour {
                 selectionF -= Input.mouseScrollDelta.y;
             }
             selection = Mathf.RoundToInt(selectionF);
-            selection = Mathf.Min(player.inventory.capacity - 1, Mathf.Max(0, selection));
+            selection = Mathf.Min(maxItems - 1, Mathf.Max(0, selection));
             if (Input.mouseScrollDelta.y != 0)
             {
                 Debug.Log(Input.mouseScrollDelta.y + " delta");
             }
-            ShowInventory(1);
+            if (displaying)
+            {
+                ShowInventory(3, maxItems: maxItems);
+            }
+            else
+            {
+                ShowInventory(1, maxItems: maxItems);
+            }
         }
 
 
         // click when not capturing
         if (blocksHoldingWithMouse == null)
         {
-            if (Input.GetMouseButtonDown(0) && !player.mouseLook.prevCapturing)
+            if (Input.GetMouseButtonDown(0) && displaying)
             {
                 for (int i = 0; i < blockItems.Count; i++)
                 {
@@ -180,7 +241,7 @@ public class InventoryGui : MonoBehaviour {
             }
         }
 
-        else if (blocksHoldingWithMouse != null)
+        else if (blocksHoldingWithMouse != null && displaying)
         {
             player.mouseLook.allowedToCapture = false;
             Vector3 offset;
@@ -259,19 +320,7 @@ public class InventoryGui : MonoBehaviour {
                 // didn't click on anything, threw on ground instead
                 if (!foundCollision)
                 {
-                    for (int i = 0; i < blocksHoldingWithMouse.count; i++)
-                    {
-                        BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(blocksHoldingWithMouse.block, transform.position + transform.forward*1.0f);
-                        worldEntity.timeThrown = Time.time;
-                        worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(transform.forward);
-                        worldEntity.playerThrowing = player.GetComponent<MovingEntity>();
-                        Debug.Log(transform.forward);
-                    }
-
-                    blocksHoldingWithMouse = null;
-                    GameObject.Destroy(holdingWithMouseEntity.gameObject);
-                    holdingWithMouseEntity = null;
-                    player.mouseLook.allowedToCapture = true;
+                    ThrowStuff();
                 }
             }
         }

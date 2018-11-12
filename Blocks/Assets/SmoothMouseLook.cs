@@ -31,10 +31,19 @@ public class SmoothMouseLook : MonoBehaviour
 
     Quaternion originalRotation;
     public bool allowedToCapture = true;
-    bool capturing = false;
+    public bool capturing = false;
     public bool prevCapturing = false;
     void Update()
     {
+
+        if (!capturing)
+        {
+            World.mainWorld.blocksWorld.blockRenderCanvas.transform.Find("Cursor").GetComponent<UnityEngine.UI.Image>().enabled = false;
+        }
+        else
+        {
+            World.mainWorld.blocksWorld.blockRenderCanvas.transform.Find("Cursor").GetComponent<UnityEngine.UI.Image>().enabled = true;
+        }
         if (!allowedToCapture)
         {
             capturing = false;

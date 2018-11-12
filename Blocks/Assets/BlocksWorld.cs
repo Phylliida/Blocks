@@ -1203,6 +1203,7 @@ public class World
             needsAnotherUpdate = false;
 
 
+
             // if we are WATER without water above and with water below, pathfind to look for open space
             if (block == WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
             {
@@ -1234,6 +1235,32 @@ public class World
             }
             else
             {
+
+                // if air below, set below = water and us = air
+                if (this[wx, wy - 1, wz] == AIR)
+                {
+                    this[wx, wy - 1, wz] = WATER;
+                    resState3 = 0;
+                    SetState(wx, wy - 1, wz, GetNumAirNeighbors(wx, wy - 1, wz) + 1, 3); // +1 because we are now air instead of water
+                    return AIR;
+                }
+                else
+                {
+                    // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
+                    foreach (LVector3 neighbor in SidewaysNeighbors())
+                    {
+                        LVector3 pos = new LVector3(wx, wy, wz);
+                        LVector3 nPos = pos + neighbor;
+                        LVector3 nPos2 = pos + neighbor * 2;
+                        if ((nPos.Block == AIR && (this[nPos.x, nPos.y - 1, nPos.z] == AIR || (nPos2.Block == AIR && this[nPos2.x, nPos2.y - 1, nPos2.z] == AIR))))
+                        {
+                            this[nPos.x, nPos.y, nPos.z] = WATER;
+                            resState3 = 0;
+                            SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
+                            return AIR;
+                        }
+                    }
+                }
                 int prevNumAirNeighbors = state3;
                 int curNumAirNeighbors = GetNumAirNeighbors(wx, wy, wz);
                 resState3 = curNumAirNeighbors;
@@ -1278,7 +1305,10 @@ public class World
                         return WATER_NOFLOW;
                     }
                 }
+
+                return block;
             }
+
         }
 
 
