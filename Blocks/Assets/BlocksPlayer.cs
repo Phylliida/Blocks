@@ -12,12 +12,19 @@ public class BlocksPlayer : MonoBehaviour
     public InventoryGui inventoryGui;
     public float reachRange = 6.0f;
 
+    public BlockStack blocksHoldingWithMouse = null;
+    public BlockEntity holdingWithMouseEntity = null;
     int blockPlacing;
 
+    bool showingHotbarOnly = true;
+    int hotbarSize = 8;
     public void Start()
     {
         blockPlacing = World.GRASS;
         inventory = new Inventory(16);
+        inventoryGui.playerUsing = this;
+        inventoryGui.inventory = inventory;
+        inventoryGui.displaying = true;
     }
 
     public void GetBlockEntity(BlockEntity blockEntity)
@@ -30,6 +37,51 @@ public class BlocksPlayer : MonoBehaviour
 
     public void Update()
     {
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            showingHotbarOnly = !showingHotbarOnly;
+        }
+
+
+        if (showingHotbarOnly)
+        {
+            World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = false;
+            mouseLook.allowedToCapture = true;
+            inventoryGui.numRows = 1;
+            inventoryGui.maxItems = hotbarSize;
+            inventoryGui.screenOffset.y = -Screen.height / 2.0f + 100.0f;
+        }
+        else
+        {
+            World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+            mouseLook.allowedToCapture = false;
+            inventoryGui.maxItems = -1;
+            inventoryGui.numRows = 4;
+            inventoryGui.screenOffset.y = -Screen.height / 2.0f + 500.0f;
+        }
+
+        int maxSelection = Mathf.Max(inventory.capacity, inventoryGui.maxItems);
+        if (Input.GetKeyDown(KeyCode.Alpha1) && 1 <= maxSelection - 1) inventoryGui.selection = 1 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha2) && 2 <= maxSelection - 1) inventoryGui.selection = 2 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha3) && 3 <= maxSelection - 1) inventoryGui.selection = 3 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha4) && 4 <= maxSelection - 1) inventoryGui.selection = 4 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha5) && 5 <= maxSelection - 1) inventoryGui.selection = 5 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha6) && 6 <= maxSelection - 1) inventoryGui.selection = 6 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha7) && 7 <= maxSelection - 1) inventoryGui.selection = 7 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha8) && 8 <= maxSelection - 1) inventoryGui.selection = 8 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha9) && 9 <= maxSelection - 1) inventoryGui.selection = 9 - 1;
+        if (Input.GetKeyDown(KeyCode.Alpha0) && 10 <= maxSelection - 1) inventoryGui.selection = 10 - 1;
+        float selectionF = inventoryGui.selection;
+        if (Input.mouseScrollDelta.y != 0)
+        {
+            selectionF -= Input.mouseScrollDelta.y;
+        }
+        inventoryGui.selection = Mathf.RoundToInt(selectionF);
+        if (Input.mouseScrollDelta.y != 0)
+        {
+            Debug.Log(Input.mouseScrollDelta.y + " delta");
+        }
+
         BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
         foreach (BlockEntity blockEntity in entities)
         {
@@ -97,15 +149,41 @@ public class BlocksPlayer : MonoBehaviour
                     LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
                     LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                     LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-                    if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+
+                    if (hitResults.hitBlock.Block == World.GRASS && showingHotbarOnly)
                     {
-                        World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
-                        inventory.blocks[inventoryGui.selection].count -= 1;
-                        if (inventory.blocks[inventoryGui.selection].count <= 0)
+                        Inventory blockInventory;
+                        if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                         {
-                            inventory.blocks[inventoryGui.selection] = null;
+                            blockInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
+                        }
+                        else
+                        {
+                            blockInventory = new Inventory(5);
+                            World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock] = blockInventory;
+                        }
+                        World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
+                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                        showingHotbarOnly = false;
+                        mouseLook.allowedToCapture = false;
+                        World.mainWorld.blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
+                        World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 0);
+                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                    }
+                    else
+                    {
+                        if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                        {
+                            World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
+                            inventory.blocks[inventoryGui.selection].count -= 1;
+                            if (inventory.blocks[inventoryGui.selection].count <= 0)
+                            {
+                                inventory.blocks[inventoryGui.selection] = null;
+                            }
                         }
                     }
+
+
                     //Debug.Log("hit at pos " + hitPos);
                 }
                 else

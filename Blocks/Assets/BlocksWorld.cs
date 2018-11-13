@@ -1160,6 +1160,64 @@ public class World
 
     }
 
+    public int GetWaterAirOnlyAbove(long wx, long wy, long wz)
+    {
+        if (this[wx, wy+1, wz] == AIR &&
+            this[wx+1, wy, wz] != AIR &&
+            this[wx-1, wy, wz] != AIR &&
+            this[wx, wy, wz+1] != AIR &&
+            this[wx, wy, wz-1] != AIR)
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+
+    }
+
+
+
+    // water state 2 = air accessable by me + air accessable by newers (sum of state 2 of newers)
+    public int GetNewerWaterNeighborValues(long wx, long wy, long wz, int state1)
+    {
+        return
+            ((this[wx + 1, wy, wz] == WATER && GetState(wx + 1, wy, wz, 1) < state1) ? GetState(wx + 1, wy, wz, 2) : 0) +
+            ((this[wx - 1, wy, wz] == WATER && GetState(wx - 1, wy, wz, 1) < state1) ? GetState(wx - 1, wy, wz, 2) : 0) +
+            ((this[wx, wy + 1, wz] == WATER && GetState(wx, wy + 1, wz, 1) < state1) ? GetState(wx, wy + 1, wz, 2) : 0) +
+            ((this[wx, wy - 1, wz] == WATER && GetState(wx, wy - 1, wz, 1) < state1) ? GetState(wx, wy - 1, wz, 2) : 0) +
+            ((this[wx, wy, wz + 1] == WATER && GetState(wx, wy, wz + 1, 1) < state1) ? GetState(wx, wy, wz + 1, 2) : 0) +
+            ((this[wx, wy, wz - 1] == WATER && GetState(wx, wy, wz - 1, 1) < state1) ? GetState(wx, wy, wz - 1, 2) : 0);
+    }
+
+    // water state 3 = air accessable by me + air accessable by olders (sum of state 3 of olders)
+    public int GetOlderWaterNeighborValues(long wx, long wy, long wz, int state1)
+    {
+        return
+            ((this[wx + 1, wy, wz] == WATER && GetState(wx + 1, wy, wz, 1) > state1) ? GetState(wx + 1, wy, wz, 3) : 0) +
+            ((this[wx - 1, wy, wz] == WATER && GetState(wx - 1, wy, wz, 1) > state1) ? GetState(wx - 1, wy, wz, 3) : 0) +
+            ((this[wx, wy + 1, wz] == WATER && GetState(wx, wy + 1, wz, 1) > state1) ? GetState(wx, wy + 1, wz, 3) : 0) +
+            ((this[wx, wy - 1, wz] == WATER && GetState(wx, wy - 1, wz, 1) > state1) ? GetState(wx, wy - 1, wz, 3) : 0) +
+            ((this[wx, wy, wz + 1] == WATER && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
+            ((this[wx, wy, wz - 1] == WATER && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
+    }
+
+
+
+    int waterFrameT = 0;
+
+    public int GetWaterFrameT()
+    {
+        int res = waterFrameT;
+        waterFrameT = (waterFrameT + 1) % (int.MaxValue - 1); // mod prevents overflow weirdness
+        return res;
+    }
+
+    public int numBlockUpdatesThisTick = 0;
+    public int numWaterUpdatesThisTick = 0;
+
+    // water idea: determine where flow ahead of time, then trickle water through those "chosen directions" - allows for one quick "dam breaking" computation and then the water can flow down precomputing stuff
     public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, int state3, out int resState1, out int resState2, out int resState3, out bool needsAnotherUpdate)
     {
         needsAnotherUpdate = false;
@@ -1175,6 +1233,165 @@ public class World
             return AIR;
         }
 
+
+
+        // water state 1 = time when put there
+        // water state 2 = air accessable by me + air accessable by newers (sum of state 2 of newers)
+        // water state 3 = air accessable by me + air accessable by olders (sum of state 3 of olders)
+
+        // should ensure no cycles unless we get overflows and manage to loop back to the same number again, but that should rarely happen? idk something to consider
+
+
+        if (block == SAND)
+        {
+            if (this[wx, wy-1, wz] == AIR)
+            {
+                this[wx, wy - 1, wz] = WATER;
+                SetState(wx, wy - 1, wz, GetWaterFrameT(), 1);
+                // reset initial air neighbors because it'll have to recompute that anyway
+                SetState(wx, wy - 1, wz, 0, 2);
+                SetState(wx, wy - 1, wz, 0, 3);
+            }
+        }
+
+        /*
+        if (block == WATER)
+        {
+            numWaterUpdatesThisTick += 1;
+            if (this[wx, wy-1, wz] == AIR)
+            {
+                this[wx, wy - 1, wz] = WATER;
+                SetState(wx, wy - 1, wz, GetWaterFrameT(), 1);
+                // reset initial air neighbors because it'll have to recompute that anyway
+                SetState(wx, wy - 1, wz, 0, 2);
+                SetState(wx, wy - 1, wz, 0, 3);
+                return AIR;
+            }
+            else
+            {
+                // look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
+                foreach (LVector3 neighbor in SidewaysNeighbors())
+                {
+                    LVector3 pos = new LVector3(wx, wy, wz);
+                    LVector3 nPos = pos + neighbor;
+                    LVector3 nPos2 = pos + neighbor * 2;
+                    if ((nPos.Block == AIR && (this[nPos.x, nPos.y - 1, nPos.z] == AIR || (nPos2.Block == AIR && this[nPos2.x, nPos2.y - 1, nPos2.z] == AIR))))
+                    {
+                        this[nPos.x, nPos.y, nPos.z] = WATER;
+                        SetState(nPos.x, nPos.y, nPos.z, GetWaterFrameT(), 1);
+                        SetState(nPos.x, nPos.y, nPos.z, 0, 2);
+                        SetState(nPos.x, nPos.y, nPos.z, 0, 3);
+                        AddBlockUpdateToNeighbors(wx, wy, wz);
+                        AddBlockUpdateToNeighbors(nPos.x, nPos.y, nPos.z);
+                        return AIR;
+                    }
+                }
+                // water state 1 = time when put there
+                // water state 2 = air accessable by me + air accessable by newers (sum of state 2 of newers)
+                // water state 3 = air accessable by me + air accessable by olders (sum of state 3 of olders)
+                int numAirNeighbors = GetWaterAirOnlyAbove(wx, wy, wz);
+                int numNewerAirs = GetNewerWaterNeighborValues(wx, wy, wz, state1);
+                int numOlderAirs = GetOlderWaterNeighborValues(wx, wy, wz, state1);
+                // water below, try to flow through it (but only if we just got new info)
+                if (this[wx, wy - 1, wz] == WATER && (numNewerAirs + numAirNeighbors != state2 || numOlderAirs + numAirNeighbors != state3))
+                {
+                    int maxSteps = 30;
+                    // below is older
+                    if (GetState(wx, wy-1, wz, 1) < state1)
+                    {
+                        // below has air through olders, we can try to trickle through it
+                        if (GetState(wx, wy - 1, wz, 3) > 0)
+                        {
+                            Debug.Log(wx + " " + wy + " " + wz);
+                            numBlockUpdatesThisTick += 1;
+                            if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy - 1, wz), maxSteps, true, true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
+                            {
+                                // make sure we only go through olders
+                                //int prevState1 = GetState(pbx, pby, pbz, 1);
+                                //int curState1 = GetState(bx, by, bz, 1);
+                                //return curState1 < prevState1 && by < wy && GetState(bx, by, bz, 2) > 0;
+                                return by < wy && GetState(bx, by, bz, 2) > 0;
+                            }, isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
+                            {
+                                if (b == AIR && by < wy)
+                                {
+                                    this[bx, by, bz] = WATER;
+                                    SetState(bx, by, bz, GetWaterFrameT(), 1);
+                                    SetState(bx, by, bz, 0, 2);
+                                    SetState(bx, by, bz, 0, 3);
+                                    return true;
+                                }
+                                return false;
+                            }))
+                            {
+                                resState1 = 0;
+                                resState2 = 0;
+                                resState3 = 0;
+                                return AIR;
+                            }
+                        }
+                    }
+                    // below is newer
+                    else if (GetState(wx, wy - 1, wz, 1) > state1)
+                    {
+                        // below has air through newers, we can try to trickle through it
+                        if (GetState(wx, wy - 1, wz, 2) > 0)
+                        {
+                            Debug.Log(wx + " " + wy + " " + wz + " h");
+
+                            numBlockUpdatesThisTick += 1;
+                            if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy - 1, wz), maxSteps, true, true, isBlockValid:(b, bx, by, bz, pbx, pby, pbz) =>
+                              {
+                                  // make sure we only go through newers
+                                  //int prevState1 = GetState(pbx, pby, pbz, 1);
+                                  //int curState1 = GetState(bx, by, bz, 1);
+                                  //return curState1 > prevState1 && by < wy && GetState(bx, by, bz, 2) > 0;
+                                  return by < wy && GetState(bx, by, bz, 2) > 0;
+                              }, isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
+                              {
+                                  if (b == AIR && by < wy)
+                                  {
+                                      this[bx, by, bz] = WATER;
+                                      SetState(bx, by, bz, GetWaterFrameT(), 1);
+                                      SetState(bx, by, bz, 0, 2);
+                                      SetState(bx, by, bz, 0, 3);
+                                      return true;
+                                  }
+                                  return false;
+                              }))
+                            {
+                                resState1 = 0;
+                                resState2 = 0;
+                                resState3 = 0;
+                                return AIR;
+                            }
+                        }
+                    }
+                }
+
+
+
+                resState2 = numNewerAirs + numAirNeighbors;
+                resState3 = numOlderAirs + numAirNeighbors;
+                if (state2 != resState2 || state3 != resState3)
+                {
+                    AddBlockUpdateToNeighbors(wx, wy, wz);
+                    
+                }
+                return WATER;
+            }
+        }
+        else
+        {
+        }
+        */
+
+
+
+
+
+        // good water, slightly inefficient
+        
 
         if (block == SAND)
         {
@@ -1195,6 +1412,7 @@ public class World
         }
 
 
+        // water: state 2 = time I got here
 
 
         if (block == WATER || block == WATER_NOFLOW)
@@ -1208,11 +1426,13 @@ public class World
             if (block == WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
             {
                 // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
-                if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz) =>
-                    {
-                        return by < wy && (b == WATER || b == WATER_NOFLOW);
+                //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
+                numWaterUpdatesThisTick += 1;
+                if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
+                {
+                    return by < wy && (b == WATER || b == WATER_NOFLOW);
                     },
-                   isBlockDesiredResult: (b, bx, by, bz) =>
+                   isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                    {
                        if (b == AIR && by < wy)
                        {
@@ -1252,12 +1472,22 @@ public class World
                         LVector3 pos = new LVector3(wx, wy, wz);
                         LVector3 nPos = pos + neighbor;
                         LVector3 nPos2 = pos + neighbor * 2;
-                        if ((nPos.Block == AIR && (this[nPos.x, nPos.y - 1, nPos.z] == AIR || (nPos2.Block == AIR && this[nPos2.x, nPos2.y - 1, nPos2.z] == AIR))))
+                        if (nPos.Block == AIR)
                         {
-                            this[nPos.x, nPos.y, nPos.z] = WATER;
-                            resState3 = 0;
-                            SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
-                            return AIR;
+                            if (this[nPos.x, nPos.y - 1, nPos.z] == AIR)
+                            {
+                                this[nPos.x, nPos.y - 1, nPos.z] = WATER;
+                                resState3 = 0;
+                                SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
+                                return AIR;
+                            }
+                            else if (this[nPos2.x, nPos2.y - 1, nPos2.z] == AIR)
+                            {
+                                this[nPos2.x, nPos2.y - 1, nPos2.z] = WATER;
+                                resState3 = 0;
+                                SetState(nPos2.x, nPos2.y - 1, nPos2.z, GetNumAirNeighbors(nPos2.x, nPos2.y - 1, nPos2.z) + 1, 3); // +1 because we are now air instead of water
+                                return AIR;
+                            }
                         }
                     }
                 }
@@ -1265,7 +1495,7 @@ public class World
                 int curNumAirNeighbors = GetNumAirNeighbors(wx, wy, wz);
                 resState3 = curNumAirNeighbors;
                 // if we have a more air neighbors, flood fill back and set valid blocks that have WATER_NOFLOW back to WATER so they can try again
-                if (curNumAirNeighbors > prevNumAirNeighbors)
+                if (curNumAirNeighbors != prevNumAirNeighbors)
                 {
                     LVector3 airNeighbor = new LVector3(wx, wy, wz);
                     foreach (LVector3 neighbor in AllNeighborsRelative(new LVector3(wx, wy, wz)))
@@ -1276,13 +1506,15 @@ public class World
                             break;
                         }
                     }
+                    numBlockUpdatesThisTick += 1;
 
                     // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
-                    if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz) =>
+                    //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
+                    if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     {
                         return (b == WATER || b == WATER_NOFLOW);
                     },
-                       isBlockDesiredResult: (b, bx, by, bz) =>
+                       isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                        {
                            if (b == WATER_NOFLOW && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
                            {
@@ -1297,6 +1529,7 @@ public class World
                         this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = WATER;
                         SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
                         resState3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
+                        needsAnotherUpdate = true;
                         return WATER;
                     }
                     else
@@ -1823,6 +2056,10 @@ public class World
         globalPreference = (globalPreference + 1) % 4;
         List<Chunk> allChunksHere = new List<Chunk>(allChunks);
 
+        numBlockUpdatesThisTick = 0;
+        numWaterUpdatesThisTick = 0;
+
+
         foreach (Chunk chunk in allChunksHere)
         {
             chunk.TickStart();
@@ -1832,6 +2069,7 @@ public class World
         {
             chunk.Tick();
         }
+        Debug.Log("num non-water updates: " + numBlockUpdatesThisTick + " num water updates: " + numWaterUpdatesThisTick);
     }
 }
 
@@ -1856,6 +2094,9 @@ public class BlocksWorld : MonoBehaviour {
     public float worldScale = 0.1f;
     public Camera uiCamera;
 
+    public InventoryGui otherObjectInventoryGui;
+
+    public Dictionary<LVector3, Inventory> blockInventories = new Dictionary<LVector3, Inventory>();
 
     public ComputeBuffer chunkBlockData;
 

@@ -292,7 +292,7 @@ public class PhysicsUtils {
         return RayCast(origin, ray.direction, maxDist, out hitResults, maxSteps);
     }
 
-    public delegate bool IsBlockValidForSearch(int block, long x, long y, long z);
+    public delegate bool IsBlockValidForSearch(int block, long x, long y, long z, long prevX, long prevY, long prevZ);
 
 
     static int searchCounter = int.MaxValue;
@@ -369,13 +369,13 @@ public class PhysicsUtils {
            
 
             // if is desired result, done
-            if (isBlockDesiredResult(neighborBlock, curX + nx, curY + ny, curZ + nz))
+            if (isBlockDesiredResult(neighborBlock, curX + nx, curY + ny, curZ + nz, curX, curY, curZ))
             {
                 return true;
             }
 
             // if is valid add to quue
-            if (isBlockValid(neighborBlock, curX + nx, curY + ny, curZ + nz))
+            if (isBlockValid(neighborBlock, curX + nx, curY + ny, curZ + nz, curX, curY, curZ))
             {
                 xOffsets.Enqueue(xOffset + nx);
                 yOffsets.Enqueue(yOffset + ny);

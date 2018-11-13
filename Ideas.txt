@@ -228,3 +228,19 @@ way of walking would be closer to how birds to it, similar to image at https://e
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+Water:
+	stores what time it got there
+		tells everyone older than them that they have n air (with a "only go to older" message)
+		tells everyone younger than them that they have n air (with a "only go to younger than you" message)
+	

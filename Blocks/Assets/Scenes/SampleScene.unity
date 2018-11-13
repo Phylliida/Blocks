@@ -305,6 +305,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 1850076242}
+  - {fileID: 1234048946}
   m_Father: {fileID: 183012525}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -353,15 +354,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcf20767406d1ca4289b95bc303f2aa2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  player: {fileID: 282840815}
-  blockItems: []
-  inventoryWidth: 100
-  inventoryHeight: 100
-  inventoryForward: 0.5
+  playerUsing: {fileID: 282840815}
   selection: 0
-  inventoryOffset: {x: 0, y: -100}
-  holdingWithMouseEntity: {fileID: 0}
   displaying: 0
+  numRows: 0
+  maxItems: -1
+  screenOffset: {x: 0, y: -100}
+  blockItems: []
+  holdingWithMouseEntity: {fileID: 0}
 --- !u!1 &324794735
 GameObject:
   m_ObjectHideFlags: 0
@@ -400,6 +400,7 @@ MonoBehaviour:
   blockRenderCanvas: {fileID: 342654144}
   worldScale: 2
   uiCamera: {fileID: 1850076245}
+  otherObjectInventoryGui: {fileID: 1234048945}
   ticksPerSecond: 20
   numChunksTotal: 0
 --- !u!4 &324794737
@@ -707,6 +708,54 @@ Prefab:
     - {fileID: 0}
   m_ParentPrefab: {fileID: 100100000, guid: b2d6538d3dc065f4aa63743b569c851d, type: 2}
   m_IsPrefabParent: 0
+--- !u!1 &1234048944
+GameObject:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  serializedVersion: 5
+  m_Component:
+  - component: {fileID: 1234048946}
+  - component: {fileID: 1234048945}
+  m_Layer: 0
+  m_Name: Blerg
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1234048945
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1234048944}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcf20767406d1ca4289b95bc303f2aa2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerUsing: {fileID: 0}
+  selection: 0
+  displaying: 0
+  numRows: 1
+  maxItems: -1
+  screenOffset: {x: 0, y: -100}
+  blockItems: []
+  holdingWithMouseEntity: {fileID: 0}
+--- !u!4 &1234048946
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1234048944}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 282840814}
+  m_RootOrder: 1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1273376210
 GameObject:
   m_ObjectHideFlags: 0
