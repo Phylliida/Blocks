@@ -3,6 +3,82 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
+
+// fast for just a few elements (10-20)
+public class FastSmallDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
+{
+    T1[] keys;
+    T2[] values;
+    int firstEmptyPos;
+    public FastSmallDictionary(int maxCapacity)
+    {
+        keys = new T1[maxCapacity];
+        values = new T2[maxCapacity];
+        firstEmptyPos = 0;
+    }
+
+    public T2 this[T1 key]
+    {
+        get
+        {
+            for (int i = 0; i < firstEmptyPos; i++)
+            {
+                if (keys[i].Equals(key))
+                {
+                    return values[i];
+                }
+            }
+            return default(T2); // this usually means null
+        }
+        set
+        {
+            keys[firstEmptyPos] = key;
+            values[firstEmptyPos] = value;
+            firstEmptyPos += 1;
+        }
+    }
+
+    public T2 this[int key]
+    {
+        get
+        {
+            return values[key];
+        }
+        set
+        {
+            values[key] = value;
+        }
+    }
+
+    public int KeyToInt(T1 key)
+    {
+        for (int i = 0; i < firstEmptyPos; i++)
+        {
+            if (keys[i].Equals(key))
+            {
+                return i;
+            }
+        }
+        throw new System.ArgumentException("key " + key + " is not in the dictionary");
+    }
+
+    public IEnumerator<KeyValuePair<T1, T2>> GetEnumerator()
+    {
+        for (int i = 0; i < firstEmptyPos; i++)
+        {
+            yield return new KeyValuePair<T1, T2>(keys[i], values[i]);
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        for (int i = 0; i < firstEmptyPos; i++)
+        {
+            yield return new KeyValuePair<T1, T2>(keys[i], values[i]);
+        }
+    }
+}
+
 public class WorldPosition
 {
 
@@ -111,25 +187,307 @@ public class ChunkBiomeData
 {
     public float altitude;
     public long cx, cy, cz;
-    public ChunkBiomeData(long cx, long cy, long cz)
+
+    public float[] chunkProperties;
+
+
+    public ChunkBiomeData(ChunkProperties chunkProperties, long cx, long cy, long cz)
     {
-        Perlin a = new Perlin();
+        this.chunkProperties = chunkProperties.GenerateChunkPropertiesArr(cx, cy, cz);
         this.cx = cx;
         this.cy = cy;
         this.cz = cz;
-        // should be in -1 to 1 range now?
-        altitude = (float)Simplex.Noise.Generate(cx/10.0f, 0, cz/10.0f)*30.0f+40.0f;
+    }
+
+    ChunkBiomeData x0y0z0,
+                   x1y0z0,
+                   x0y1z0,
+                   x1y1z0,
+                   x0y0z1,
+                   x1y0z1,
+                   x0y1z1,
+                   x1y1z1;
+
+    public void FetchNeighbors()
+    {
+        x0y0z0 = this;
+        x1y0z0 = World.mainWorld.GetChunkBiomeData(cx + 1, cy, cz);
+        x0y1z0 = World.mainWorld.GetChunkBiomeData(cx, cy + 1, cz);
+        x1y1z0 = World.mainWorld.GetChunkBiomeData(cx + 1, cy + 1, cz);
+        x0y0z1 = World.mainWorld.GetChunkBiomeData(cx, cy, cz + 1);
+        x1y0z1 = World.mainWorld.GetChunkBiomeData(cx + 1, cy, cz + 1);
+        x0y1z1 = World.mainWorld.GetChunkBiomeData(cx, cy + 1, cz + 1);
+        x1y1z1 = World.mainWorld.GetChunkBiomeData(cx + 1, cy + 1, cz + 1);
+    }
+
+    public float AverageBiomeData(long wx, long wy, long wz, int key)
+    {
+        if (x0y0z0 == null)
+        {
+            FetchNeighbors();
+        }
+        int chunkSize = World.mainWorld.chunkSize;
+
+        // relative to us at 0
+        long relx = wx - cx * chunkSize;
+        long rely = wy - cy * chunkSize;
+        long relz = wz - cz * chunkSize;
+
+        float x0Weight = 1.0f - relx / (float)chunkSize;
+        float y0Weight = 1.0f - rely / (float)chunkSize;
+        float z0Weight = 1.0f - relz / (float)chunkSize;
+
+        // average over x first
+
+        float y0z0 = x0y0z0.chunkProperties[key] * x0Weight + x1y0z0.chunkProperties[key] * (1 - x0Weight);
+        float y1z0 = x0y1z0.chunkProperties[key] * x0Weight + x1y1z0.chunkProperties[key] * (1 - x0Weight);
+        float y0z1 = x0y0z1.chunkProperties[key] * x0Weight + x1y0z1.chunkProperties[key] * (1 - x0Weight);
+        float y1z1 = x0y1z1.chunkProperties[key] * x0Weight + x1y1z1.chunkProperties[key] * (1 - x0Weight);
+
+        // then average over y
+
+        float z0 = y0z0 * y0Weight + y1z0 * (1 - y0Weight);
+        float z1 = y0z1 * y0Weight + y1z1 * (1 - y0Weight);
+
+        // then average over z
+
+        return z0 * z0Weight + z1 * (1 - z0Weight);
     }
 
 
 }
 
+public enum BlockValue
+{
+    EMPTY = 10,
+    LEAF = 9,
+    TRUNK = 8,
+    WATER_NOFLOW = 7,
+    WATER = 6,
+    BEDROCK = 5,
+    DIRT = 4,
+    GRASS = 3,
+    STONE = 2,
+    SAND = 1,
+    AIR = 0,
+    WILDCARD = -1
+}
+
+public class BlockData : System.IDisposable
+{
+    bool wasModified;
+    // world.blockModifyState is incremented whenever a change occurs
+    // this lets us not have to check for changes that may have occured unless the world's value of this is different than ours
+    // once we make a change, we can set ours to the world's value since it will be incremented (see the getters of state1-3 and block below)
+    long curBlockModifyState = 0;
+    public bool WasModified
+    {
+        get
+        {
+            return wasModified;
+        }
+        private set
+        {
+
+        }
+    }
+
+    private long wx, wy, wz;
+
+    public long x { get { return wx; } private set { } }
+    public long y { get { return wy; } private set { } }
+    public long z { get { return wz; } private set { } }
+
+    BlockGetter world;
+
+    public int state1 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 1) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 1); curBlockModifyState = world.blockModifyState; } } }
+    public int state2 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 2); curBlockModifyState = world.blockModifyState; } } }
+    public int state3 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 3); curBlockModifyState = world.blockModifyState; } } }
+    public BlockValue block { get { return (BlockValue)world[wx, wy, wz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz] != value) { wasModified = true; world[wx, wy, wz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
+
+    public bool needsAnotherTick;
+
+    public BlockData(BlockGetter world, long x, long y, long z)
+    {
+        this.wasModified = false;
+        this.world = world;
+        this.wx = x;
+        this.wy = y;
+        this.wz = z;
+        needsAnotherTick = false;
+    }
+
+    public void Dispose()
+    {
+        world.DoneWithBlockData(this);
+    }
+
+    public void ReassignValues(long x, long y, long z)
+    {
+        this.curBlockModifyState = 0;
+        this.wasModified = false;
+        this.wx = x;
+        this.wy = y;
+        this.wz = z;
+    }
+}
+public class BlockDataGetter
+{
+    public World world;
+    public BlockGetter blockGetter;
+    public BlockDataGetter(World world, BlockGetter blockGetter)
+    {
+        this.world = world;
+        this.blockGetter = blockGetter;
+    }
+
+    public BlockDataGetter()
+    {
+        this.world = World.mainWorld;
+        this.blockGetter = World.mainWorld;
+    }
+
+    public BlockData GetBlockData(long x, long y, long z)
+    {
+        return blockGetter.GetBlockData(x, y, z);
+    }
+}
+public class Block : BlockDataGetter
+{
+    public void OnTick(BlockData block)
+    {
+        return;
+    }
+}
+
+public class Grass : Block
+{
+
+}
+
+public class ChunkProperty
+{
+    public string name;
+    public float minVal;
+    public float maxVal;
+    public bool usesY;
+    public ChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    {
+        this.name = name;
+        this.minVal = minVal;
+        this.maxVal = maxVal;
+        this.usesY = usesY;
+    }
+
+    public float GenerateValue(long cx, long cy, long cz)
+    {
+        if (usesY)
+        {
+            return Simplex.Noise.Generate(cx / 10.0f, cy / 10.0f, cz / 10.0f)*(maxVal-minVal) + minVal;
+        }
+        else
+        {
+            return Simplex.Noise.Generate(cx / 10.0f, 0, cz / 10.0f) * (maxVal - minVal) + minVal;
+        }
+    }
+}
+public class ChunkProperties
+{
+    public List<ChunkProperty> chunkProperties = new List<ChunkProperty>();
+    public int AddChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    {
+        chunkProperties.Add(new ChunkProperty(name, minVal, maxVal, usesY));
+        return chunkProperties.Count - 1;
+    }
+
+    public float[] GenerateChunkPropertiesArr(long cx, long cy, long cz)
+    {
+        // if we have more than 1000 properties for each chunk this needs to be increased but that is probably excessive so we should probably be ok? BUT HERE IS SOMEWHERE TO CHECK IF A BUG OCCURS, FYI
+        float[] res = new float[chunkProperties.Count];
+        for (int i = 0; i < chunkProperties.Count; i++)
+        {
+            res[i] = chunkProperties[i].GenerateValue(cx, cy, cz);
+        }
+        return res;
+    }
+}
+
+
+public abstract class GenerationClass : BlockDataGetter
+{
+
+    public float GetChunkProperty(long x, long y, long z, int key)
+    {
+        return world.AverageChunkValues(x, y, z, key);
+    }
+
+    public abstract void OnGenerationInit();
+    public abstract void OnGenerateBlock(long x, long y, long z, BlockData outBlock);
+
+}
+
+public class ExampleGeneration : GenerationClass
+{
+    public int elevationKey;
+    public override void OnGenerationInit()
+    {
+        float minVal = 10.0f;
+        float maxVal = 40.0f;
+        elevationKey = world.AddChunkProperty("elevation", minVal, maxVal, usesY:false);
+    }
+
+    public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
+    {
+        float elevation = GetChunkProperty(x, y, z, elevationKey);
+        //if (y <= 0)
+        //{
+        //    outBlock.block = BlockValue.STONE;
+        //}
+        long elevationL = (long)Mathf.Round(elevation);
+        if (y >= elevationL)
+        {
+            outBlock.block = BlockValue.AIR;
+        }
+        else
+        {
+            long distFromSurface = elevationL - y;
+            if (distFromSurface == 1)
+            {
+                outBlock.block = BlockValue.GRASS;
+            }
+            else
+            {
+                outBlock.block = BlockValue.DIRT;
+            }
+        }
+    }
+}
+
 public class Chunk
 {
-    public long[] chunkPos;
-    public long cx { get { return chunkPos[0]; } set { chunkPos[0] = value; } }
-    public long cy { get { return chunkPos[1]; } set { chunkPos[1] = value; } }
-    public long cz { get { return chunkPos[2]; } set { chunkPos[2] = value; } }
+    public long cx, cy, cz;
+    
+    public long GetPos(int d)
+    {
+        if (d == 0)
+        {
+            return cx;
+        }
+        else if(d == 1)
+        {
+            return cy;
+        }
+        else if(d == 2)
+        {
+            return cz;
+        }
+        else
+        {
+            throw new System.ArgumentOutOfRangeException("only has 3 dimensions (0-2) right now, you passed in d=" + d);
+        }
+    }
+
+
 
     int chunkSize;
     public ChunkData chunkData;
@@ -160,13 +518,15 @@ public class Chunk
     
 
 
-    public Chunk(World world, long chunkX, long chunkY, long chunkZ, int chunkSize)
+    public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSize)
     {
         this.world = world;
         this.chunkSize = chunkSize;
         this.chunkRenderer = new ChunkRenderer(this, chunkSize);
-        this.chunkBiomeData = new ChunkBiomeData(chunkX, chunkY, chunkZ);
-        this.chunkPos = new long[] { chunkX, chunkY, chunkZ };
+        this.chunkBiomeData = new ChunkBiomeData(chunkProperties, chunkX, chunkY, chunkZ);
+        this.cx = chunkX;
+        this.cy = chunkY;
+        this.cz = chunkZ;
         posChunks = new Chunk[] { null, null, null };
         negChunks = new Chunk[] { null, null, null };
         chunkData = new ChunkData(chunkSize);
@@ -185,6 +545,58 @@ public class Chunk
         long baseX = cx * chunkSize;
         long baseY = cy * chunkSize;
         long baseZ = cz * chunkSize;
+        Structure myStructure = new Structure(cx + " " + cy + " " + cz, true, this);
+        long start = PhysicsUtils.millis();
+        //Debug.Log("generating chunk " + cx + " " + cy + " " + cz + " ");
+        try
+        {
+            world.worldGeneration.blockGetter = myStructure;
+            for (long x = baseX; x < baseX + this.chunkSize; x++)
+            {
+                for (long z = baseZ; z < baseZ + this.chunkSize; z++)
+                {
+                    //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
+                    for (long y = baseY; y < baseY + this.chunkSize; y++)
+                    {
+                        //long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, "altitude"));
+                        using (BlockData block = myStructure.GetBlockData(x, y, z))
+                        {
+                            world.worldGeneration.OnGenerateBlock(x, y, z, block);
+                        }
+                    }
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            world.worldGeneration.blockGetter = world;
+            chunkData.blocksNeedUpdating.Clear();
+            chunkData.blocksNeedUpdatingNextFrame.Clear();
+            generating = false;
+            Debug.LogError("error in generating chunk " + cx + " " + cy + " " + cz);
+            throw e;
+        }
+        long end = PhysicsUtils.millis();
+        float secondsTaken = (end - start) / 1000.0f;
+        //Debug.Log("done generating chunk " + cx + " " + cy + " " + cz + " in " + secondsTaken + " seconds");
+        if (!myStructure.HasAllChunksGenerated())
+        {
+            world.AddUnfinishedStructure(myStructure);
+        }
+        world.worldGeneration.blockGetter = world;
+        chunkData.blocksNeedUpdating.Clear();
+        chunkData.blocksNeedUpdatingNextFrame.Clear();
+        generating = false;
+
+
+        /*
+       
+        generating = true;
+        long baseX = cx * chunkSize;
+        long baseY = cy * chunkSize;
+        long baseZ = cz * chunkSize;
+        Structure myStructure = new Structure(cx + " " + cy + " " + cz, true);
+        world.worldGeneration.blockGetter = myStructure;
         for (long x = baseX; x < baseX + this.chunkSize; x++)
         {
             for (long z = baseZ; z < baseZ + this.chunkSize; z++)
@@ -258,13 +670,13 @@ public class Chunk
                                         }
                                     }
                                 }
-                                /*
+                                / *
                                 PhysicsUtils.SearchOutwards(new LVector3(x, y + treeHeight, z), 20+ treeHeight, true, true, (b, bx, by, bz) => b == World.AIR || b == World.WILDCARD, (b, bx, by, bz) =>
                                 {
                                     tree[bx, by, bz] = World.LEAF;
                                     return false;
                                 }, getBlock: (bx, by, bz) => tree[bx, by, bz]);
-                                */
+                                * /
 
 
                                 if (!tree.HasAllChunksGenerated())
@@ -284,7 +696,7 @@ public class Chunk
                         }
                     }
 
-                    /*
+                    / *
                     if (y > 3 && y < 5)
                     {
                         this[x, y, z] = World.BEDROCK;
@@ -297,7 +709,7 @@ public class Chunk
                     {
                         this[x, y, z] = World.BEDROCK;
                     }
-                    */
+                    * /
                     if (World.maxCapacities.ContainsKey(this[x,y,z]))
                     {
                         SetState(x, y, z, World.maxCapacities[this[x, y, z]], 2);
@@ -309,9 +721,11 @@ public class Chunk
                 }
             }
         }
+        world.worldGeneration.blockGetter = world;
         chunkData.blocksNeedUpdating.Clear();
         chunkData.blocksNeedUpdatingNextFrame.Clear();
         generating = false;
+        */
     }
 
     public void TickStart()
@@ -320,12 +734,13 @@ public class Chunk
         this.chunkData.TickStart();
     }
 
-    public void Tick()
+    public bool Tick()
     {
+        bool didGenerate = false;
         if (generating)
         {
             Generate();
-
+            didGenerate = true;
 
             generating = false;
         }
@@ -352,6 +767,44 @@ public class Chunk
                 long wx = x + cx * chunkSize;
                 long wy = y + cy * chunkSize;
                 long wz = z + cz * chunkSize;
+
+                using (BlockData block = world.GetBlockData(wx, wy, wz))
+                {
+                    BlockValue blockValue = block.block;
+                    if (world.customBlocks.ContainsKey(blockValue))
+                    {
+                        world.customBlocks[blockValue].OnTick(block);
+                        if (block.needsAnotherTick)
+                        {
+                            chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
+                        }
+                        if (block.WasModified)
+                        {
+                            bool neighborsInsideThisChunk =
+                                (x != 0 && x != chunkSize - 1) &&
+                                (y != 0 && y != chunkSize - 1) &&
+                                (z != 0 && z != chunkSize - 1);
+
+                            // don't call lots of chunk lookups if we don't need to
+                            if (!neighborsInsideThisChunk)
+                            {
+                                world.AddBlockUpdateToNeighbors(wx, wy, wz);
+                            }
+                            else
+                            {
+                                chunkData.AddBlockUpdate(x - 1, y, z);
+                                chunkData.AddBlockUpdate(x + 1, y, z);
+                                chunkData.AddBlockUpdate(x, y - 1, z);
+                                chunkData.AddBlockUpdate(x, y + 1, z);
+                                chunkData.AddBlockUpdate(x, y, z - 1);
+                                chunkData.AddBlockUpdate(x, y, z + 1);
+                            }
+                        }
+                    }
+                }
+                /*
+
+
                 int resState1;
                 int resState2;
                 int resState3;
@@ -386,8 +839,10 @@ public class Chunk
                         chunkData.AddBlockUpdate(x, y, z+1);
                     }
                 }
+                */
             }
         }
+        return didGenerate;
     }
 
 
@@ -552,7 +1007,7 @@ public class ChunkData
         if (forceBlockUpdate || (data[ind * 4 + stateI] != state && stateI != 3))
         {
             addedBlockUpdate = true;
-            blocksNeedUpdatingNextFrame.Add((int)ind);
+            //blocksNeedUpdatingNextFrame.Add((int)ind);
         }
 
         data[ind * 4 + stateI] = state;
@@ -581,7 +1036,7 @@ public class ChunkData
         if (forceBlockUpdate || data[ind * 4] != block)
         {
             addedBlockUpdate = true;
-            blocksNeedUpdatingNextFrame.Add((int)ind);
+            //blocksNeedUpdatingNextFrame.Add((int)ind);
         }
 
         data[ind * 4] = block;
@@ -608,7 +1063,34 @@ public class ChunkData
     }
 }
 
-public class Structure
+
+public abstract class BlockGetter
+{
+
+
+    public long blockModifyState = 1;
+
+    protected BlockDataCache blockDataCache;
+    public BlockData GetBlockData(long x, long y, long z)
+    {
+        return blockDataCache.GetNewBlockData(x, y, z);
+    }
+
+    public void DoneWithBlockData(BlockData blockData)
+    {
+        blockDataCache.DoneWithBlockData(blockData);
+    }
+
+    public abstract void SetState(long x, long y, long z, int state, int stateI);
+    public abstract int GetState(long x, long y, long z, int stateI);
+    public abstract int this[long x, long y, long z]
+    {
+        get;
+        set;
+    }
+}
+
+public class Structure : BlockGetter
 {
     public string name;
     public bool madeInGeneration;
@@ -619,9 +1101,13 @@ public class Structure
     public Dictionary<LVector3, int> state2;
     public Dictionary<LVector3, int> state3;
 
-    public Structure(string name, bool madeInGeneration)
+    public Chunk baseChunk;
+
+    public Structure(string name, bool madeInGeneration, Chunk baseChunk)
     {
         this.name = name;
+        this.baseChunk = baseChunk;
+        this.blockDataCache = new BlockDataCache(this);
         block = new Dictionary<LVector3, int>();
         state1 = new Dictionary<LVector3, int>();
         state2 = new Dictionary<LVector3, int>();
@@ -653,77 +1139,200 @@ public class Structure
         return ungeneratedChunkPositions.Count == 0;
     }
 
-    public int this[long x, long y, long z]
+    public override void SetState(long x, long y, long z, int state, int stateI)
     {
-        get
+        blockModifyState += 1;
+        long cx, cy, cz;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
         {
-            return this[new LVector3(x, y, z)];
+            baseChunk.SetState(x, y, z, state, stateI);
+            return;
         }
-        set
-        {
-            this[new LVector3(x, y, z)] = value;
-        }
-    }
 
-    public int this[LVector3 pos]
-    {
-        get
+        if (madeInGeneration)
         {
-            if (block.ContainsKey(pos))
+            Chunk chunk = World.mainWorld.GetChunkAtPos(x, y, z);
+            if (chunk == null)
             {
-                return block[pos];
+                LVector3 chunkPos;
+                World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
+                int chunkSize = World.mainWorld.chunkSize;
+                if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
+                {
+                    ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                }
+                long localPosX = x - chunkPos.x * chunkSize;
+                long localPosY = y - chunkPos.y * chunkSize;
+                long localPosZ = z - chunkPos.z * chunkSize;
+                bool addedBlockUpdate;
+                ungeneratedChunkPositions[chunkPos].SetState(localPosX, localPosY, localPosZ, state, stateI, out addedBlockUpdate);
             }
             else
             {
-                if (madeInGeneration)
+                bool wasGenerating = chunk.generating;
+                chunk.generating = true;
+                chunk.SetState(x, y, z, state, stateI);
+                chunk.generating = wasGenerating;
+            }
+        }
+        else
+        {
+            World.mainWorld.SetState(x, y, z, state, stateI);
+        }
+    }
+    public override int GetState(long x, long y, long z, int stateI)
+    {
+        long cx, cy, cz;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+        {
+            return baseChunk.GetState(x, y, z, stateI);
+        }
+        if (madeInGeneration)
+        {
+            Chunk chunk = World.mainWorld.GetChunkAtPos(x, y, z);
+            if (chunk == null)
+            {
+                LVector3 chunkPos;
+                World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
+
+                int chunkSize = World.mainWorld.chunkSize;
+                if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                 {
-                    return World.WILDCARD;
+                    ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                }
+                long localPosX = x - chunkPos.x * chunkSize;
+                long localPosY = y - chunkPos.y * chunkSize;
+                long localPosZ = z - chunkPos.z * chunkSize;
+                return ungeneratedChunkPositions[chunkPos].GetState(localPosX, localPosY, localPosZ, stateI);
+            }
+            else
+            {
+                return chunk.GetState(x, y, z, stateI);
+            }
+        }
+        else
+        {
+            return World.mainWorld.GetState(x, y, z, stateI);
+        }
+    }
+
+    public override int this[long x, long y, long z]
+    {
+        get
+        {
+            long cx, cy, cz;
+            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+            {
+                return baseChunk[x,y,z];
+            }
+            if (madeInGeneration)
+            {
+                Chunk chunk = World.mainWorld.GetChunkAtPos(x, y, z);
+                if (chunk == null)
+                {
+                    LVector3 chunkPos;
+                    World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
+
+                    int chunkSize = World.mainWorld.chunkSize;
+                    if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
+                    {
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                    }
+                    long localPosX = x - chunkPos.x * chunkSize;
+                    long localPosY = y - chunkPos.y * chunkSize;
+                    long localPosZ = z - chunkPos.z * chunkSize;
+                    return ungeneratedChunkPositions[chunkPos][localPosX, localPosY, localPosZ];
                 }
                 else
                 {
-                    return World.mainWorld[pos];
+                    return chunk[x, y, z];
                 }
+            }
+            else
+            {
+                return World.mainWorld[x,y,z];
             }
         }
         set
         {
-            block[pos] = value;
-
+            blockModifyState += 1;
+            long cx, cy, cz;
+            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+            {
+                baseChunk[x, y, z] = value;
+                return;
+            }
             if (madeInGeneration)
             {
-                Chunk chunk = World.mainWorld.GetChunkAtPos(pos.x, pos.y, pos.z);
+                Chunk chunk = World.mainWorld.GetChunkAtPos(x, y, z);
                 if (chunk == null)
                 {
                     LVector3 chunkPos;
-                    World.mainWorld.GetChunkCoordinatesAtPos(pos, out chunkPos);
+                    World.mainWorld.GetChunkCoordinatesAtPos(x,y,z, out chunkPos);
                     int chunkSize = World.mainWorld.chunkSize;
                     if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                     {
                         ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard:true);
                     }
-                    long localPosX = pos.x - chunkPos.x * chunkSize;
-                    long localPosY = pos.y - chunkPos.y * chunkSize;
-                    long localPosZ = pos.z - chunkPos.z * chunkSize;
+                    long localPosX = x - chunkPos.x * chunkSize;
+                    long localPosY = y - chunkPos.y * chunkSize;
+                    long localPosZ = z - chunkPos.z * chunkSize;
                     ungeneratedChunkPositions[chunkPos][localPosX, localPosY, localPosZ] = value;
                 }
                 else
                 {
                     bool wasGenerating = chunk.generating;
                     chunk.generating = true;
-                    chunk[pos.x, pos.y, pos.z] = value;
+                    chunk[x, y, z] = value;
                     chunk.generating = wasGenerating;
                 }
             }
             else
             {
-                World.mainWorld[pos] = value;
+                World.mainWorld[x,y,z] = value;
             }
 
         }
     }
 }
 
-public class World
+public class BlockDataCache
+{
+    Queue<BlockData> blockDatasNotInUse;
+
+    BlockGetter world;
+
+    public BlockDataCache(BlockGetter world)
+    {
+        this.world = world;
+        blockDatasNotInUse = new Queue<BlockData>();
+    }
+
+    public BlockData GetNewBlockData(long x, long y, long z)
+    {
+        if (blockDatasNotInUse.Count == 0)
+        {
+            return new BlockData(world, x, y, z);
+        }
+        else
+        {
+            BlockData res = blockDatasNotInUse.Dequeue();
+            res.ReassignValues(x, y, z);
+            return res;
+        }
+    }
+
+    public void DoneWithBlockData(BlockData blockData)
+    {
+        blockDatasNotInUse.Enqueue(blockData);
+    }
+}
+
+public class World : BlockGetter
 {
     public static World mainWorld;
 
@@ -742,6 +1351,14 @@ public class World
     public const int WILDCARD = -1;
     public BlocksWorld blocksWorld;
 
+    ChunkProperties chunkProperties;
+    
+
+
+    public int AddChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    {
+        return chunkProperties.AddChunkProperty(name, minVal, maxVal, usesY);
+    }
 
     public static string BlockToString(int block)
     {
@@ -802,8 +1419,15 @@ public class World
         return blockEntity.GetComponent<BlockEntity>();
     }
 
-    public World(BlocksWorld blocksWorld, int chunkSize)
+    public Dictionary<BlockValue, Block> customBlocks;
+    public GenerationClass worldGeneration;
+
+    public World(BlocksWorld blocksWorld, int chunkSize, GenerationClass worldGeneration, Dictionary<BlockValue, Block> customBlocks)
     {
+        this.worldGeneration = worldGeneration;
+        this.customBlocks = customBlocks;
+        blockDataCache = new BlockDataCache(this);
+        chunkProperties = new ChunkProperties();
         World.mainWorld = this;
         this.blocksWorld = blocksWorld;
         this.chunkSize = chunkSize;
@@ -838,7 +1462,10 @@ public class World
         maxCapacities[AIR] = 0;
         maxCapacities[BEDROCK] = 6;
 
-        int viewDist = 5;
+        int viewDist = 6;
+        this.worldGeneration.world = this;
+        this.worldGeneration.blockGetter = this;
+        this.worldGeneration.OnGenerationInit();
         for (int i = -viewDist; i <= viewDist; i++)
         {
             for (int j = -viewDist; j <= viewDist; j++)
@@ -860,12 +1487,44 @@ public class World
 
     public delegate float ChunkValueGetter(ChunkBiomeData chunk);
 
-    public float AverageChunkValues(long x, long y, long z, ChunkValueGetter getChunkValue)
+
+    Dictionary<LVector3, ChunkBiomeData> ungeneratedChunkBiomeDatas = new Dictionary<LVector3, ChunkBiomeData>();
+
+
+    ChunkBiomeData lastRequest;
+
+    public ChunkBiomeData GetChunkBiomeData(long cx, long cy, long cz)
     {
-        ChunkBiomeData chunkx1z1 = new ChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-        ChunkBiomeData chunkx2z1 = new ChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-        ChunkBiomeData chunkx1z2 = new ChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
-        ChunkBiomeData chunkx2z2 = new ChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+        Chunk chunk = GetChunk(cx, cy, cz);
+        if (chunk != null)
+        {
+            return chunk.chunkBiomeData;
+        }
+        else
+        {
+            LVector3 chunkPos = new LVector3(cx, cy, cz);
+            if (ungeneratedChunkBiomeDatas.ContainsKey(chunkPos))
+            {
+                return ungeneratedChunkBiomeDatas[chunkPos];
+            }
+            else
+            {
+                ChunkBiomeData res = new ChunkBiomeData(chunkProperties, chunkPos.x, chunkPos.y, chunkPos.z);
+                ungeneratedChunkBiomeDatas[chunkPos] = res;
+                return res;
+            }
+        }
+    }
+
+
+    public float AverageChunkValues(long x, long y, long z, int key)
+    {
+        ChunkBiomeData chunkBiomeData = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        return chunkBiomeData.AverageBiomeData(x, y, z, key);
+        /*
+        ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+        ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
 
         long x1Weight = x - chunkx1z1.cx * chunkSize;
         long x2Weight = chunkx2z1.cx * chunkSize - x;
@@ -880,7 +1539,32 @@ public class World
         float valZ2 = getChunkValue(chunkx1z2) * (1 - px) + getChunkValue(chunkx2z2) * px;
 
         return valZ1 * (1 - pz) + valZ2 * pz;
+        */
     }
+    /*
+
+    public float AverageChunkValues(long x, long y, long z, string valueKey)
+    {
+        ChunkBiomeData chunkx1z1 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+        ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+
+        long x1Weight = x - chunkx1z1.cx * chunkSize;
+        long x2Weight = chunkx2z1.cx * chunkSize - x;
+        long z1Weight = z - chunkx1z1.cz * chunkSize;
+        long z2Weight = chunkx2z1.cz * chunkSize - z;
+
+        float px = x1Weight / (float)chunkSize;
+        float pz = z1Weight / (float)chunkSize;
+
+
+        float valZ1 = chunkx1z1[valueKey] * (1 - px) + chunkx2z1[valueKey] * px;
+        float valZ2 = chunkx1z2[valueKey] * (1 - px) + chunkx2z2[valueKey] * px;
+
+        return valZ1 * (1 - pz) + valZ2 * pz;
+    }
+    */
 
 
     public bool NeedsInitialUpdate(int block)
@@ -893,15 +1577,16 @@ public class World
     }
 
 
-    public void SetState(long i, long j, long k, int state, int stateI)
+    public override void SetState(long i, long j, long k, int state, int stateI)
     {
+        blockModifyState += 1;
         long chunkX = divWithFloor(i, chunkSize);
         long chunkY = divWithFloor(j, chunkSize);
         long chunkZ = divWithFloor(k, chunkSize);
         Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
         chunk.SetState(i, j, k, state, stateI);
     }
-    public int GetState(long i, long j, long k, int stateI)
+    public override int GetState(long i, long j, long k, int stateI)
     {
         long chunkX = divWithFloor(i, chunkSize);
         long chunkY = divWithFloor(j, chunkSize);
@@ -1743,20 +2428,13 @@ public class World
     // I didn't want to convert to a float or double and floor because that can lead to precision issues
     long divWithFloor(long a, long b)
     {
-        if (a % b == 0)
+        if (a % b == 0 || (System.Math.Sign(a) == System.Math.Sign(b)))
         {
             return a / b;
         }
         else
         {
-            if ((a < 0 && b > 0) || (a > 0 && b < 0))
-            {
-                return a / b - 1; // if a and b differ by a sign, this rounds up, round down instead (in other words, always floor)
-            }
-            else
-            {
-                return a / b;
-            }
+             return a / b - 1; // if a and b differ by a sign, this rounds up, round down instead (in other words, always floor)
         }
     }
 
@@ -1791,7 +2469,7 @@ public class World
             this[pos.x, pos.y, pos.z] = value;
         }
     }
-    public int this[long x, long y, long z]
+    public override int this[long x, long y, long z]
     {
         get
         {
@@ -1804,6 +2482,7 @@ public class World
 
         set
         {
+            blockModifyState += 1;
             long chunkX = divWithFloor(x, chunkSize);
             long chunkY = divWithFloor(y, chunkSize);
             long chunkZ = divWithFloor(z, chunkSize);
@@ -1822,9 +2501,20 @@ public class World
         return chunk;
     }
 
+    Chunk lastChunk;
+
     public Chunk GetChunk(long chunkX, long chunkY, long chunkZ)
     {
-        return GetChunk(new long[] { chunkX, chunkY, chunkZ });
+        if (lastChunk != null && lastChunk.cx == chunkX && lastChunk.cy == chunkY && lastChunk.cz == chunkZ)
+        {
+            return lastChunk;
+        }
+        Chunk res = GetChunk(new long[] { chunkX, chunkY, chunkZ });
+        if (res != null)
+        {
+            lastChunk = res;
+        }
+        return res;
     }
 
     Chunk GetChunk(long[] pos)
@@ -1901,7 +2591,7 @@ public class World
                 return existingChunk;
             }
         }
-        Chunk res = new Chunk(this, chunkX, chunkY, chunkZ, chunkSize);
+        Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSize);
         AddChunkToDataStructures(res);
         return res;
     }
@@ -1911,18 +2601,20 @@ public class World
     {
         //Debug.Log("adding chunk " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " " + Time.frameCount);
         long[] curPos = new long[] { chunk.cx, chunk.cy, chunk.cz };
+
+
         for (int d = 0; d < DIM; d++)
         {
-            if (!chunksPer[d].ContainsKey(chunk.chunkPos[d]))
+            if (!chunksPer[d].ContainsKey(chunk.GetPos(d)))
             {
-                chunksPer[d][chunk.chunkPos[d]] = new List<Chunk>();
+                chunksPer[d][chunk.GetPos(d)] = new List<Chunk>();
             }
 
-            chunksPer[d][chunk.chunkPos[d]].Add(chunk);
+            chunksPer[d][chunk.GetPos(d)].Add(chunk);
 
 
             // link to node before
-            curPos[d] = chunk.chunkPos[d] - 1;
+            curPos[d] = chunk.GetPos(d) - 1;
             Chunk beforeChunk = GetChunk(curPos);
             if (beforeChunk != null)
             {
@@ -1932,7 +2624,7 @@ public class World
 
 
             // link to node after
-            curPos[d] = chunk.chunkPos[d] + 1;
+            curPos[d] = chunk.GetPos(d) + 1;
             Chunk afterChunk = GetChunk(curPos);
             if (afterChunk != null)
             {
@@ -1941,11 +2633,16 @@ public class World
             }
 
             // reset back to chunk pos so next dim can use this array as well
-            curPos[d] = chunk.chunkPos[d];
+            curPos[d] = chunk.GetPos(d);
         }
         allChunks.Add(chunk);
 
-
+        LVector3 chunkPosVec = new LVector3(chunk.cx, chunk.cy, chunk.cz);
+        if (ungeneratedChunkBiomeDatas.ContainsKey(chunkPosVec))
+        {
+            chunk.chunkBiomeData = ungeneratedChunkBiomeDatas[chunkPosVec];
+            ungeneratedChunkBiomeDatas.Remove(chunkPosVec);
+        }
         List<Structure> leftoverStructures = new List<Structure>();
         foreach (Structure structure in unfinishedStructures)
         {
@@ -1982,6 +2679,23 @@ public class World
         long chunkX = divWithFloor(worldPos.x, chunkSize);
         long chunkY = divWithFloor(worldPos.y, chunkSize);
         long chunkZ = divWithFloor(worldPos.z, chunkSize);
+        chunkPos = new LVector3(chunkX, chunkY, chunkZ);
+    }
+
+
+    public void GetChunkCoordinatesAtPos(long x, long y, long z, out long cx, out long cy, out long cz)
+    {
+        cx = divWithFloor(x, chunkSize);
+        cy = divWithFloor(y, chunkSize);
+        cz = divWithFloor(z, chunkSize);
+    }
+
+
+    public void GetChunkCoordinatesAtPos(long x, long y, long z, out LVector3 chunkPos)
+    {
+        long chunkX = divWithFloor(x, chunkSize);
+        long chunkY = divWithFloor(y, chunkSize);
+        long chunkZ = divWithFloor(z, chunkSize);
         chunkPos = new LVector3(chunkX, chunkY, chunkZ);
     }
 
@@ -2067,7 +2781,10 @@ public class World
 
         foreach (Chunk chunk in allChunksHere)
         {
-            chunk.Tick();
+            if(chunk.Tick())
+            {
+                //break;
+            }
         }
         Debug.Log("num non-water updates: " + numBlockUpdatesThisTick + " num water updates: " + numWaterUpdatesThisTick);
     }
@@ -2357,7 +3074,11 @@ public class BlocksWorld : MonoBehaviour {
     void Start () {
         
         SetupRendering();
-        world = new World(this, chunkSize);
+
+        Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
+        customBlocks[BlockValue.GRASS] = new Grass();
+        GenerationClass customGeneration = new ExampleGeneration();
+        world = new World(this, chunkSize, customGeneration, customBlocks);
         lastTick = 0;
     }
 

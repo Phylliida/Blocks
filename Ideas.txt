@@ -148,9 +148,7 @@ Glass - as long as you have sand and brick oven you get it, and you can make con
 
 
 
-wolf/dog neiche - looks more like a crocodile but stands more upright - hunting or guard animal - needs meat to survive and heal damage and to breed
-Might shed scales?
-	If climate is too cold they can't live there, but otherwise decently large range of things - hotter to cooler to tempereate
+
 	
 hair or fur like mammals do, but have beaks and may or may not lay eggs (depends on the species - like even sharks irl some lay eggs some give live birth)
 	wooly ground sloth with a beak (the niche of "beak" adapted much more readily than mouthes/teeth in this world) does well in cold, eats from trees and shrubs, like a donkey, fish up, mostly you'll see trilobyes, arthropods
@@ -158,19 +156,13 @@ hair or fur like mammals do, but have beaks and may or may not lay eggs (depends
 	
 Player from: give live birth to small young in larval stage (sorta like tadpoles like frogs have, no limbs, young will live in that stage and adults take care, then metamorphisis in teen stage and pupa and then hatch into arms and legs, scaly arms and scan, and teeth rather than beaks)
 	
-Piglike thing that has a larval stage then grows up to be a larger scaly thing with 4 legs - hide is usable for making bags and things - leather and stuff
-	scales vary from individual scales to skin made of scales (snakes), these scales are more like snake skin
-	can live in very hot or pretty cold climate
 
-similar to a horse in form and ecological niche, stripy scales, larval form is (water or underground?), adult is horselike and eats grass - larval form in usually rivers and ponds, they are decent swimmers, not amazing but you can ride them in water
-can run very fast to get away from predators and eat grass
 
-Fur and beaks:
-	spines like a porcupine, defensive things, attack bare handed due damage but generally docile, sheds spines so you can get them occasionally, about size of sheep, lays eggs, looks like an echidna, eags worms and bugs out of the ground (like birds do)
-		Spines have lower durability than bone needles but they keep shedding them so you can get more often
+
+
+
 		
 		
-Antelope looking things, CUTE, tube like hummingbirds, scamper around drinking nectar - rabbit size - so you could use hide to stitch together and you could also eat them but 
 
 
 
@@ -244,3 +236,72 @@ Water:
 		tells everyone older than them that they have n air (with a "only go to older" message)
 		tells everyone younger than them that they have n air (with a "only go to younger than you" message)
 	
+	
+warm, has rivers, lowlands 
+lowlands, by lake, just dry enough that there is not thick forest but just sparse trees so it is easy enough to ride a horse through, lots of grass space, plants that grow very large flowers that the tiny antelopes drink nectar from (the antelopes are the pollenators)
+rivers flow these biomes for main source of water, not much rainfall, probably some plants in the water at the river
+What is going to be spicy?
+	oil is somewhat limited - main good source of oil is: once they've been pollinated they'll form a seed about the side of a coconut, then launches it into the air and wherever it lands if it lands good it forms a new flower, form seeds slowly
+		seeds will hurt if they hit you, but they are oily seeds that you can get oil from, just can be inconvenent to farm
+		one reason antelopes get starteled and speedy is to dodge seeds - some way to tell when they are right about to launch, you can try to pry it out before it launches but then it might just hit you in the face
+		fairly warm, nice rivers for water, fairly hospitable in that stuff that you need is there
+		sparse large trees have bark that you can make into string: 
+			main predator: river wyrm
+				it has a body shaped kind of like a chineese dragon, jaws that open sideways, ambush predators, hide in plants, 3-4 blocks long, bendy, vulerable when out of water cause they can't walk that fast, they might go between bodies of water but usually only at night
+				these make the rivers spicy but you need water
+		tree bark can be turned into string but you need to soak it (like how you make linen out of flax)
+		clay available under top few layers of dirt
+		clay on the surface along the river banks
+		
+		spookers wait until someone is right next to water and then drag you in and drown you
+		
+	food sources - eventually you can get seeds into wheats but that might take time and effort to get it dometicated right
+		easiest thing from the start is the smaller flowers that have bulbs like tulips or segolillies that you can eat, the grow back fast, but each bulb doesn't restore a lot of hunger
+		You can also plant the bulbs to grow more
+			spread vs break to get more than one - not sure yet but something like that
+			also if you live on only that malnutrition can eventually become a problem
+		
+		calorie dense things: most animals are either speedy or well defended due to the local spookers
+			fishing for trilobite or arthipods can be good but the rivers are spookers
+			
+			
+		launched seeds can also be eaten but you might have to break them open with a rock first (like a coconut)
+			
+			
+	large grazing animal:
+		fairly large, usable in an ox sort of way (pull a cart or something), a really big armadillo, with plates
+	
+	you also might see the horse one (larval form in rivers but small enough that not worth the wyrm's food but still get nommed sometimes so they are not the most common) and the skeep sized porkupine things
+	river wyrm usually eats the little antelope things and sometimes manages to kill younger armadillo grazer things (harder time with an adult because so armored), they generally avoid the porcupine sheep unless necessary
+	they will also eat the player species
+	piglike things would not be here as much because not very much defenses so they'd probably get nommed, they are more likely in the forest but might wander in occasionally
+	
+	maybe a few wolf/dog ones, might go after small prey like the size of antelope, working together they might go for the horse things or the juvenile armadillo things
+	
+	
+	
+	you might see slightly different color morphs in different biomes for some that show up in lots of biomes (like bunnies in minecraft)
+	
+	maybe some shrubbry with berries, not sure, but this should be enough to feel like an ecosystem
+	
+
+	
+All animals:	
+- River wyrm
+- Player species
+- Porcupine sheep: Fur and beakss, spines like a porcupine, defensive things, attack bare handed due damage but generally docile, sheds spines so you can get them occasionally, about size of sheep, lays eggs, looks like an echidna, eags worms and bugs out of the ground (like birds do)
+		Spines have lower durability than bone needles but they keep shedding them so you can get more often
+- Piglike thing that has a larval stage then grows up to be a larger scaly thing with 4 legs - hide is usable for making bags and things - leather and stuff
+	[scales in all animals on earth vary from individual scales to skin made of scales (snakes), these scales are more like snake skin]
+	can live in very hot or pretty cold climate
+- Antelope looking things, CUTE, tube like hummingbirds, scamper around drinking nectar - rabbit size - so you could use hide to stitch together and you could also eat them but 
+- wolf/dog neiche - looks more like a crocodile but stands more upright - hunting or guard animal - needs meat to survive and heal damage and to breed
+	Might shed scales?
+		If climate is too cold they can't live there, but otherwise decently large range of things - hotter to cooler to tempereate
+- wooly ground sloth with a beak (the niche of "beak" adapted much more readily than mouthes/teeth in this world) does well in cold, eats from trees and shrubs, like a donkey
+- if you fish you'll mostly see trilobyes type things (or other arthropod type things)
+- similar to a horse in form and ecological niche, stripy scales, larval form is (water or underground?), adult is horselike and eats grass - larval form in usually rivers and ponds, they are decent swimmers, not amazing but you can ride them in water
+		can run very fast to get away from predators and eat grass
+- large grazing animal: fairly large, usable in an ox sort of way (pull a cart or something), a really big armadillo, with plates, burrows to make larva (worm kinda sense), stubby legs, sorta takes care of it until it metamorphisis to have small stubby legs at first, then it can walk around, parents chew up grass and then regurgitate for babies
+	quite useful to domesticate because fairly strong, [pull their neck in, put their face to the ground], with juveniles they might try to make a circle around the babies, and protect babies by sitting on them
+	animals will eventually give up killing them because its a waste of energy, they might keep scratch at it for a bit but then go and chase something easier

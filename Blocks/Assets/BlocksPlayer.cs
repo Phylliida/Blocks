@@ -16,6 +16,7 @@ public class BlocksPlayer : MonoBehaviour
     public BlockEntity holdingWithMouseEntity = null;
     int blockPlacing;
 
+
     bool showingHotbarOnly = true;
     int hotbarSize = 8;
     public void Start()

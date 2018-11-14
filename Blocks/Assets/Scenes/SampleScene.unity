@@ -325,6 +325,7 @@ MonoBehaviour:
   mainCamera: {fileID: 282840813}
   inventoryGui: {fileID: 282840817}
   reachRange: 6
+  holdingWithMouseEntity: {fileID: 0}
 --- !u!114 &282840816
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -361,7 +362,6 @@ MonoBehaviour:
   maxItems: -1
   screenOffset: {x: 0, y: -100}
   blockItems: []
-  holdingWithMouseEntity: {fileID: 0}
 --- !u!1 &324794735
 GameObject:
   m_ObjectHideFlags: 0
@@ -742,7 +742,6 @@ MonoBehaviour:
   maxItems: -1
   screenOffset: {x: 0, y: -100}
   blockItems: []
-  holdingWithMouseEntity: {fileID: 0}
 --- !u!4 &1234048946
 Transform:
   m_ObjectHideFlags: 0

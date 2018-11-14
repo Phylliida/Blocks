@@ -3,16 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-public class Block
-{
-    public int block;
-
-    public Block(int block)
-    {
-        this.block = block;
-    }
-}
-
 public class BlockStack
 {
     public int block;

@@ -383,7 +383,9 @@ namespace Simplex
 
             // Add contributions from each corner to get the final noise value.
             // The result is scaled to stay just inside [-1,1]
-            return 32.0f * (n0 + n1 + n2 + n3); // TODO: The scale factor is preliminary!
+            float res = 32.0f * (n0 + n1 + n2 + n3); // TODO: The scale factor is preliminary!
+            res = (res + 1.0f) / 2.0f; // fix so it is from 0 to 1 instead
+            return res;
         }
 
         private static byte[] perm;
