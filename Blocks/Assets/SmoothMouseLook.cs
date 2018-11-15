@@ -35,6 +35,7 @@ public class SmoothMouseLook : MonoBehaviour
     public bool prevCapturing = false;
     void Update()
     {
+        capturing = allowedToCapture;
 
         if (!capturing)
         {
@@ -59,15 +60,15 @@ public class SmoothMouseLook : MonoBehaviour
             return;
         }
 
-        prevCapturing = capturing;
-        if (Input.GetMouseButtonDown(0))
-        {
-            capturing = true;
-        }
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            capturing = false;
-        }
+
+        //if (Input.GetMouseButtonDown(0))
+        //{
+        //    capturing = true;
+        //}
+        //if (Input.GetKeyDown(KeyCode.Escape))
+        //{
+        //    capturing = false;
+        //}
         if (!capturing)
         {
             if (Cursor.lockState != CursorLockMode.None || !Cursor.visible)
@@ -77,14 +78,13 @@ public class SmoothMouseLook : MonoBehaviour
             }
             return;
         }
-        if (prevCapturing == capturing)
+        if (capturing)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-        }
-        else
-        {
-            return;
+            if (Cursor.lockState != CursorLockMode.Locked)
+            {
+            }
         }
         if (axes == RotationAxes.MouseXAndY)
         {

@@ -127,7 +127,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 78167f405d4a6c64d84db2290bdead8a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  blockId: 1
+  blockId: 10
   playerPulling: {fileID: 0}
   playerThrowing: {fileID: 0}
   timeThrown: 0

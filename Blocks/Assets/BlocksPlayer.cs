@@ -36,10 +36,31 @@ public class BlocksPlayer : MonoBehaviour
         }
     }
 
+    public bool paused = false;
+
     public void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            paused = true;
+        }
+        if (paused)
+        {
+            mouseLook.allowedToCapture = false;
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
+            {
+                paused = false;
+                mouseLook.allowedToCapture = true;
+            }
+            return;
+        }
         if (Input.GetKeyDown(KeyCode.E))
         {
+            if (!showingHotbarOnly)
+            {
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = false;
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = null;
+            }
             showingHotbarOnly = !showingHotbarOnly;
         }
 
@@ -48,6 +69,7 @@ public class BlocksPlayer : MonoBehaviour
         {
             World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = false;
             mouseLook.allowedToCapture = true;
+            mouseLook.capturing = true;
             inventoryGui.numRows = 1;
             inventoryGui.maxItems = hotbarSize;
             inventoryGui.screenOffset.y = -Screen.height / 2.0f + 100.0f;
@@ -58,7 +80,7 @@ public class BlocksPlayer : MonoBehaviour
             mouseLook.allowedToCapture = false;
             inventoryGui.maxItems = -1;
             inventoryGui.numRows = 4;
-            inventoryGui.screenOffset.y = -Screen.height / 2.0f + 500.0f;
+            inventoryGui.screenOffset.y = -Screen.height / 2.0f + 300.0f;
         }
 
         int maxSelection = Mathf.Max(inventory.capacity, inventoryGui.maxItems);
@@ -112,7 +134,7 @@ public class BlocksPlayer : MonoBehaviour
                 blockEntity.playerPulling = null;
             }
         }
-        if (Input.GetMouseButtonDown(0) && mouseLook.prevCapturing)
+        if (Input.GetMouseButtonDown(0) && showingHotbarOnly)
         {
             LVector3 hitPos;
             LVector3 posBeforeHit;
@@ -125,6 +147,12 @@ public class BlocksPlayer : MonoBehaviour
             {
                 //Debug.Log("hit at pos " + hitPos);
                 World.mainWorld.CreateBlockEntity(hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3());
+                if (hitResults.hitBlock.Block == World.CRAFTING_TABLE && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                {
+                    Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
+                    chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
+                    World.mainWorld.blocksWorld.blockInventories.Remove(hitResults.hitBlock);
+                }
                 World.mainWorld[hitResults.hitBlock] = 0;
             }
             else
@@ -134,64 +162,62 @@ public class BlocksPlayer : MonoBehaviour
             }
         }
 
-        if (Input.GetMouseButtonDown(1) && mouseLook.prevCapturing)
+        if (Input.GetMouseButtonDown(1) && showingHotbarOnly)
         {
             //Debug.Log("made click");
 
 
             RaycastResults hitResults;
 
-            if (inventoryGui != null && inventory != null && inventory.blocks[inventoryGui.selection] != null && inventory.blocks[inventoryGui.selection].count > 0)
+            if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
             {
-                if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
-                {
-                    // don't let you place a block in yourself
-                    LVector3 myPos = LVector3.FromUnityVector3(transform.position);
-                    LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
-                    LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
-                    LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
+                // don't let you place a block in yourself
+                LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+                LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
+                LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
+                LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
 
-                    if (hitResults.hitBlock.Block == World.GRASS && showingHotbarOnly)
+                if (hitResults.hitBlock.Block == World.CRAFTING_TABLE && showingHotbarOnly)
+                {
+                    Inventory blockInventory;
+                    if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                     {
-                        Inventory blockInventory;
-                        if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
-                        {
-                            blockInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
-                        }
-                        else
-                        {
-                            blockInventory = new Inventory(5);
-                            World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock] = blockInventory;
-                        }
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
-                        showingHotbarOnly = false;
-                        mouseLook.allowedToCapture = false;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 0);
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                        blockInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
                     }
                     else
                     {
-                        if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                        blockInventory = new Inventory(9);
+                        blockInventory.resultBlocks = new BlockStack[1];
+                        World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock] = blockInventory;
+                    }
+                    World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
+                    World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                    showingHotbarOnly = false;
+                    mouseLook.allowedToCapture = false;
+                    World.mainWorld.blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
+                    World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 300);
+                    World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                }
+                else if (inventoryGui != null && inventory != null && inventory.blocks[inventoryGui.selection] != null && inventory.blocks[inventoryGui.selection].count > 0)
+                {
+                    if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
+                    {
+                        World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
+                        inventory.blocks[inventoryGui.selection].count -= 1;
+                        if (inventory.blocks[inventoryGui.selection].count <= 0)
                         {
-                            World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
-                            inventory.blocks[inventoryGui.selection].count -= 1;
-                            if (inventory.blocks[inventoryGui.selection].count <= 0)
-                            {
-                                inventory.blocks[inventoryGui.selection] = null;
-                            }
+                            inventory.blocks[inventoryGui.selection] = null;
                         }
                     }
-
-
-                    //Debug.Log("hit at pos " + hitPos);
                 }
-                else
-                {
 
-                    //Debug.Log("mouse cast failed " + hitPos);
-                }
+
+                //Debug.Log("hit at pos " + hitPos);
+            }
+            else
+            {
+
+                //Debug.Log("mouse cast failed " + hitPos);
             }
         }
 

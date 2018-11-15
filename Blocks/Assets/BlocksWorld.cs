@@ -220,8 +220,9 @@ public class ChunkBiomeData
         x1y1z1 = World.mainWorld.GetChunkBiomeData(cx + 1, cy + 1, cz + 1);
     }
 
-    public float AverageBiomeData(long wx, long wy, long wz, int key)
+    public float AverageBiomeData(long wx, long wy, long wz, ChunkProperty chunkProperty)
     {
+        int key = chunkProperty.index;
         if (x0y0z0 == null)
         {
             FetchNeighbors();
@@ -259,6 +260,7 @@ public class ChunkBiomeData
 
 public enum BlockValue
 {
+    CHEST = 11,
     EMPTY = 10,
     LEAF = 9,
     TRUNK = 8,
@@ -290,6 +292,11 @@ public class BlockData : System.IDisposable
         {
 
         }
+    }
+
+    public float rand()
+    {
+        return Random.value;
     }
 
     private long wx, wy, wz;
@@ -333,6 +340,7 @@ public class BlockData : System.IDisposable
 }
 public class BlockDataGetter
 {
+
     public World world;
     public BlockGetter blockGetter;
     public BlockDataGetter(World world, BlockGetter blockGetter)
@@ -347,56 +355,271 @@ public class BlockDataGetter
         this.blockGetter = World.mainWorld;
     }
 
+    public BlockValue GetBlock(long x, long y, long z)
+    {
+        return (BlockValue)blockGetter[x, y, z];
+    }
+
+    public void SetBlock(long x, long y, long z, BlockValue value)
+    {
+        blockGetter[x, y, z] = (int)value;
+    }
+
     public BlockData GetBlockData(long x, long y, long z)
     {
         return blockGetter.GetBlockData(x, y, z);
     }
 }
-public class Block : BlockDataGetter
+public abstract class Block : BlockDataGetter
 {
-    public void OnTick(BlockData block)
+    public float rand()
     {
-        return;
+        return Random.value;
     }
+    static int globalPreference = 0;
+
+
+    public IEnumerable<BlockData> GetNeighbors(BlockData block, bool includingUp=true, bool includingDown=true)
+    {
+        foreach (BlockData n in GetHorizontalNeighbors(block))
+        {
+            yield return n;
+        }
+        if (includingUp)
+        {
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+        }
+        if (includingDown)
+        {
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+        }
+    }
+
+
+    public IEnumerable<BlockData> GetHorizontalNeighbors(BlockData block)
+    {
+        globalPreference = (globalPreference + 1) % 4;
+        if (globalPreference == 0)
+        {
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+        }
+        else if (globalPreference == 1)
+        {
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+        }
+        else if (globalPreference == 2)
+        {
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+        }
+        else if (globalPreference == 3)
+        {
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+        }
+    }
+
+    public IEnumerable<BlockData> Get26Neighbors(BlockData block)
+    {
+        globalPreference = (globalPreference + 1) % 4;
+        if (globalPreference == 0)
+        {
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+        }
+        else if(globalPreference == 1)
+        {
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+        }
+        else if (globalPreference == 2)
+        {
+
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+        }
+        else if (globalPreference == 3)
+        {
+            using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
+
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
+
+
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+            using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+        }
+    }
+
+    public abstract void OnTick(BlockData block);
 }
 
-public class Grass : Block
-{
-
-}
 
 public class ChunkProperty
 {
+    public int index;
     public string name;
     public float minVal;
     public float maxVal;
     public bool usesY;
-    public ChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    public float scale;
+    public ChunkProperty(string name, float minVal, float maxVal, float scale=10.0f, bool usesY=true)
     {
         this.name = name;
         this.minVal = minVal;
         this.maxVal = maxVal;
         this.usesY = usesY;
+        this.scale = scale;
+        this.index = 0;
     }
 
     public float GenerateValue(long cx, long cy, long cz)
     {
         if (usesY)
         {
-            return Simplex.Noise.Generate(cx / 10.0f, cy / 10.0f, cz / 10.0f)*(maxVal-minVal) + minVal;
+            return Simplex.Noise.Generate(cx / scale, cy / scale, cz / scale) *(maxVal-minVal) + minVal;
         }
         else
         {
-            return Simplex.Noise.Generate(cx / 10.0f, 0, cz / 10.0f) * (maxVal - minVal) + minVal;
+            return Simplex.Noise.Generate(cx / scale, 0, cz / scale) * (maxVal - minVal) + minVal;
         }
     }
 }
 public class ChunkProperties
 {
     public List<ChunkProperty> chunkProperties = new List<ChunkProperty>();
-    public int AddChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    public int AddChunkProperty(ChunkProperty chunkProperty)
     {
-        chunkProperties.Add(new ChunkProperty(name, minVal, maxVal, usesY));
+        chunkProperties.Add(chunkProperty);
+        chunkProperty.index = chunkProperties.Count - 1;
         return chunkProperties.Count - 1;
     }
 
@@ -413,54 +636,17 @@ public class ChunkProperties
 }
 
 
-public abstract class GenerationClass : BlockDataGetter
+public abstract class GenerationClass : BlockDataGetter 
 {
 
-    public float GetChunkProperty(long x, long y, long z, int key)
+    public float GetChunkProperty(long x, long y, long z, ChunkProperty chunkProperty)
     {
-        return world.AverageChunkValues(x, y, z, key);
+        return world.AverageChunkValues(x, y, z, chunkProperty);
     }
 
     public abstract void OnGenerationInit();
     public abstract void OnGenerateBlock(long x, long y, long z, BlockData outBlock);
 
-}
-
-public class ExampleGeneration : GenerationClass
-{
-    public int elevationKey;
-    public override void OnGenerationInit()
-    {
-        float minVal = 10.0f;
-        float maxVal = 40.0f;
-        elevationKey = world.AddChunkProperty("elevation", minVal, maxVal, usesY:false);
-    }
-
-    public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
-    {
-        float elevation = GetChunkProperty(x, y, z, elevationKey);
-        //if (y <= 0)
-        //{
-        //    outBlock.block = BlockValue.STONE;
-        //}
-        long elevationL = (long)Mathf.Round(elevation);
-        if (y >= elevationL)
-        {
-            outBlock.block = BlockValue.AIR;
-        }
-        else
-        {
-            long distFromSurface = elevationL - y;
-            if (distFromSurface == 1)
-            {
-                outBlock.block = BlockValue.GRASS;
-            }
-            else
-            {
-                outBlock.block = BlockValue.DIRT;
-            }
-        }
-    }
 }
 
 public class Chunk
@@ -573,15 +759,19 @@ public class Chunk
             chunkData.blocksNeedUpdating.Clear();
             chunkData.blocksNeedUpdatingNextFrame.Clear();
             generating = false;
-            Debug.LogError("error in generating chunk " + cx + " " + cy + " " + cz);
-            throw e;
+            Debug.LogError("error in generating chunk " + cx + " " + cy + " " + cz + " " + e);
         }
         long end = PhysicsUtils.millis();
         float secondsTaken = (end - start) / 1000.0f;
         //Debug.Log("done generating chunk " + cx + " " + cy + " " + cz + " in " + secondsTaken + " seconds");
         if (!myStructure.HasAllChunksGenerated())
         {
+            Debug.Log("adding unfinished " + cx + " " + cy + " " + cz);
             world.AddUnfinishedStructure(myStructure);
+        }
+        else
+        {
+            //Debug.Log("done with thing " + cx + " " + cy + " " + cz);
         }
         world.worldGeneration.blockGetter = world;
         chunkData.blocksNeedUpdating.Clear();
@@ -773,7 +963,8 @@ public class Chunk
                     BlockValue blockValue = block.block;
                     if (world.customBlocks.ContainsKey(blockValue))
                     {
-                        world.customBlocks[blockValue].OnTick(block);
+                        Block customBlock = world.customBlocks[blockValue];
+                        customBlock.OnTick(block);
                         if (block.needsAnotherTick)
                         {
                             chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
@@ -1263,7 +1454,10 @@ public class Structure : BlockGetter
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
             if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
-                baseChunk[x, y, z] = value;
+                if ((BlockValue)value != BlockValue.WILDCARD)
+                {
+                    baseChunk[x, y, z] = value;
+                }
                 return;
             }
             if (madeInGeneration)
@@ -1285,10 +1479,13 @@ public class Structure : BlockGetter
                 }
                 else
                 {
-                    bool wasGenerating = chunk.generating;
-                    chunk.generating = true;
-                    chunk[x, y, z] = value;
-                    chunk.generating = wasGenerating;
+                    if ((BlockValue)value != BlockValue.WILDCARD)
+                    {
+                        bool wasGenerating = chunk.generating;
+                        chunk.generating = true;
+                        chunk[x, y, z] = value;
+                        chunk.generating = wasGenerating;
+                    }
                 }
             }
             else
@@ -1332,11 +1529,29 @@ public class BlockDataCache
     }
 }
 
+public class BlocksPack : MonoBehaviour
+{
+    public Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
+    public GenerationClass customGeneration;
+
+    public void AddCustomBlock(BlockValue block, Block customBlock)
+    {
+        customBlocks[block] = customBlock;
+    }
+
+    public void SetCustomGeneration(GenerationClass customGeneration)
+    {
+        this.customGeneration = customGeneration;
+    }
+
+}
+
 public class World : BlockGetter
 {
     public static World mainWorld;
 
-    public static int numBlocks = 10;
+    public static int numBlocks = 11;
+    public const int CRAFTING_TABLE = 11;
     public const int EMPTY = 10;
     public const int LEAF = 9;
     public const int TRUNK = 8;
@@ -1355,9 +1570,9 @@ public class World : BlockGetter
     
 
 
-    public int AddChunkProperty(string name, float minVal, float maxVal, bool usesY=true)
+    public int AddChunkProperty(ChunkProperty chunkProperty)
     {
-        return chunkProperties.AddChunkProperty(name, minVal, maxVal, usesY);
+        return chunkProperties.AddChunkProperty(chunkProperty);
     }
 
     public static string BlockToString(int block)
@@ -1375,6 +1590,8 @@ public class World : BlockGetter
             case SAND: return "Sand";
             case AIR: return "Air";
             case WILDCARD: return "Wildcard";
+            case CRAFTING_TABLE: return "Chest";
+            case EMPTY: return "Empty";
             default: return "unknown";
         }
     }
@@ -1422,10 +1639,15 @@ public class World : BlockGetter
     public Dictionary<BlockValue, Block> customBlocks;
     public GenerationClass worldGeneration;
 
-    public World(BlocksWorld blocksWorld, int chunkSize, GenerationClass worldGeneration, Dictionary<BlockValue, Block> customBlocks)
+    public World(BlocksWorld blocksWorld, int chunkSize, BlocksPack blocksPack)
     {
-        this.worldGeneration = worldGeneration;
-        this.customBlocks = customBlocks;
+        this.worldGeneration = blocksPack.customGeneration;
+        this.customBlocks = blocksPack.customBlocks;
+        foreach (KeyValuePair<BlockValue, Block> customBlock in customBlocks)
+        {
+            customBlock.Value.blockGetter = this;
+            customBlock.Value.world = this;
+        }
         blockDataCache = new BlockDataCache(this);
         chunkProperties = new ChunkProperties();
         World.mainWorld = this;
@@ -1462,13 +1684,13 @@ public class World : BlockGetter
         maxCapacities[AIR] = 0;
         maxCapacities[BEDROCK] = 6;
 
-        int viewDist = 6;
+        int viewDist = 5;
         this.worldGeneration.world = this;
         this.worldGeneration.blockGetter = this;
         this.worldGeneration.OnGenerationInit();
         for (int i = -viewDist; i <= viewDist; i++)
         {
-            for (int j = -viewDist; j <= viewDist; j++)
+            for (int j = -3; j <= 3; j++)
             {
                 for (int k = -viewDist; k <= viewDist; k++)
                 {
@@ -1517,10 +1739,10 @@ public class World : BlockGetter
     }
 
 
-    public float AverageChunkValues(long x, long y, long z, int key)
+    public float AverageChunkValues(long x, long y, long z, ChunkProperty chunkProperty)
     {
         ChunkBiomeData chunkBiomeData = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-        return chunkBiomeData.AverageBiomeData(x, y, z, key);
+        return chunkBiomeData.AverageBiomeData(x, y, z, chunkProperty);
         /*
         ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
         ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
@@ -2428,7 +2650,11 @@ public class World : BlockGetter
     // I didn't want to convert to a float or double and floor because that can lead to precision issues
     long divWithFloor(long a, long b)
     {
-        if (a % b == 0 || (System.Math.Sign(a) == System.Math.Sign(b)))
+        bool sa = a < 0;
+        bool sb = b < 0;
+        int of = (a % b == 0 || sa == sb) ? 0 : 1;
+        return a / b - of;
+        if (a % b == 0 || sa == sb)
         {
             return a / b;
         }
@@ -2643,6 +2869,7 @@ public class World : BlockGetter
             chunk.chunkBiomeData = ungeneratedChunkBiomeDatas[chunkPosVec];
             ungeneratedChunkBiomeDatas.Remove(chunkPosVec);
         }
+        /*
         List<Structure> leftoverStructures = new List<Structure>();
         foreach (Structure structure in unfinishedStructures)
         {
@@ -2653,6 +2880,9 @@ public class World : BlockGetter
         }
 
         unfinishedStructures = leftoverStructures;
+
+
+        */
         /*
         // fun code that makes chunks repeat around in a very non-euclidean way
         if (allChunks.Count > 32)
@@ -2783,10 +3013,18 @@ public class World : BlockGetter
         {
             if(chunk.Tick())
             {
-                //break;
+                List<Structure> leftoverStructures = new List<Structure>();
+                foreach (Structure structure in unfinishedStructures)
+                {
+                    if (!structure.AddNewChunk(chunk))
+                    {
+                        leftoverStructures.Add(structure);
+                    }
+                }
+
+                unfinishedStructures = leftoverStructures;
             }
         }
-        Debug.Log("num non-water updates: " + numBlockUpdatesThisTick + " num water updates: " + numWaterUpdatesThisTick);
     }
 }
 
@@ -3070,15 +3308,17 @@ public class BlocksWorld : MonoBehaviour {
         }
     }
 
+    public BlocksPack blocksPack;
+
     // Use this for initialization
     void Start () {
         
         SetupRendering();
 
-        Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
-        customBlocks[BlockValue.GRASS] = new Grass();
-        GenerationClass customGeneration = new ExampleGeneration();
-        world = new World(this, chunkSize, customGeneration, customBlocks);
+        //Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
+        //customBlocks[BlockValue.GRASS] = new Grass();
+        //GenerationClass customGeneration = new ExampleGeneration();
+        world = new World(this, chunkSize, blocksPack);
         lastTick = 0;
     }
 

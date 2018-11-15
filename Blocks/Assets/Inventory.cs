@@ -14,6 +14,12 @@ public class BlockStack
         this.count = count;
     }
 
+    public BlockStack(BlockValue block, int count)
+    {
+        this.block = (int)block;
+        this.count = count;
+    }
+
     public bool CanAddToStack(int block)
     {
         return (block == this.block && World.stackableSize.ContainsKey(block) && World.stackableSize[block] > count);
@@ -37,6 +43,28 @@ public class BlockStack
 
 public class Inventory {
 
+
+    public void ThrowAllBlocks(Vector3 position)
+    {
+        if (resultBlocks != null)
+        {
+            for (int i = 0; i < resultBlocks.Length; i++)
+            {
+                resultBlocks[i] = null;
+            }
+        }
+        for (int i = 0; i < blocks.Length; i++)
+        {
+            if (blocks[i] != null)
+            {
+                for (int j = 0; j < blocks[i].count; j++)
+                {
+                    World.mainWorld.CreateBlockEntity(blocks[i].block, position + Random.insideUnitSphere * 0.5f); 
+                }
+                blocks[i] = null;
+            }
+        }
+    }
     
     public bool CanAddBlock(int block)
     {
@@ -91,6 +119,8 @@ public class Inventory {
         // no empty spots or stacks we can put it in, return false
         return false;
     }
+
+    public BlockStack[] resultBlocks;
 
     public int capacity;
 

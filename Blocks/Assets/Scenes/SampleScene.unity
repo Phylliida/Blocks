@@ -326,6 +326,7 @@ MonoBehaviour:
   inventoryGui: {fileID: 282840817}
   reachRange: 6
   holdingWithMouseEntity: {fileID: 0}
+  paused: 0
 --- !u!114 &282840816
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -362,6 +363,7 @@ MonoBehaviour:
   maxItems: -1
   screenOffset: {x: 0, y: -100}
   blockItems: []
+  resultOffset: {x: 0, y: 0}
 --- !u!1 &324794735
 GameObject:
   m_ObjectHideFlags: 0
@@ -372,6 +374,7 @@ GameObject:
   - component: {fileID: 324794737}
   - component: {fileID: 324794736}
   - component: {fileID: 324794738}
+  - component: {fileID: 324794739}
   m_Layer: 0
   m_Name: World
   m_TagString: Untagged
@@ -402,6 +405,7 @@ MonoBehaviour:
   uiCamera: {fileID: 1850076245}
   otherObjectInventoryGui: {fileID: 1234048945}
   ticksPerSecond: 20
+  blocksPack: {fileID: 324794739}
   numChunksTotal: 0
 --- !u!4 &324794737
 Transform:
@@ -451,6 +455,17 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+--- !u!114 &324794739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 324794735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4c1621e545efe84b9a30e9e8b13df11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &342654144
 GameObject:
   m_ObjectHideFlags: 0
@@ -652,6 +667,16 @@ Prefab:
       propertyPath: m_RootOrder
       value: 6
       objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: blockId
+      value: 11
+      objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
   m_IsPrefabParent: 0
@@ -717,6 +742,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1234048946}
   - component: {fileID: 1234048945}
+  - component: {fileID: 1234048947}
   m_Layer: 0
   m_Name: Blerg
   m_TagString: Untagged
@@ -738,10 +764,11 @@ MonoBehaviour:
   playerUsing: {fileID: 0}
   selection: 0
   displaying: 0
-  numRows: 1
+  numRows: 3
   maxItems: -1
   screenOffset: {x: 0, y: -100}
   blockItems: []
+  resultOffset: {x: 300, y: 300}
 --- !u!4 &1234048946
 Transform:
   m_ObjectHideFlags: 0
@@ -755,6 +782,17 @@ Transform:
   m_Father: {fileID: 282840814}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1234048947
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 1234048944}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6012e6ccab283234abcab72448989892, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1273376210
 GameObject:
   m_ObjectHideFlags: 0
@@ -796,7 +834,7 @@ MonoBehaviour:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1273376210}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
   m_Name: 
@@ -972,7 +1010,7 @@ MonoBehaviour:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1987926142}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
   m_Name: 
@@ -1080,7 +1118,7 @@ MonoBehaviour:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 2094522184}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fd3b9ea64d2544c4b99c5fe5c4211cc4, type: 3}
   m_Name: 

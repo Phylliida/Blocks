@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
+public abstract class InventoryListener : MonoBehaviour
+{
+    public abstract void OnInventoryChange(InventoryGui inventoryGui, Inventory inventory, int numRows, int maxItems);
+}
+
 public class InventoryGui : MonoBehaviour {
 
     public BlocksPlayer playerUsing;
 
 	// Use this for initialization
 	void Start () {
-      
 
     }
 
@@ -18,8 +22,8 @@ public class InventoryGui : MonoBehaviour {
     public Inventory inventory;
     public bool displaying = false;
 
-    float inventoryWidth = 100.0f;
-    float inventoryHeight = 100.0f;
+    float inventoryWidth = 110.0f;
+    float inventoryHeight = 110.0f;
 
     public int numRows;
     public int maxItems = -1;
@@ -30,9 +34,15 @@ public class InventoryGui : MonoBehaviour {
     public List<BlockEntity> blockItems = new List<BlockEntity>();
 
 
+    bool hasInventory = false;
+
     private void Update()
     {
 
+        if (inventory == null || !displaying || playerUsing == null)
+        {
+            hasInventory = false;
+        }
         if (!displaying || playerUsing == null)
         {
             for (int i = 0; i < blockItems.Count; i++)
@@ -42,7 +52,13 @@ public class InventoryGui : MonoBehaviour {
             blockItems.Clear();
             return;
         }
-        
+
+        if (!hasInventory && inventory != null && displaying && playerUsing != null)
+        {
+            hasInventory = true;
+            CallInventoryModifiedCallbacks();
+        }
+
 
 
         if (selection < 0)
@@ -56,7 +72,7 @@ public class InventoryGui : MonoBehaviour {
         }
         if (selection > actualMaxItems)
         {
-            selection = maxItems;
+            selection = actualMaxItems;
         }
 
         ShowInventory(numRows, maxItems);
@@ -65,10 +81,12 @@ public class InventoryGui : MonoBehaviour {
             if (playerUsing.blocksHoldingWithMouse != null)
             {
                 ThrowStuff();
+
             }
             return;
         }
 
+        bool inventoryModified = false;
         // click when not capturing
         if (playerUsing.blocksHoldingWithMouse == null)
         {
@@ -76,16 +94,36 @@ public class InventoryGui : MonoBehaviour {
             {
                 for (int i = 0; i < blockItems.Count; i++)
                 {
-                    Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
-                    if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.blocks[i] != null)
+                    if (i < inventory.blocks.Length)
                     {
-                        Debug.Log("got dat boi");
-                        playerUsing.blocksHoldingWithMouse = inventory.blocks[i];
-                        playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
-                        playerUsing.holdingWithMouseEntity.blockStack = inventory.blocks[i];
-                        inventory.blocks[i] = null;
-                        //playerUsing.mouseLook.allowedToCapture = false;
-                        break;
+                        //Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
+                        if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.blocks[i] != null)
+                        {
+                            //Debug.Log("got dat boi");
+                            playerUsing.blocksHoldingWithMouse = inventory.blocks[i];
+                            playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
+                            playerUsing.holdingWithMouseEntity.blockStack = inventory.blocks[i];
+                            inventory.blocks[i] = null;
+                            inventoryModified = true;
+                            //playerUsing.mouseLook.allowedToCapture = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        int ind = i - inventory.blocks.Length;
+                        //Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
+                        if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.resultBlocks[ind] != null)
+                        {
+                            //Debug.Log("got dat boi");
+                            playerUsing.blocksHoldingWithMouse = inventory.resultBlocks[ind];
+                            playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
+                            playerUsing.holdingWithMouseEntity.blockStack = inventory.resultBlocks[ind];
+                            inventory.resultBlocks[ind] = null;
+                            inventoryModified = true;
+                            //playerUsing.mouseLook.allowedToCapture = false;
+                            break;
+                        }
                     }
                 }
             }
@@ -100,7 +138,7 @@ public class InventoryGui : MonoBehaviour {
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
             {
                 bool foundCollision = false;
-                for (int i = 0; i < blockItems.Count; i++)
+                for (int i = 0; i < blockItems.Count && i < inventory.blocks.Length; i++)
                 {
                     if (MouseIntersectsBlockEntity(blockItems[i]))
                     {
@@ -113,6 +151,7 @@ public class InventoryGui : MonoBehaviour {
                             {
 
                                 inventory.blocks[i] = new BlockStack(playerUsing.blocksHoldingWithMouse.block, 1);
+                                inventoryModified = true;
                                 if (playerUsing.blocksHoldingWithMouse.count == 1)
                                 {
                                     letGo = true;
@@ -126,6 +165,7 @@ public class InventoryGui : MonoBehaviour {
                             else if (Input.GetMouseButtonDown(0))
                             {
                                 inventory.blocks[i] = playerUsing.blocksHoldingWithMouse;
+                                inventoryModified = true;
                                 letGo = true;
                             }
                         }
@@ -148,6 +188,7 @@ public class InventoryGui : MonoBehaviour {
                                         if (playerUsing.blocksHoldingWithMouse.count == 1)
                                         {
                                             inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
+                                            inventoryModified = true;
                                             letGo = true;
                                             playerUsing.blocksHoldingWithMouse = null;
                                         }
@@ -155,6 +196,7 @@ public class InventoryGui : MonoBehaviour {
                                         else
                                         {
                                             inventory.blocks[i].count += 1;
+                                            inventoryModified = true;
                                             playerUsing.blocksHoldingWithMouse.count -= 1;
                                             if (playerUsing.blocksHoldingWithMouse.count <= 0)
                                             {
@@ -173,6 +215,7 @@ public class InventoryGui : MonoBehaviour {
                                         if (inventory.blocks[i].count + playerUsing.blocksHoldingWithMouse.count <= numMaxStack)
                                         {
                                             inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
+                                            inventoryModified = true;
                                             letGo = true;
                                             playerUsing.blocksHoldingWithMouse = null;
                                         }
@@ -181,6 +224,7 @@ public class InventoryGui : MonoBehaviour {
                                         {
                                             int numCanFitIn = numMaxStack - inventory.blocks[i].count;
                                             inventory.blocks[i].count += numCanFitIn;
+                                            inventoryModified = true;
                                             playerUsing.blocksHoldingWithMouse.count -= numCanFitIn;
                                             if (playerUsing.blocksHoldingWithMouse.count <= 0)
                                             {
@@ -192,6 +236,7 @@ public class InventoryGui : MonoBehaviour {
                                     else
                                     {
                                         inventory.blocks[i].count = playerUsing.blocksHoldingWithMouse.count;
+                                        inventoryModified = true;
                                         playerUsing.blocksHoldingWithMouse.count = numMaxStack;
                                     }
 
@@ -202,6 +247,7 @@ public class InventoryGui : MonoBehaviour {
                             {
                                 BlockStack tmp = inventory.blocks[i];
                                 inventory.blocks[i] = playerUsing.blocksHoldingWithMouse;
+                                inventoryModified = true;
                                 playerUsing.blocksHoldingWithMouse = tmp;
                                 playerUsing.holdingWithMouseEntity.blockStack = tmp;
                             }
@@ -223,10 +269,33 @@ public class InventoryGui : MonoBehaviour {
             }
         }
 
+        if (playerUsing.blocksHoldingWithMouse != null && displaying)
+        {
+            //player.mouseLook.allowedToCapture = false;
+            Vector3 offset;
+            Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
+            playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
+        }
 
 
+        if (inventoryModified)
+        {
+            CallInventoryModifiedCallbacks();
+        }
     }
 
+    void CallInventoryModifiedCallbacks()
+    {
+        int curMaxItems = maxItems;
+        if (maxItems == -1)
+        {
+            curMaxItems = inventory.capacity;
+        }
+        foreach (InventoryListener inventoryListener in GetComponents<InventoryListener>())
+        {
+            inventoryListener.OnInventoryChange(this, inventory, numRows, curMaxItems);
+        }
+    }
 
 
 
@@ -245,26 +314,33 @@ public class InventoryGui : MonoBehaviour {
         return res;
     }
 
-
     void ShowInventory(int nRows=4, int maxItems=-1)
     {
-        int numItems = inventory.capacity;
+        ShowInventoryArray(inventory.blocks, screenOffset, nRows, maxItems);
+        if (inventory.resultBlocks != null)
+        {
+            ShowInventoryArray(inventory.resultBlocks, resultOffset, nRows:1, maxItems:inventory.resultBlocks.Length, numPrev:blockItems.Count);
+        }
+    }
+
+    void ShowInventoryArray(BlockStack[] blocks, Vector2 offset, int nRows=4, int maxItems=-1, int numPrev=0)
+    {
+        int numItems = blocks.Length;
         if (maxItems != -1)
         {
             numItems = System.Math.Min(numItems, maxItems);
         }
-        while (blockItems.Count < numItems)
+        while (blockItems.Count- numPrev < numItems)
         {
             blockItems.Add(MakeNewBlockEntity());
         }
-        while (blockItems.Count > numItems)
+        while (blockItems.Count - numPrev > numItems)
         {
             BlockEntity ripU = blockItems[blockItems.Count - 1];
             blockItems.RemoveAt(blockItems.Count - 1);
             GameObject.Destroy(ripU.gameObject);
         }
-
-        int pos = 0;
+        int pos = numPrev;
         for (int i = 0; i < nRows; i++)
         {
             int rowLen = numItems / nRows;
@@ -272,16 +348,29 @@ public class InventoryGui : MonoBehaviour {
             {
                 rowLen += numItems % nRows;
             }
+            if (nRows == 4 && maxItems == 10)
+            {
+                if (i < 3)
+                {
+                    rowLen = 3;
+                }
+                else
+                {
+                    rowLen = 1;
+                }
+            }
 
             for (int k = 0; k < rowLen; k++)
             {
-                actualInventoryWidth = inventoryWidth * rowLen;
+                actualInventoryWidth = inventoryWidth* rowLen;
                 actualInventoryHeight = inventoryHeight * nRows;
-                ShowInventoryItem(pos, i/(float)Mathf.Max(1, (nRows-1)), k/(float)Mathf.Max(1, (rowLen-1)), inventory.blocks[pos]);
+                ShowInventoryItem(pos, offset, i, k, blocks[pos-numPrev]);
                 pos += 1;
             }
         }
     }
+
+    public Vector2 resultOffset;
 
 
     float actualInventoryWidth;
@@ -289,14 +378,14 @@ public class InventoryGui : MonoBehaviour {
 
 
 
-    public void ShowInventoryItem(int index, float rowP, float columnP, BlockStack itemStack)
+    public void ShowInventoryItem(int index, Vector2 offset, float rowP, float columnP, BlockStack itemStack)
     {
         // 0 to 1 -> -0.5 to 0.5
-        rowP -= 0.5f;
-        columnP -= 0.5f;
         BlockEntity displayItem = blockItems[index];
-        float xPos = actualInventoryWidth * columnP + screenOffset.x;
-        float yPos = actualInventoryHeight * rowP + screenOffset.y;
+        float xPos = inventoryWidth * columnP + offset.x;
+        float yPos = inventoryHeight * rowP + offset.y;
+        xPos -= actualInventoryWidth/2.0f;
+        yPos -= actualInventoryHeight/2.0f;
         if (itemStack == null)
         {
             displayItem.blockId = -1;
@@ -322,7 +411,6 @@ public class InventoryGui : MonoBehaviour {
             displayItem.selected = false;
         }
         displayItem.transform.localPosition = Vector3.right * xPos + Vector3.up * yPos;
-        Debug.Log("moved to " + displayItem.transform.localPosition + " " + name);
     }
 
 
@@ -332,12 +420,12 @@ public class InventoryGui : MonoBehaviour {
         {
             if(RectTransformUtility.RectangleContainsScreenPoint(blockEntity.GetComponent<UnityEngine.UI.Image>().rectTransform, Input.mousePosition, playerUsing.mainCamera))
             {
-                Debug.Log("hit " + blockEntity + " " + Input.mousePosition);
+                //Debug.Log("hit " + blockEntity + " " + Input.mousePosition);
                 return true;
             }
             else
             {
-                Debug.Log("not hit " + blockEntity + " " + Input.mousePosition);
+                //Debug.Log("not hit " + blockEntity + " " + Input.mousePosition);
                 return false;
             }
         }
@@ -357,8 +445,9 @@ public class InventoryGui : MonoBehaviour {
             worldEntity.timeThrown = Time.time;
             worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(playerUsing.transform.forward);
             worldEntity.playerThrowing = playerUsing.GetComponent<MovingEntity>();
-            Debug.Log(playerUsing.transform.forward);
+            //Debug.Log(playerUsing.transform.forward);
         }
+        CallInventoryModifiedCallbacks();
 
         playerUsing.blocksHoldingWithMouse = null;
         GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);

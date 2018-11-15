@@ -18,6 +18,7 @@ public class BlockEntity : MonoBehaviour {
 	// Use this for initialization
 	void Start () {
         initialized = false;
+        Update();
     }
 	
 	// Update is called once per frame
