@@ -34,3 +34,12 @@ public class Grass : Block
         }
     }
 }
+
+
+
+public class Clay : Block
+{
+    public override void OnTick(BlockData block)
+    {
+    }
+}

@@ -468,7 +468,7 @@ public class PhysicsUtils {
 
     public static bool IsBlockSolid(int block)
     {
-        return block != World.AIR && block != World.WATER && block != World.WATER_NOFLOW;
+        return block != (int)BlockValue.AIR && block != (int)BlockValue.WATER && block != (int)BlockValue.WATER_NOFLOW;
     }
 
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)

@@ -43,7 +43,7 @@ public class BlockMob : MonoBehaviour {
         bool isCurrentlyValid = true;
         for (int i = 0; i < blocksHeight; i++)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == World.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.AIR;
         }
         // bad:
         // X  
@@ -55,17 +55,17 @@ public class BlockMob : MonoBehaviour {
         // 1 
         if (pos.y > prevPos.y)
         {
-            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == World.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == (int)BlockValue.AIR;
         }
         else if(pos.y < prevPos.y)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == World.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == (int)BlockValue.AIR;
         }
         if (prevPos.y == pos.y && pos.z != prevPos.z && pos.x != prevPos.x)
         {
-            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == World.AIR || world[pos.x, prevPos.y, prevPos.z] == World.AIR);
+            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == (int)BlockValue.AIR || world[pos.x, prevPos.y, prevPos.z] == (int)BlockValue.AIR);
         }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != World.AIR;
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.AIR;
     }
 
 
@@ -74,9 +74,9 @@ public class BlockMob : MonoBehaviour {
         bool isCurrentlyValid = true;
         for (int i = 0; i < blocksHeight; i++)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == World.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.AIR;
         }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != World.AIR;
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.AIR;
     }
 
 

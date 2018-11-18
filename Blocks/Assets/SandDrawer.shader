@@ -11,6 +11,8 @@ Shader "Unlit/SandDrawer" {
 
 		Tags{ "RenderType" = "Opaque"}
 		Pass{
+
+		ZWrite On
 		Cull Front
 		CGPROGRAM
 #include "UnityCG.cginc"
@@ -52,7 +54,7 @@ Shader "Unlit/SandDrawer" {
 		// from https://answers.unity.com/questions/678193/is-it-possible-to-access-the-dimensions-of-a-textu.html
 		//_MainTex_TexelSize.z //contains width
 		//_MainTex_TexelSize.w //contains height
-		int numBlocks = 11;
+		int numBlocks = 20;
 		uvOffset.y /= 3.0f;
 		uvOffset.y += (idI - 1) / (float)numBlocks;
 		//float3 pos = (idPt + offset*0.98 + 0.01) * ptCloudScale;

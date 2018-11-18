@@ -79,7 +79,7 @@ public class BlockEntity : MonoBehaviour {
         {
             GetComponent<UnityEngine.UI.Outline>().enabled = selected;
         }
-		if ((displayedBlockId != blockId && !(blockId == -1 && displayedBlockId == World.EMPTY)) || !initialized)
+		if ((displayedBlockId != blockId && !(blockId == -1 && displayedBlockId == (int)BlockValue.EMPTY)) || !initialized)
         {
             initialized = true;
             displayedBlockId = blockId;
@@ -89,7 +89,7 @@ public class BlockEntity : MonoBehaviour {
             }
             if (blockId == -1)
             {
-                displayedBlockId = World.EMPTY;
+                displayedBlockId = (int)BlockValue.EMPTY;
             }
             if (transform.GetComponent<UnityEngine.UI.Image>() != null)
             {

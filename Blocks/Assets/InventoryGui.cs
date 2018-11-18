@@ -441,7 +441,7 @@ public class InventoryGui : MonoBehaviour {
     {
         for (int i = 0; i < playerUsing.blocksHoldingWithMouse.count; i++)
         {
-            BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(playerUsing.blocksHoldingWithMouse.block, transform.position + transform.forward * 1.0f);
+            BlockEntity worldEntity = World.mainWorld.CreateBlockEntity((BlockValue)playerUsing.blocksHoldingWithMouse.block, transform.position + transform.forward * 1.0f);
             worldEntity.timeThrown = Time.time;
             worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(playerUsing.transform.forward);
             worldEntity.playerThrowing = playerUsing.GetComponent<MovingEntity>();

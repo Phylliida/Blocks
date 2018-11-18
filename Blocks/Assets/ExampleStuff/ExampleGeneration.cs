@@ -1,31 +1,29 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-
+using System;
 
 public class ExampleGeneration : GenerationClass
 {
     public ChunkProperty elevationProp;
-    public ChunkProperty caveProp;
+    public ChunkProperty riverProp;
     public override void OnGenerationInit()
     {
         float minVal = 10.0f;
         float maxVal = 40.0f;
         elevationProp = new ChunkProperty("elevation", minVal, maxVal, usesY: false);
-        caveProp = new ChunkProperty("cave", 0.0f, 1.0f, scale: 1.0f, usesY: true);
+        riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);
-        world.AddChunkProperty(caveProp);
+        world.AddChunkProperty(riverProp);
     }
 
     public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
     {
-        float elevation = GetChunkProperty(x, y, z, elevationProp);
-        float caveLevel = GetChunkProperty(x, y, z, caveProp);
+        float elevation = outBlock.GetChunkProperty(elevationProp);
         //if (y <= 0)
         //{
         //    outBlock.block = BlockValue.STONE;
         //}
-        long elevationL = (long)Mathf.Round(elevation);
+        long elevationL = (long)Math.Round(elevation);
         if (y >= elevationL)
         {
             // air, but allow other things to go here instead
@@ -40,7 +38,7 @@ public class ExampleGeneration : GenerationClass
                 // low pr of making tree
                 if (Simplex.Noise.rand(x, y, z) < 0.01f)
                 {
-                    int treeHeight = Mathf.RoundToInt(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
+                    int treeHeight = (int)Math.Round(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
                     for (int i = 0; i < treeHeight; i++)
                     {
                         if (i == 0)
@@ -72,7 +70,7 @@ public class ExampleGeneration : GenerationClass
                         }
 
                         float width = minVal * p + maxVal * (1 - p);
-                        int widthI = Mathf.FloorToInt(width);
+                        int widthI = (int)Math.Floor(width);
 
 
 
@@ -80,7 +78,7 @@ public class ExampleGeneration : GenerationClass
                         {
                             for (int k = -widthI; k <= widthI; k++)
                             {
-                                if (Mathf.Sqrt(j * j + k * k) <= width)
+                                if (Math.Sqrt(j * j + k * k) <= width)
                                 {
                                     SetBlock(x + j, y + i, z + k, BlockValue.LEAF);
                                 }
@@ -88,80 +86,76 @@ public class ExampleGeneration : GenerationClass
                         }
                     }
                 }
-            }
-            else if (distFromSurface < 4)
-            {
-                outBlock.block = BlockValue.DIRT;
-            }
-            else
-            {
-                if (Simplex.Noise.rand(x, y, z) < 0.005f && y == elevationL-20 && false)
+                else
                 {
-                    long curX = x;
-                    long curY = y;
-                    long curZ = z;
-
-                    int offsetX = 0;
-                    int offsetY = 0;
-                    int offsetZ = 0;
-                    int[] xOffsets = new int[] { 1, -1, 0, 0, 0, 0 };
-                    int[] yOffsets = new int[] { 0, 0, 1, -1, 0, 0 };
-                    int[] zOffsets = new int[] { 0, 0, 0, 0, 1, -1 };
-
-                    Debug.Log("making cave");
-                    for (int i = 0; i < 100; i++)
+                    float caveLevelX = outBlock.GetChunkProperty(riverProp);
+                    if (Simplex.Noise.rand(x, y, z) > 0.9999f)
                     {
-                        int val = Random.Range(0, xOffsets.Length);
-                        offsetX += xOffsets[val];
-                        offsetY += yOffsets[val];
-                        offsetZ += zOffsets[val];
-                        if (Mathf.Abs(offsetX) > Mathf.Abs(offsetY) && Mathf.Abs(offsetX) > Mathf.Abs(offsetZ))
-                        {
-                            curX += System.Math.Sign(offsetX) * 3;
-                        }
-                        else if (Mathf.Abs(offsetY) > Mathf.Abs(offsetX) && Mathf.Abs(offsetY) > Mathf.Abs(offsetZ))
-                        {
-                            offsetY = 0;
-                            curY += System.Math.Sign(offsetY);
-                        }
-                        else if (Mathf.Abs(offsetZ) > Mathf.Abs(offsetY) && Mathf.Abs(offsetZ) > Mathf.Abs(offsetX))
-                        {
-                            curZ += System.Math.Sign(offsetZ) * 3;
-                        }
-                        else
-                        {
-                            val = Random.Range(0, xOffsets.Length);
-                            curX += xOffsets[val]* 3;
-                            curY += yOffsets[val]* 3;
-                            curZ += zOffsets[val]* 3;
-                        }
-                        float curElevation = GetChunkProperty(curX, curY, curZ, elevationProp);
-                        if (curY > curElevation-10)
-                        {
-                            break;
-                        }
-                        float caveWidth = 5.0f;
-                        int caveWidthI = Mathf.FloorToInt(caveWidth);
+                        long curX = x;
+                        long curY = y + 20;
+                        long curZ = z;
 
-                        for (int j = -caveWidthI; j <= caveWidthI; j++)
+                        int offsetX = 0;
+                        int offsetY = 0;
+                        int offsetZ = 0;
+                        int[] xOffsets = new int[] { 1, -1, 0, 0 };
+                        int[] zOffsets = new int[] { 0, 0, 1, -1 };
+
+                        UnityEngine.Debug.Log("making river");
+                        for (int i = 0; i < 100; i++)
                         {
-                            for (int k = -caveWidthI; k <= caveWidthI; k++)
+                            int val = UnityEngine.Random.Range(0, xOffsets.Length);
+                            offsetX += xOffsets[val];
+                            offsetZ += zOffsets[val];
+                            if (Math.Abs(offsetX) > Math.Abs(offsetZ))
+                            {
+                                curX += Math.Sign(offsetX) * 3;
+                            }
+                            else
+                            {
+                                curZ += Math.Sign(offsetX) * 3;
+                            }
+
+                            curY = (long)Math.Round(GetChunkProperty(curX, 0, curZ, elevationProp));
+                            float caveWidth = 3.0f;
+                            int caveWidthI = (int)Math.Floor(caveWidth);
+
+                            for (int j = -caveWidthI; j <= caveWidthI; j++)
                             {
                                 for (int l = -caveWidthI; l <= caveWidthI; l++)
                                 {
-                                    if (Mathf.Sqrt(j * j + k * k + l*l) <= caveWidth)
+                                    curY = (int)Math.Round(GetChunkProperty(curX+j, 0, curZ+l, elevationProp));
+                                    for (int k = -caveWidthI; k <= -1; k++)
                                     {
-                                        SetBlock(x + j, y + i, z + k, BlockValue.AIR);
+                                        if (Math.Sqrt(j * j + k * k + l * l) <= caveWidth)
+                                        {
+                                            SetBlock(curX + j, curY + k, curZ + l, BlockValue.WATER);
+                                        }
+                                        else if (Math.Sqrt(j * j + k * k + l * l) <= 5.0f)
+                                        {
+                                            if (GetBlock(curX + j, curY + k, curZ + l) != BlockValue.WATER)
+                                            {
+                                                SetBlock(curX + j, curY + k, curZ + l, BlockValue.CLAY);
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                else
-                {
-                    outBlock.block = BlockValue.STONE;
-                }
+            }
+            else if (distFromSurface < 3)
+            {
+                outBlock.block = BlockValue.DIRT;
+            }
+            else if(distFromSurface < 5)
+            {
+                outBlock.block = BlockValue.CLAY;
+            }
+            else
+            {
+                 outBlock.block = BlockValue.STONE;
             }
         }
     }

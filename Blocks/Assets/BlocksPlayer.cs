@@ -21,7 +21,7 @@ public class BlocksPlayer : MonoBehaviour
     int hotbarSize = 8;
     public void Start()
     {
-        blockPlacing = World.GRASS;
+        blockPlacing = (int)BlockValue.GRASS;
         inventory = new Inventory(16);
         inventoryGui.playerUsing = this;
         inventoryGui.inventory = inventory;
@@ -146,8 +146,8 @@ public class BlocksPlayer : MonoBehaviour
             if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange*World.mainWorld.worldScale, out hitResults))
             {
                 //Debug.Log("hit at pos " + hitPos);
-                World.mainWorld.CreateBlockEntity(hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3());
-                if (hitResults.hitBlock.Block == World.CRAFTING_TABLE && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3());
+                if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                 {
                     Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
                     chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
@@ -177,7 +177,7 @@ public class BlocksPlayer : MonoBehaviour
                 LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                 LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
 
-                if (hitResults.hitBlock.Block == World.CRAFTING_TABLE && showingHotbarOnly)
+                if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && showingHotbarOnly)
                 {
                     Inventory blockInventory;
                     if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
@@ -234,46 +234,46 @@ public class BlocksPlayer : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            blockPlacing = World.GRASS;
+            blockPlacing = (int)BlockValue.GRASS;
             Debug.Log("placing grass");
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            blockPlacing = World.DIRT;
+            blockPlacing = (int)BlockValue.DIRT;
             Debug.Log("placing dirt");
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha3))
         {
-            blockPlacing = World.STONE;
+            blockPlacing = (int)BlockValue.STONE;
             Debug.Log("placing stone");
         }
 
 
         if (Input.GetKeyDown(KeyCode.Alpha4))
         {
-            blockPlacing = World.SAND;
+            blockPlacing = (int)BlockValue.SAND;
             Debug.Log("placing sand");
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha5))
         {
-            blockPlacing = World.BEDROCK;
+            blockPlacing = (int)BlockValue.BEDROCK;
             Debug.Log("placing bedrock");
         }
 
 
         if (Input.GetKeyDown(KeyCode.Alpha6))
         {
-            blockPlacing = World.WATER;
+            blockPlacing = (int)BlockValue.WATER;
             Debug.Log("placing water");
         }
 
 
         if (Input.GetKeyDown(KeyCode.Alpha7))
         {
-            blockPlacing = World.WATER_NOFLOW;
+            blockPlacing = (int)BlockValue.WATER_NOFLOW;
             Debug.Log("placing pushed water");
         }
 

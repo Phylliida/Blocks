@@ -4,11 +4,13 @@ using UnityEngine;
 
 
 
+
 // fast for just a few elements (10-20)
 public class FastSmallDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
 {
     T1[] keys;
     T2[] values;
+
     int firstEmptyPos;
     public FastSmallDictionary(int maxCapacity)
     {
@@ -260,6 +262,8 @@ public class ChunkBiomeData
 
 public enum BlockValue
 {
+    STICK = 13,
+    CLAY = 12,
     CHEST = 11,
     EMPTY = 10,
     LEAF = 9,
@@ -300,6 +304,7 @@ public class BlockData : System.IDisposable
     }
 
     private long wx, wy, wz;
+    public long cx, cy, cz;
 
     public long x { get { return wx; } private set { } }
     public long y { get { return wy; } private set { } }
@@ -307,11 +312,11 @@ public class BlockData : System.IDisposable
 
     BlockGetter world;
 
-    public int state1 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 1) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 1); curBlockModifyState = world.blockModifyState; } } }
-    public int state2 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 2); curBlockModifyState = world.blockModifyState; } } }
-    public int state3 { get { return world.GetState(wx, wy, wz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, value, 3); curBlockModifyState = world.blockModifyState; } } }
-    public BlockValue block { get { return (BlockValue)world[wx, wy, wz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz] != value) { wasModified = true; world[wx, wy, wz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
-
+    public int state1 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 1) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState = world.blockModifyState; } } }
+    public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
+    public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
+    public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
+    ChunkBiomeData chunkBiomeData;
     public bool needsAnotherTick;
 
     public BlockData(BlockGetter world, long x, long y, long z)
@@ -321,7 +326,17 @@ public class BlockData : System.IDisposable
         this.wx = x;
         this.wy = y;
         this.wz = z;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
         needsAnotherTick = false;
+    }
+
+    public float GetChunkProperty(ChunkProperty chunkProperty)
+    {
+        if (chunkBiomeData == null)
+        {
+            chunkBiomeData = World.mainWorld.GetChunkBiomeData(cx, cy, cz);
+        }
+        return chunkBiomeData.AverageBiomeData(this.wx, this.wy, this.wz, chunkProperty);
     }
 
     public void Dispose()
@@ -336,6 +351,8 @@ public class BlockData : System.IDisposable
         this.wx = x;
         this.wy = y;
         this.wz = z;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+
     }
 }
 public class BlockDataGetter
@@ -1115,7 +1132,7 @@ public class ChunkData
         {
             for (int i= 0; i < data.Length; i++)
             {
-                data[i] = World.WILDCARD;
+                data[i] = (int)BlockValue.WILDCARD;
             }
         }
     }
@@ -1126,7 +1143,7 @@ public class ChunkData
         int totalLen = System.Math.Min(data.Length, chunkData.Length);
         for (int i = 0; i < totalLen; i++)
         {
-            if (data[i] != World.WILDCARD)
+            if (data[i] != (int)BlockValue.WILDCARD)
             {
                 chunkData[i] = data[i];
             }
@@ -1260,7 +1277,6 @@ public abstract class BlockGetter
 
 
     public long blockModifyState = 1;
-
     protected BlockDataCache blockDataCache;
     public BlockData GetBlockData(long x, long y, long z)
     {
@@ -1272,12 +1288,39 @@ public abstract class BlockGetter
         blockDataCache.DoneWithBlockData(blockData);
     }
 
-    public abstract void SetState(long x, long y, long z, int state, int stateI);
-    public abstract int GetState(long x, long y, long z, int stateI);
-    public abstract int this[long x, long y, long z]
+    public void SetState(long x, long y, long z, int state, int stateI)
     {
-        get;
-        set;
+        long cx, cy, cz;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        SetState(x, y, z, cx, cy, cz, state, stateI);
+    }
+    public int GetState(long x, long y, long z, int stateI)
+    {
+        long cx, cy, cz;
+        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        return GetState(x, y, z, cx, cy, cz, stateI);
+    }
+
+    public abstract void SetState(long x, long y, long z, long cx, long cy, long cz, int state, int stateI);
+    public abstract int GetState(long x, long y, long z, long cx, long cy, long cz, int stateI);
+    public int this[long x, long y, long z]
+    {
+        get
+        {
+            long cx, cy, cz;
+            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            return this[x, y, z, cx, cy, cz];
+        }
+        set
+        {
+            long cx, cy, cz;
+            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            this[x, y, z, cx, cy, cz] = value;
+        }
+    }
+    public abstract int this[long x, long y, long z, long cx, long cy, long cz]
+    {
+        get; set;
     }
 }
 
@@ -1330,11 +1373,9 @@ public class Structure : BlockGetter
         return ungeneratedChunkPositions.Count == 0;
     }
 
-    public override void SetState(long x, long y, long z, int state, int stateI)
+    public override void SetState(long x, long y, long z, long cx, long cy, long cz, int state, int stateI)
     {
         blockModifyState += 1;
-        long cx, cy, cz;
-        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
         if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
         {
             baseChunk.SetState(x, y, z, state, stateI);
@@ -1372,10 +1413,8 @@ public class Structure : BlockGetter
             World.mainWorld.SetState(x, y, z, state, stateI);
         }
     }
-    public override int GetState(long x, long y, long z, int stateI)
+    public override int GetState(long x, long y, long z, long cx, long cy, long cz, int stateI)
     {
-        long cx, cy, cz;
-        World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
         if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
         {
             return baseChunk.GetState(x, y, z, stateI);
@@ -1409,12 +1448,10 @@ public class Structure : BlockGetter
         }
     }
 
-    public override int this[long x, long y, long z]
+    public override int this[long x, long y, long z, long cx, long cy, long cz]
     {
         get
         {
-            long cx, cy, cz;
-            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
             if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
                 return baseChunk[x,y,z];
@@ -1450,8 +1487,6 @@ public class Structure : BlockGetter
         set
         {
             blockModifyState += 1;
-            long cx, cy, cz;
-            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
             if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
                 if ((BlockValue)value != BlockValue.WILDCARD)
@@ -1497,22 +1532,133 @@ public class Structure : BlockGetter
     }
 }
 
+// Has O(1) access for enqueue, dequeue, push, pop, and individual element access.
+// Does not allow removing any element, only last or first
+// The only time it can be slow is when it has to grow the internal list, it doubles the size each time so this shouldn't happen very often
+public class FastStackQueue<T>
+{
+    int count;
+    int frontPos;
+
+    T[] list;
+
+    public int Count
+    {
+        get
+        {
+            return count;
+        }
+        private set
+        {
+
+        }
+    }
+
+    public FastStackQueue(int initialCount)
+    {
+        frontPos = 0;
+        list = new T[initialCount];
+    }
+
+    public T this[int i]
+    {
+        get
+        {
+            if (i < 0 || i >= count)
+            {
+                throw new System.ArgumentOutOfRangeException("index = " + i + " but list is of size " + count);
+            }
+            else
+            {
+                return list[(i + frontPos) % count];
+            }
+        }
+        set
+        {
+            if (i < 0 || i >= count)
+            {
+                throw new System.ArgumentOutOfRangeException("index = " + i + " but list is of size " + count);
+            }
+            else
+            {
+                list[(i + frontPos) % count] = value;
+            }
+        }
+    }
+
+    public void Enqueue(T value)
+    {
+        if (count + 1 > list.Length)
+        {
+            T[] newList = new T[list.Length * 2];
+            int k = 0;
+            for (int i = 0; i < count; i++)
+            {
+                int j = (i +frontPos) % list.Length;
+                newList[k] = list[j];
+            }
+            list = newList;
+            frontPos = 0;
+        }
+        int ind = (frontPos + count) % list.Length;
+        list[ind] = value;
+        count += 1;
+    }
+
+    public T Dequeue()
+    {
+        if (count == 0)
+        {
+            throw new System.ArgumentOutOfRangeException("dequeing an empty FastStackQueue, this is invalid");
+        }
+        else
+        {
+            T res = list[frontPos];
+            frontPos = (frontPos + 1) % list.Length;
+            count -= 1;
+            return res;
+        }
+    }
+
+    public void Push(T value)
+    {
+        Enqueue(value);
+    }
+
+    public T Pop()
+    {
+        if (count == 0)
+        {
+            throw new System.ArgumentOutOfRangeException("dequeing an empty FastStackQueue, this is invalid");
+        }
+        else
+        {
+            T res = list[frontPos+count-1];
+            count -= 1;
+            return res;
+        }
+    }
+}
+
 public class BlockDataCache
 {
-    Queue<BlockData> blockDatasNotInUse;
+    FastStackQueue<BlockData> blockDatasNotInUse;
 
     BlockGetter world;
 
     public BlockDataCache(BlockGetter world)
     {
         this.world = world;
-        blockDatasNotInUse = new Queue<BlockData>();
+        blockDatasNotInUse = new FastStackQueue<BlockData>(100);
     }
 
     public BlockData GetNewBlockData(long x, long y, long z)
     {
         if (blockDatasNotInUse.Count == 0)
         {
+            blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
+            blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
+            blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
             return new BlockData(world, x, y, z);
         }
         else
@@ -1550,20 +1696,9 @@ public class World : BlockGetter
 {
     public static World mainWorld;
 
-    public static int numBlocks = 11;
-    public const int CRAFTING_TABLE = 11;
-    public const int EMPTY = 10;
-    public const int LEAF = 9;
-    public const int TRUNK = 8;
-    public const int WATER_NOFLOW = 7;
-    public const int WATER = 6;
-    public const int BEDROCK = 5;
-    public const int DIRT = 4;
-    public const int GRASS = 3;
-    public const int STONE = 2;
-    public const int SAND = 1;
-    public const int AIR = 0;
-    public const int WILDCARD = -1;
+    public static int numBlocks = 20;
+
+    
     public BlocksWorld blocksWorld;
 
     ChunkProperties chunkProperties;
@@ -1577,21 +1712,26 @@ public class World : BlockGetter
 
     public static string BlockToString(int block)
     {
+        return BlockToString((BlockValue)block);
+    }
+
+    public static string BlockToString(BlockValue block)
+    {
         switch (block)
         {
-            case LEAF: return "Leaf";;
-            case TRUNK: return "Log";
-            case WATER_NOFLOW: return "Water (no flow)";
-            case WATER: return "Water";
-            case BEDROCK: return "Bedrock";
-            case DIRT: return "Dirt";
-            case GRASS: return "Grass";
-            case STONE: return "Stone";
-            case SAND: return "Sand";
-            case AIR: return "Air";
-            case WILDCARD: return "Wildcard";
-            case CRAFTING_TABLE: return "Chest";
-            case EMPTY: return "Empty";
+            case BlockValue.CLAY: return "Clay"; ;
+            case BlockValue.LEAF: return "Leaf"; ;
+            case BlockValue.TRUNK: return "Log";
+            case BlockValue.WATER_NOFLOW: return "Water (no flow)";
+            case BlockValue.WATER: return "Water";
+            case BlockValue.BEDROCK: return "Bedrock";
+            case BlockValue.DIRT: return "Dirt";
+            case BlockValue.GRASS: return "Grass";
+            case BlockValue.STONE: return "Stone";
+            case BlockValue.AIR: return "Air";
+            case BlockValue.WILDCARD: return "Wildcard";
+            case BlockValue.CHEST: return "Chest";
+            case BlockValue.EMPTY: return "Empty";
             default: return "unknown";
         }
     }
@@ -1628,11 +1768,26 @@ public class World : BlockGetter
     public List<Structure> unfinishedStructures;
 
 
-    public BlockEntity CreateBlockEntity(int block, Vector3 position)
+    public void DropBlockOnDestroy(BlockValue block, Vector3 position)
+    {
+        if (block == BlockValue.LEAF)
+        {
+            if (Random.value < 0.8f)
+            {
+                CreateBlockEntity(BlockValue.STICK, position);
+            }
+        }
+        else
+        {
+            CreateBlockEntity(block, position);
+        }
+    }
+
+    public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
     {
         GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockEntityPrefab);
         blockEntity.transform.position = position;
-        blockEntity.GetComponent<BlockEntity>().blockId = block;
+        blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
         return blockEntity.GetComponent<BlockEntity>();
     }
 
@@ -1656,11 +1811,14 @@ public class World : BlockGetter
 
 
         stackableSize = new Dictionary<int, int>();
-        stackableSize[DIRT] = 16;
-        stackableSize[STONE] = 45;
-        stackableSize[GRASS] = 64;
-        stackableSize[SAND] = 32;
-        stackableSize[BEDROCK] = 16;
+        stackableSize[(int)BlockValue.DIRT] = 16;
+        stackableSize[(int)BlockValue.STONE] = 45;
+        stackableSize[(int)BlockValue.GRASS] = 64;
+        stackableSize[(int)BlockValue.SAND] = 32;
+        stackableSize[(int)BlockValue.BEDROCK] = 16;
+        stackableSize[(int)BlockValue.CLAY] = 64;
+        stackableSize[(int)BlockValue.LEAF] = 64;
+        stackableSize[(int)BlockValue.STICK] = 64;
 
 
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -1677,12 +1835,12 @@ public class World : BlockGetter
         unfinishedStructures = new List<Structure>();
 
         maxCapacities = new Dictionary<int, int>();
-        maxCapacities[DIRT] = 3;
-        maxCapacities[STONE] = 5;
-        maxCapacities[GRASS] = 4;
-        maxCapacities[SAND] = 0;
-        maxCapacities[AIR] = 0;
-        maxCapacities[BEDROCK] = 6;
+        maxCapacities[(int)BlockValue.DIRT] = 3;
+        maxCapacities[(int)BlockValue.STONE] = 5;
+        maxCapacities[(int)BlockValue.GRASS] = 4;
+        maxCapacities[(int)BlockValue.SAND] = 0;
+        maxCapacities[(int)BlockValue.AIR] = 0;
+        maxCapacities[(int)BlockValue.BEDROCK] = 6;
 
         int viewDist = 5;
         this.worldGeneration.world = this;
@@ -1741,7 +1899,14 @@ public class World : BlockGetter
 
     public float AverageChunkValues(long x, long y, long z, ChunkProperty chunkProperty)
     {
-        ChunkBiomeData chunkBiomeData = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
+        long cx, cy, cz;
+        GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        return AverageChunkValues(x, y, z, cx, cy, cz, chunkProperty);
+    }
+
+    public float AverageChunkValues(long x, long y, long z, long cx, long cy, long cz, ChunkProperty chunkProperty)
+    {
+        ChunkBiomeData chunkBiomeData = GetChunkBiomeData(cx, cy, cz);
         return chunkBiomeData.AverageBiomeData(x, y, z, chunkProperty);
         /*
         ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
@@ -1791,7 +1956,7 @@ public class World : BlockGetter
 
     public bool NeedsInitialUpdate(int block)
     {
-        if (block == World.GRASS)
+        if (block == (int)BlockValue.GRASS)
         {
             return true;
         }
@@ -1799,32 +1964,26 @@ public class World : BlockGetter
     }
 
 
-    public override void SetState(long i, long j, long k, int state, int stateI)
+    public override void SetState(long i, long j, long k, long cx, long cy, long cz, int state, int stateI)
     {
         blockModifyState += 1;
-        long chunkX = divWithFloor(i, chunkSize);
-        long chunkY = divWithFloor(j, chunkSize);
-        long chunkZ = divWithFloor(k, chunkSize);
-        Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+        Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
         chunk.SetState(i, j, k, state, stateI);
     }
-    public override int GetState(long i, long j, long k, int stateI)
+    public override int GetState(long i, long j, long k, long cx, long cy, long cz, int stateI)
     {
-        long chunkX = divWithFloor(i, chunkSize);
-        long chunkY = divWithFloor(j, chunkSize);
-        long chunkZ = divWithFloor(k, chunkSize);
-        Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+        Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
         return chunk.GetState(i, j, k, stateI);
     }
 
 
     public int TrickleSupportPowerUp(int blockFrom, int powerFrom, int blockTo)
     {
-        if (blockTo == AIR)
+        if (blockTo == (int)BlockValue.AIR)
         {
             return 0;
         }
-        if (blockFrom == AIR)
+        if (blockFrom == (int)BlockValue.AIR)
         {
             return 0;
         }
@@ -1838,11 +1997,11 @@ public class World : BlockGetter
     }
     public int TrickleSupportPowerSidewaysOrDown(int blockFrom, int powerFrom, int blockTo)
     {
-        if (blockTo == AIR)
+        if (blockTo == (int)BlockValue.AIR)
         {
             return 0;
         }
-        if (blockFrom == AIR)
+        if (blockFrom == (int)BlockValue.AIR)
         {
             return 0;
         }
@@ -2052,28 +2211,28 @@ public class World : BlockGetter
 
     public bool IsWater(int block)
     {
-        return block == WATER || block == WATER_NOFLOW;
+        return block == (int)BlockValue.WATER || block == (int)BlockValue.WATER_NOFLOW;
     }
     
     public int GetNumAirNeighbors(long wx, long wy, long wz)
     {
         return
-            (this[wx + 1, wy, wz] == AIR ? 1 : 0) +
-            (this[wx - 1, wy, wz] == AIR ? 1 : 0) +
-            (this[wx, wy + 1, wz] == AIR ? 1 : 0) +
-            (this[wx, wy - 1, wz] == AIR ? 1 : 0) +
-            (this[wx, wy, wz + 1] == AIR ? 1 : 0) +
-            (this[wx, wy, wz - 1] == AIR ? 1 : 0);
+            (this[wx + 1, wy, wz] == (int)BlockValue.AIR ? 1 : 0) +
+            (this[wx - 1, wy, wz] == (int)BlockValue.AIR ? 1 : 0) +
+            (this[wx, wy + 1, wz] == (int)BlockValue.AIR ? 1 : 0) +
+            (this[wx, wy - 1, wz] == (int)BlockValue.AIR ? 1 : 0) +
+            (this[wx, wy, wz + 1] == (int)BlockValue.AIR ? 1 : 0) +
+            (this[wx, wy, wz - 1] == (int)BlockValue.AIR ? 1 : 0);
 
     }
 
     public int GetWaterAirOnlyAbove(long wx, long wy, long wz)
     {
-        if (this[wx, wy+1, wz] == AIR &&
-            this[wx+1, wy, wz] != AIR &&
-            this[wx-1, wy, wz] != AIR &&
-            this[wx, wy, wz+1] != AIR &&
-            this[wx, wy, wz-1] != AIR)
+        if (this[wx, wy+1, wz] == (int)BlockValue.AIR &&
+            this[wx+1, wy, wz] != (int)BlockValue.AIR &&
+            this[wx-1, wy, wz] != (int)BlockValue.AIR &&
+            this[wx, wy, wz+1] != (int)BlockValue.AIR &&
+            this[wx, wy, wz-1] != (int)BlockValue.AIR)
         {
             return 1;
         }
@@ -2090,24 +2249,24 @@ public class World : BlockGetter
     public int GetNewerWaterNeighborValues(long wx, long wy, long wz, int state1)
     {
         return
-            ((this[wx + 1, wy, wz] == WATER && GetState(wx + 1, wy, wz, 1) < state1) ? GetState(wx + 1, wy, wz, 2) : 0) +
-            ((this[wx - 1, wy, wz] == WATER && GetState(wx - 1, wy, wz, 1) < state1) ? GetState(wx - 1, wy, wz, 2) : 0) +
-            ((this[wx, wy + 1, wz] == WATER && GetState(wx, wy + 1, wz, 1) < state1) ? GetState(wx, wy + 1, wz, 2) : 0) +
-            ((this[wx, wy - 1, wz] == WATER && GetState(wx, wy - 1, wz, 1) < state1) ? GetState(wx, wy - 1, wz, 2) : 0) +
-            ((this[wx, wy, wz + 1] == WATER && GetState(wx, wy, wz + 1, 1) < state1) ? GetState(wx, wy, wz + 1, 2) : 0) +
-            ((this[wx, wy, wz - 1] == WATER && GetState(wx, wy, wz - 1, 1) < state1) ? GetState(wx, wy, wz - 1, 2) : 0);
+            ((this[wx + 1, wy, wz] == (int)BlockValue.WATER && GetState(wx + 1, wy, wz, 1) < state1) ? GetState(wx + 1, wy, wz, 2) : 0) +
+            ((this[wx - 1, wy, wz] == (int)BlockValue.WATER && GetState(wx - 1, wy, wz, 1) < state1) ? GetState(wx - 1, wy, wz, 2) : 0) +
+            ((this[wx, wy + 1, wz] == (int)BlockValue.WATER && GetState(wx, wy + 1, wz, 1) < state1) ? GetState(wx, wy + 1, wz, 2) : 0) +
+            ((this[wx, wy - 1, wz] == (int)BlockValue.WATER && GetState(wx, wy - 1, wz, 1) < state1) ? GetState(wx, wy - 1, wz, 2) : 0) +
+            ((this[wx, wy, wz + 1] == (int)BlockValue.WATER && GetState(wx, wy, wz + 1, 1) < state1) ? GetState(wx, wy, wz + 1, 2) : 0) +
+            ((this[wx, wy, wz - 1] == (int)BlockValue.WATER && GetState(wx, wy, wz - 1, 1) < state1) ? GetState(wx, wy, wz - 1, 2) : 0);
     }
 
     // water state 3 = air accessable by me + air accessable by olders (sum of state 3 of olders)
     public int GetOlderWaterNeighborValues(long wx, long wy, long wz, int state1)
     {
         return
-            ((this[wx + 1, wy, wz] == WATER && GetState(wx + 1, wy, wz, 1) > state1) ? GetState(wx + 1, wy, wz, 3) : 0) +
-            ((this[wx - 1, wy, wz] == WATER && GetState(wx - 1, wy, wz, 1) > state1) ? GetState(wx - 1, wy, wz, 3) : 0) +
-            ((this[wx, wy + 1, wz] == WATER && GetState(wx, wy + 1, wz, 1) > state1) ? GetState(wx, wy + 1, wz, 3) : 0) +
-            ((this[wx, wy - 1, wz] == WATER && GetState(wx, wy - 1, wz, 1) > state1) ? GetState(wx, wy - 1, wz, 3) : 0) +
-            ((this[wx, wy, wz + 1] == WATER && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
-            ((this[wx, wy, wz - 1] == WATER && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
+            ((this[wx + 1, wy, wz] == (int)BlockValue.WATER && GetState(wx + 1, wy, wz, 1) > state1) ? GetState(wx + 1, wy, wz, 3) : 0) +
+            ((this[wx - 1, wy, wz] == (int)BlockValue.WATER && GetState(wx - 1, wy, wz, 1) > state1) ? GetState(wx - 1, wy, wz, 3) : 0) +
+            ((this[wx, wy + 1, wz] == (int)BlockValue.WATER && GetState(wx, wy + 1, wz, 1) > state1) ? GetState(wx, wy + 1, wz, 3) : 0) +
+            ((this[wx, wy - 1, wz] == (int)BlockValue.WATER && GetState(wx, wy - 1, wz, 1) > state1) ? GetState(wx, wy - 1, wz, 3) : 0) +
+            ((this[wx, wy, wz + 1] == (int)BlockValue.WATER && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
+            ((this[wx, wy, wz - 1] == (int)BlockValue.WATER && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
     }
 
 
@@ -2132,12 +2291,12 @@ public class World : BlockGetter
         resState2 = state2;
         resState3 = state3;
         //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
-        if (block == AIR)
+        if (block == (int)BlockValue.AIR)
         {
             resState1 = 0;
             resState2 = 0;
             needsAnotherUpdate = false;
-            return AIR;
+            return (int)BlockValue.AIR;
         }
 
 
@@ -2149,11 +2308,11 @@ public class World : BlockGetter
         // should ensure no cycles unless we get overflows and manage to loop back to the same number again, but that should rarely happen? idk something to consider
 
 
-        if (block == SAND)
+        if (block == (int)BlockValue.SAND)
         {
-            if (this[wx, wy-1, wz] == AIR)
+            if (this[wx, wy-1, wz] == (int)BlockValue.AIR)
             {
-                this[wx, wy - 1, wz] = WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
                 SetState(wx, wy - 1, wz, GetWaterFrameT(), 1);
                 // reset initial air neighbors because it'll have to recompute that anyway
                 SetState(wx, wy - 1, wz, 0, 2);
@@ -2300,19 +2459,19 @@ public class World : BlockGetter
         // good water, slightly inefficient
         
 
-        if (block == SAND)
+        if (block == (int)BlockValue.SAND)
         {
-            if (this[wx, wy-1, wz] == WATER || this[wx, wy-1, wz] == WATER_NOFLOW)
+            if (this[wx, wy-1, wz] == (int)BlockValue.WATER || this[wx, wy-1, wz] == (int)BlockValue.WATER_NOFLOW)
             {
-                this[wx, wy - 1, wz] = WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
                 needsAnotherUpdate = true;
                 resState1 = 1 - state1;
                 SetState(wx, wy - 1, wz, resState1, 1);
                 return block;
             }
-            else if(this[wx, wy-1, wz] == AIR)
+            else if(this[wx, wy-1, wz] == (int)BlockValue.AIR)
             {
-                this[wx, wy - 1, wz] = WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
                 //SetState(wx, wy - 1, wz, 1, 3);
                 return block;
             }
@@ -2322,7 +2481,7 @@ public class World : BlockGetter
         // water: state 2 = time I got here
 
 
-        if (block == WATER || block == WATER_NOFLOW)
+        if (block == (int)BlockValue.WATER || block == (int)BlockValue.WATER_NOFLOW)
         {
 
             needsAnotherUpdate = false;
@@ -2330,20 +2489,20 @@ public class World : BlockGetter
 
 
             // if we are WATER without water above and with water below, pathfind to look for open space
-            if (block == WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
+            if (block == (int)BlockValue.WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
             {
                 // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
                 //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                 numWaterUpdatesThisTick += 1;
                 if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                 {
-                    return by < wy && (b == WATER || b == WATER_NOFLOW);
+                    return by < wy && (b == (int)BlockValue.WATER || b == (int)BlockValue.WATER_NOFLOW);
                     },
                    isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                    {
-                       if (b == AIR && by < wy)
+                       if (b == (int)BlockValue.AIR && by < wy)
                        {
-                           this[bx, by, bz] = WATER;
+                           this[bx, by, bz] = (int)BlockValue.WATER;
                            SetState(bx, by, bz, GetNumAirNeighbors(bx, by, bz), 3);
                            return true;
                        }
@@ -2352,24 +2511,24 @@ public class World : BlockGetter
                 ))
                 {
                     resState3 = 0;
-                    return AIR;
+                    return (int)BlockValue.AIR;
                 }
                 else
                 {
                     needsAnotherUpdate = true;
-                    return WATER_NOFLOW;
+                    return (int)BlockValue.WATER_NOFLOW;
                 }
             }
             else
             {
 
                 // if air below, set below = water and us = air
-                if (this[wx, wy - 1, wz] == AIR)
+                if (this[wx, wy - 1, wz] == (int)BlockValue.AIR)
                 {
-                    this[wx, wy - 1, wz] = WATER;
+                    this[wx, wy - 1, wz] = (int)BlockValue.WATER;
                     resState3 = 0;
                     SetState(wx, wy - 1, wz, GetNumAirNeighbors(wx, wy - 1, wz) + 1, 3); // +1 because we are now air instead of water
-                    return AIR;
+                    return (int)BlockValue.AIR;
                 }
                 else
                 {
@@ -2379,21 +2538,21 @@ public class World : BlockGetter
                         LVector3 pos = new LVector3(wx, wy, wz);
                         LVector3 nPos = pos + neighbor;
                         LVector3 nPos2 = pos + neighbor * 2;
-                        if (nPos.Block == AIR)
+                        if (nPos.Block == (int)BlockValue.AIR)
                         {
-                            if (this[nPos.x, nPos.y - 1, nPos.z] == AIR)
+                            if (this[nPos.x, nPos.y - 1, nPos.z] == (int)BlockValue.AIR)
                             {
-                                this[nPos.x, nPos.y - 1, nPos.z] = WATER;
+                                this[nPos.x, nPos.y - 1, nPos.z] = (int)BlockValue.WATER;
                                 resState3 = 0;
                                 SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
-                                return AIR;
+                                return (int)BlockValue.AIR;
                             }
-                            else if (this[nPos2.x, nPos2.y - 1, nPos2.z] == AIR)
+                            else if (this[nPos2.x, nPos2.y - 1, nPos2.z] == (int)BlockValue.AIR)
                             {
-                                this[nPos2.x, nPos2.y - 1, nPos2.z] = WATER;
+                                this[nPos2.x, nPos2.y - 1, nPos2.z] = (int)BlockValue.WATER;
                                 resState3 = 0;
                                 SetState(nPos2.x, nPos2.y - 1, nPos2.z, GetNumAirNeighbors(nPos2.x, nPos2.y - 1, nPos2.z) + 1, 3); // +1 because we are now air instead of water
-                                return AIR;
+                                return (int)BlockValue.AIR;
                             }
                         }
                     }
@@ -2407,7 +2566,7 @@ public class World : BlockGetter
                     LVector3 airNeighbor = new LVector3(wx, wy, wz);
                     foreach (LVector3 neighbor in AllNeighborsRelative(new LVector3(wx, wy, wz)))
                     {
-                        if (neighbor.Block == AIR)
+                        if (neighbor.Block == (int)BlockValue.AIR)
                         {
                             airNeighbor = neighbor;
                             break;
@@ -2419,13 +2578,13 @@ public class World : BlockGetter
                     //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     {
-                        return (b == WATER || b == WATER_NOFLOW);
+                        return (b == (int)BlockValue.WATER || b == (int)BlockValue.WATER_NOFLOW);
                     },
                        isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                        {
-                           if (b == WATER_NOFLOW && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
+                           if (b == (int)BlockValue.WATER_NOFLOW && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
                            {
-                               this[bx, by, bz] = AIR;
+                               this[bx, by, bz] = (int)BlockValue.AIR;
                                return true;
                            }
                            return false;
@@ -2433,16 +2592,16 @@ public class World : BlockGetter
                     ))
                     {
 
-                        this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = WATER;
+                        this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = (int)BlockValue.WATER;
                         SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
                         resState3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
                         needsAnotherUpdate = true;
-                        return WATER;
+                        return (int)BlockValue.WATER;
                     }
                     else
                     {
                         needsAnotherUpdate = true;
-                        return WATER_NOFLOW;
+                        return (int)BlockValue.WATER_NOFLOW;
                     }
                 }
 
@@ -2458,7 +2617,7 @@ public class World : BlockGetter
         }
         if (state1 > 1)
         {
-            if (block == AIR)
+            if (block == (int)BlockValue.AIR)
             {
                 //Debug.Log("bad " + block + " " + state1);
                 resState1 = 0;
@@ -2473,14 +2632,14 @@ public class World : BlockGetter
         }
 
         int supportPower = state2;
-        if (block == BEDROCK)
+        if (block == (int)BlockValue.BEDROCK)
         {
-            supportPower = maxCapacities[BEDROCK];
+            supportPower = maxCapacities[(int)BlockValue.BEDROCK];
         }
-        else if (block != AIR)
+        else if (block != (int)BlockValue.AIR)
         {
             int greatestNeighborSupportPower = 0;
-            if (this[wx, wy - 1, wz] != AIR)
+            if (this[wx, wy - 1, wz] != (int)BlockValue.AIR)
             {
                 int belowSupportPower = GetState(wx, wy - 1, wz, 2);
                 greatestNeighborSupportPower = TrickleSupportPowerUp(this[wx, wy - 1, wz], belowSupportPower, block);
@@ -2518,7 +2677,7 @@ public class World : BlockGetter
 
         resState2 = supportPower;
 
-        if (supportPower <= 0 && this[wx, wy-1, wz] == AIR)
+        if (supportPower <= 0 && this[wx, wy-1, wz] == (int)BlockValue.AIR)
         {
             Debug.Log("rip me support power is not good enough and I have air below");
             this[wx, wy - 1, wz] = block;
@@ -2527,26 +2686,26 @@ public class World : BlockGetter
             resState2 = 0;
             needsAnotherUpdate = true;
             AddBlockUpdateToNeighbors(wx, wy, wz);
-            return AIR;
+            return (int)BlockValue.AIR;
         }
         else
         {
             resState1 = 0;
         }
 
-        if (block == World.GRASS)
+        if (block == (int)BlockValue.GRASS)
         {
             float prGrass = 0.005f;
             //Debug.Log("updating grass block " + wx + " " + wy + " " + wz + " " + block + " " + state);
-            if (this[wx, wy + 1, wz] == AIR)
+            if (this[wx, wy + 1, wz] == (int)BlockValue.AIR)
             {
                 for (int y = -1; y <= 1; y++)
                 {
-                    if (this[wx + 1, wy+y, wz] == DIRT && this[wx + 1, wy + y+1, wz] == AIR)
+                    if (this[wx + 1, wy+y, wz] == (int)BlockValue.DIRT && this[wx + 1, wy + y+1, wz] == (int)BlockValue.AIR)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx + 1, wy + y, wz] = GRASS;
+                            this[wx + 1, wy + y, wz] = (int)BlockValue.GRASS;
                         }
                         else
                         {
@@ -2554,11 +2713,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx - 1, wy + y, wz] == DIRT && this[wx - 1, wy + y + 1, wz] == AIR)
+                    if (this[wx - 1, wy + y, wz] == (int)BlockValue.DIRT && this[wx - 1, wy + y + 1, wz] == (int)BlockValue.AIR)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx - 1, wy + y, wz] = GRASS;
+                            this[wx - 1, wy + y, wz] = (int)BlockValue.GRASS;
                         }
                         else
                         {
@@ -2566,11 +2725,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx, wy + y, wz + 1] == DIRT && this[wx, wy + y + 1, wz+1] == AIR)
+                    if (this[wx, wy + y, wz + 1] == (int)BlockValue.DIRT && this[wx, wy + y + 1, wz+1] == (int)BlockValue.AIR)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx, wy + y, wz + 1] = GRASS;
+                            this[wx, wy + y, wz + 1] = (int)BlockValue.GRASS;
                         }
                         else
                         {
@@ -2578,11 +2737,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx, wy + y, wz - 1] == DIRT && this[wx, wy + y + 1, wz-1] == AIR)
+                    if (this[wx, wy + y, wz - 1] == (int)BlockValue.DIRT && this[wx, wy + y + 1, wz-1] == (int)BlockValue.AIR)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx, wy + y, wz - 1] = GRASS;
+                            this[wx, wy + y, wz - 1] = (int)BlockValue.GRASS;
                         }
                         else
                         {
@@ -2591,32 +2750,32 @@ public class World : BlockGetter
                     }
                 }
                 //Debug.Log("updating grass block " + needsAnotherUpdate + " <- needs update? with air above " + wx + " " + wy + " " + wz + " " + block + " " + state);
-                return GRASS;
+                return (int)BlockValue.GRASS;
             }
             else
             {
-                return DIRT;
+                return (int)BlockValue.DIRT;
             }
         }
-        else if (block == SAND)
+        else if (block == (int)BlockValue.SAND)
         {
             if (state1 <= 0)
             {
                 // if air below, fall
-                if (this[wx, wy - 1, wz] == AIR)
+                if (this[wx, wy - 1, wz] == (int)BlockValue.AIR)
                 {
-                    this[wx, wy - 1, wz] = SAND;
+                    this[wx, wy - 1, wz] = (int)BlockValue.SAND;
                     SetState(wx, wy - 1, wz, 1, 1); // don't update again until next tick
                     resState1 = 0; 
                     needsAnotherUpdate = true;
-                    return AIR;
+                    return (int)BlockValue.AIR;
                 }
                 // block below, don't fall
                 else
                 {
                     resState1 = 0;
                     needsAnotherUpdate = false;
-                    return SAND;
+                    return (int)BlockValue.SAND;
                 }
             }
             // we already moved this tick, set our state to zero so we can try moving again next tick
@@ -2624,7 +2783,7 @@ public class World : BlockGetter
             {
                 needsAnotherUpdate = true;
                 resState1 = state1 - 1;
-                return SAND;
+                return (int)BlockValue.SAND;
             }
         }
         else
@@ -2648,12 +2807,17 @@ public class World : BlockGetter
     // -3,-2,-2,-1,-1, 0, 0, 0, 1, 1, 2, 2,
     // which puts -1,0, and 1 into the same group, yet the groups are supposed to only be of size 2.
     // I didn't want to convert to a float or double and floor because that can lead to precision issues
+    // here we assume b is never less than 0
+
+    long divWithFloorForChunkSize(long a)
+    {
+        return a / chunkSize - ((a < 0 && a % chunkSize != 0) ? 1 : 0);
+    }
+
     long divWithFloor(long a, long b)
     {
-        bool sa = a < 0;
-        bool sb = b < 0;
-        int of = (a % b == 0 || sa == sb) ? 0 : 1;
-        return a / b - of;
+        return a / b - (((a < 0 == b < 0) || a % b == 0) ? 0 : 1);
+        /*
         if (a % b == 0 || sa == sb)
         {
             return a / b;
@@ -2662,6 +2826,7 @@ public class World : BlockGetter
         {
              return a / b - 1; // if a and b differ by a sign, this rounds up, round down instead (in other words, always floor)
         }
+        */
     }
 
     long divWithCeil(long a, long b)
@@ -2695,24 +2860,18 @@ public class World : BlockGetter
             this[pos.x, pos.y, pos.z] = value;
         }
     }
-    public override int this[long x, long y, long z]
+    public override int this[long x, long y, long z, long cx, long cy, long cz]
     {
         get
         {
-            long chunkX = divWithFloor(x, chunkSize);
-            long chunkY = divWithFloor(y, chunkSize);
-            long chunkZ = divWithFloor(z, chunkSize);
-            Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+            Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
             return chunk[x, y, z];
         }
 
         set
         {
             blockModifyState += 1;
-            long chunkX = divWithFloor(x, chunkSize);
-            long chunkY = divWithFloor(y, chunkSize);
-            long chunkZ = divWithFloor(z, chunkSize);
-            Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
+            Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
             chunk[x, y, z] = value;
         }
     }
@@ -2897,43 +3056,43 @@ public class World : BlockGetter
 
     public Chunk GetOrGenerateChunkAtPos(long x, long y, long z)
     {
-        long chunkX = divWithFloor(x, chunkSize);
-        long chunkY = divWithFloor(y, chunkSize);
-        long chunkZ = divWithFloor(z, chunkSize);
+        long chunkX = divWithFloorForChunkSize(x);
+        long chunkY = divWithFloorForChunkSize(y);
+        long chunkZ = divWithFloorForChunkSize(z);
         Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
         return chunk;
     }
 
     public void GetChunkCoordinatesAtPos(LVector3 worldPos, out LVector3 chunkPos)
     {
-        long chunkX = divWithFloor(worldPos.x, chunkSize);
-        long chunkY = divWithFloor(worldPos.y, chunkSize);
-        long chunkZ = divWithFloor(worldPos.z, chunkSize);
+        long chunkX = divWithFloorForChunkSize(worldPos.x);
+        long chunkY = divWithFloorForChunkSize(worldPos.y);
+        long chunkZ = divWithFloorForChunkSize(worldPos.z);
         chunkPos = new LVector3(chunkX, chunkY, chunkZ);
     }
 
 
     public void GetChunkCoordinatesAtPos(long x, long y, long z, out long cx, out long cy, out long cz)
     {
-        cx = divWithFloor(x, chunkSize);
-        cy = divWithFloor(y, chunkSize);
-        cz = divWithFloor(z, chunkSize);
+        cx = divWithFloorForChunkSize(x);
+        cy = divWithFloorForChunkSize(y);
+        cz = divWithFloorForChunkSize(z);
     }
 
 
     public void GetChunkCoordinatesAtPos(long x, long y, long z, out LVector3 chunkPos)
     {
-        long chunkX = divWithFloor(x, chunkSize);
-        long chunkY = divWithFloor(y, chunkSize);
-        long chunkZ = divWithFloor(z, chunkSize);
+        long chunkX = divWithFloorForChunkSize(x);
+        long chunkY = divWithFloorForChunkSize(y);
+        long chunkZ = divWithFloorForChunkSize(z);
         chunkPos = new LVector3(chunkX, chunkY, chunkZ);
     }
 
     public Chunk GetChunkAtPos(long x, long y, long z)
     {
-        long chunkX = divWithFloor(x, chunkSize);
-        long chunkY = divWithFloor(y, chunkSize);
-        long chunkZ = divWithFloor(z, chunkSize);
+        long chunkX = divWithFloorForChunkSize(x);
+        long chunkY = divWithFloorForChunkSize(y);
+        long chunkZ = divWithFloorForChunkSize(z);
         Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
         return chunk;
     }
@@ -2941,7 +3100,7 @@ public class World : BlockGetter
 
     public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors=true)
     {
-        GetOrGenerateChunk(divWithFloor(i, chunkSize), divWithFloor(j, chunkSize), divWithFloor(k, chunkSize)).AddBlockUpdate(i, j, k);
+        GetOrGenerateChunk(divWithFloorForChunkSize(i), divWithFloorForChunkSize(j), divWithFloorForChunkSize(k)).AddBlockUpdate(i, j, k);
         if (alsoToNeighbors)
         {
             AddBlockUpdateToNeighbors(i, j, k);
