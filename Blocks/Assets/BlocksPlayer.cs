@@ -37,6 +37,9 @@ public class BlocksPlayer : MonoBehaviour
     }
 
     public bool paused = false;
+    public float timeBreaking = 0.0f;
+
+    LVector3 curBlockBreaking;
 
     public void Update()
     {
@@ -134,7 +137,16 @@ public class BlocksPlayer : MonoBehaviour
                 blockEntity.playerPulling = null;
             }
         }
-        if (Input.GetMouseButtonDown(0) && showingHotbarOnly)
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            timeBreaking = 0.0f;
+        }
+        if (Input.GetMouseButtonUp(0))
+        {
+            timeBreaking = 0.0f;
+        }
+        if (Input.GetMouseButton(0) && showingHotbarOnly)
         {
             LVector3 hitPos;
             LVector3 posBeforeHit;
@@ -145,15 +157,27 @@ public class BlocksPlayer : MonoBehaviour
 
             if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange*World.mainWorld.worldScale, out hitResults))
             {
-                //Debug.Log("hit at pos " + hitPos);
-                World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3());
-                if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                if (curBlockBreaking != hitResults.hitBlock)
                 {
-                    Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
-                    chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
-                    World.mainWorld.blocksWorld.blockInventories.Remove(hitResults.hitBlock);
+                    timeBreaking = 0.0f;
                 }
-                World.mainWorld[hitResults.hitBlock] = 0;
+                curBlockBreaking = hitResults.hitBlock;
+                timeBreaking += Time.deltaTime;
+                if(World.mainWorld.blocksWorld.RenderBlockBreaking(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z, (BlockValue)hitResults.hitBlock.Block, timeBreaking, inventory.blocks[inventoryGui.selection]))
+                {
+                    timeBreaking = 0.0f;
+                    //Debug.Log("hit at pos " + hitPos);
+                    if(World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
+                    {
+                        if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                        {
+                            Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
+                            chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
+                            World.mainWorld.blocksWorld.blockInventories.Remove(hitResults.hitBlock);
+                        }
+                        World.mainWorld[hitResults.hitBlock] = 0;
+                    }
+                }
             }
             else
             {
@@ -176,7 +200,6 @@ public class BlocksPlayer : MonoBehaviour
                 LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
                 LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                 LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-
                 if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && showingHotbarOnly)
                 {
                     Inventory blockInventory;
@@ -202,12 +225,15 @@ public class BlocksPlayer : MonoBehaviour
                 {
                     if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
                     {
-                        World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
-                        inventory.blocks[inventoryGui.selection].count -= 1;
-                        if (inventory.blocks[inventoryGui.selection].count <= 0)
+                        if (World.mainWorld.AllowedtoPlaceBlock((BlockValue)inventory.blocks[inventoryGui.selection].block))
                         {
-                            inventory.blocks[inventoryGui.selection] = null;
-                        }
+                            World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
+                            inventory.blocks[inventoryGui.selection].count -= 1;
+                            if (inventory.blocks[inventoryGui.selection].count <= 0)
+                            {
+                                inventory.blocks[inventoryGui.selection] = null;
+                            }
+                        }  
                     }
                 }
 

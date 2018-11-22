@@ -395,6 +395,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cullBlocksShader: {fileID: 7200000, guid: 535674d4758b900489a5b18ef9852efd, type: 3}
   triMaterial: {fileID: 2100000, guid: ef482a571724d6544b4296937748b40e, type: 2}
+  breakingMaterial: {fileID: 2100000, guid: d5e54fa5cd0338f489a5585931dbac57, type: 2}
   renderTransform: {fileID: 324794737}
   blockEntityPrefab: {fileID: 1582410441544872, guid: 491f439a3d84a3a44b04dca7a77f24bd,
     type: 2}

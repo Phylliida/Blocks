@@ -262,7 +262,10 @@ public class ChunkBiomeData
 
 public enum BlockValue
 {
-    STICK = 13,
+    LARGE_ROCK = 16,
+    ROCK = 15,
+    STICK = 14,
+    LOOSE_ROCKS = 13,
     CLAY = 12,
     CHEST = 11,
     EMPTY = 10,
@@ -1696,7 +1699,8 @@ public class World : BlockGetter
 {
     public static World mainWorld;
 
-    public static int numBlocks = 20;
+    public const int numBlocks = 20;
+    public const int numBreakingFrames = 10;
 
     
     public BlocksWorld blocksWorld;
@@ -1768,19 +1772,56 @@ public class World : BlockGetter
     public List<Structure> unfinishedStructures;
 
 
-    public void DropBlockOnDestroy(BlockValue block, Vector3 position)
+    public bool DropBlockOnDestroy(BlockValue block, Vector3 positionOfBlock, Vector3 posOfOpening)
     {
-        if (block == BlockValue.LEAF)
+        if (block == BlockValue.LOOSE_ROCKS)
         {
             if (Random.value < 0.8f)
             {
-                CreateBlockEntity(BlockValue.STICK, position);
+                CreateBlockEntity(BlockValue.ROCK, posOfOpening);
+                return false;
+            }
+            else if (Random.value <= 0.2f)
+            {
+                CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
+                return false;
+            }
+            else
+            {
+                CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
+                return true;
+            }
+        }
+        else if (block == BlockValue.LEAF)
+        {
+            if (Random.value < 0.8f)
+            {
+                CreateBlockEntity(BlockValue.STICK, positionOfBlock);
             }
         }
         else
         {
-            CreateBlockEntity(block, position);
+            CreateBlockEntity(block, positionOfBlock);
         }
+        return true;
+    }
+
+    public BlockValue[] items = new BlockValue[] {
+        BlockValue.STICK,
+        BlockValue.ROCK,
+        BlockValue.LARGE_ROCK
+    };
+
+    public bool AllowedtoPlaceBlock(BlockValue block)
+    {
+        foreach (BlockValue item in items)
+        {
+            if (item == block)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
@@ -1819,6 +1860,8 @@ public class World : BlockGetter
         stackableSize[(int)BlockValue.CLAY] = 64;
         stackableSize[(int)BlockValue.LEAF] = 64;
         stackableSize[(int)BlockValue.STICK] = 64;
+        stackableSize[(int)BlockValue.ROCK] = 64;
+        stackableSize[(int)BlockValue.LARGE_ROCK] = 64;
 
 
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -3192,9 +3235,11 @@ public class BlocksWorld : MonoBehaviour {
     public ComputeShader cullBlocksShader;
     ComputeBuffer cubeOffsets;
     ComputeBuffer uvOffsets;
+    ComputeBuffer breakingUVOffsets;
     ComputeBuffer linesOffsets;
     Material outlineMaterial;
     public Material triMaterial;
+    public Material breakingMaterial;
     public Transform renderTransform;
 
     public GameObject blockEntityPrefab;
@@ -3231,6 +3276,7 @@ public class BlocksWorld : MonoBehaviour {
     public float ticksPerSecond = 20.0f;
 
 
+    public ComputeBuffer blockBreakingBuffer;
     public static Mesh blockMesh;
     void SetupRendering()
     {
@@ -3345,11 +3391,117 @@ public class BlocksWorld : MonoBehaviour {
             texOffsets[i * 4 + 3] = 0;
         }
 
-
+        blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4, ComputeBufferType.GPUMemory);
         cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
         cubeOffsets.SetData(triOffsets);
         uvOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
         uvOffsets.SetData(texOffsets);
+
+        float[] texOffsetsSingleBlock = new float[36 * 4];
+        for (int i = 0; i < 36; i++)
+        {
+            Vector3 offset = Vector3.zero;
+            Vector3 texOffset = Vector2.zero;
+            switch (i)
+            {
+                // bottom, top
+                // left, right
+                // front, back
+                // bottom
+                case 0: offset = new Vector3(1, 0, 1); break;
+                case 1: offset = new Vector3(1, 0, 0); break;
+                case 2: offset = new Vector3(0, 0, 0); break;
+                case 3: offset = new Vector3(0, 0, 0); break;
+                case 4: offset = new Vector3(0, 0, 1); break;
+                case 5: offset = new Vector3(1, 0, 1); break;
+
+                // top
+                case 6: offset = new Vector3(0, 1, 0); break;
+                case 7: offset = new Vector3(1, 1, 0); break;
+                case 8: offset = new Vector3(1, 1, 1); break;
+                case 9: offset = new Vector3(1, 1, 1); break;
+                case 10: offset = new Vector3(0, 1, 1); break;
+                case 11: offset = new Vector3(0, 1, 0); break;
+
+                // left
+                case 12: offset = new Vector3(1, 1, 0); break;
+                case 13: offset = new Vector3(0, 1, 0); break;
+                case 14: offset = new Vector3(0, 0, 0); break;
+                case 15: offset = new Vector3(1, 0, 0); break;
+                case 16: offset = new Vector3(1, 1, 0); break;
+                case 17: offset = new Vector3(0, 0, 0); break;
+
+                // right
+                case 18: offset = new Vector3(0, 0, 1); break;
+                case 19: offset = new Vector3(0, 1, 1); break;
+                case 20: offset = new Vector3(1, 1, 1); break;
+                case 21: offset = new Vector3(0, 0, 1); break;
+                case 22: offset = new Vector3(1, 1, 1); break;
+                case 23: offset = new Vector3(1, 0, 1); break;
+
+                // forward
+                case 24: offset = new Vector3(0, 0, 0); break;
+                case 25: offset = new Vector3(0, 1, 0); break;
+                case 26: offset = new Vector3(0, 1, 1); break;
+                case 27: offset = new Vector3(0, 0, 0); break;
+                case 28: offset = new Vector3(0, 1, 1); break;
+                case 29: offset = new Vector3(0, 0, 1); break;
+                // back
+                case 30: offset = new Vector3(1, 1, 1); break;
+                case 31: offset = new Vector3(1, 1, 0); break;
+                case 32: offset = new Vector3(1, 0, 0); break;
+                case 33: offset = new Vector3(1, 0, 1); break;
+                case 34: offset = new Vector3(1, 1, 1); break;
+                case 35: offset = new Vector3(1, 0, 0); break;
+            }
+            // bottom
+            float texX = 0.0f;
+            float texY = 0.0f;
+            if (i >= 0 && i <= 5)
+            {
+                texX = offset.x;
+                texY = offset.z;
+            }
+            // top
+            else if (i >= 6 && i <= 11)
+            {
+                texX = offset.x;
+                texY = offset.z;
+            }
+            // left
+            else if (i >= 12 && i <= 17)
+            {
+                texX = offset.x;
+                texY = offset.y;
+            }
+            // right
+            else if (i >= 18 && i <= 23)
+            {
+                texX = offset.x;
+                texY = offset.y;
+            }
+            // forward
+            else if (i >= 24 && i <= 29)
+            {
+                texX = offset.z;
+                texY = offset.y;
+            }
+            // back
+            else if (i >= 30 && i <= 35)
+            {
+                texX = offset.z;
+                texY = offset.y;
+            }
+            texOffset = new Vector2(texX, texY);
+
+            texOffsetsSingleBlock[i * 4] = texOffset.x;
+            texOffsetsSingleBlock[i * 4 + 1] = texOffset.y / (float)World.numBreakingFrames;
+            texOffsetsSingleBlock[i * 4 + 2] = 0;
+            texOffsetsSingleBlock[i * 4 + 3] = 0;
+        }
+
+        breakingUVOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+        breakingUVOffsets.SetData(texOffsetsSingleBlock);
 
         blockMesh = new Mesh();
         List<Vector3> blockVertices = new List<Vector3>();
@@ -3377,6 +3529,8 @@ public class BlocksWorld : MonoBehaviour {
 
         triMaterial.SetBuffer("cubeOffsets", cubeOffsets);
         triMaterial.SetBuffer("uvOffsets", uvOffsets);
+        breakingMaterial.SetBuffer("cubeOffsets", cubeOffsets);
+        breakingMaterial.SetBuffer("uvOffsets", breakingUVOffsets);
 
         float[] lineOffsets = new float[24 * 4];
         for (int i = 0; i < 24; i++)
@@ -3546,6 +3700,80 @@ public class BlocksWorld : MonoBehaviour {
         return args[0];
     }
 
+    public Queue<Tuple<LVector3, float>> blocksBreaking = new Queue<Tuple<LVector3, float>>();
+
+    public float TimeNeededToBreak(BlockValue block, BlockStack itemHittingWith)
+    {
+        if (block == BlockValue.LOOSE_ROCKS)
+        {
+            return 3.0f;
+        }
+        else if (block == BlockValue.ROCK)
+        {
+            return 20.0f;
+        }
+        else if (block == BlockValue.SAND)
+        {
+            return 1.0f;
+        }
+        else if (block == BlockValue.CLAY)
+        {
+            return 1.0f;
+        }
+        else if (block == BlockValue.GRASS)
+        {
+            return 2.0f;
+        }
+        else if(block == BlockValue.DIRT)
+        {
+            return 2.0f;
+        }
+        else if(block == BlockValue.LEAF)
+        {
+            return 0.5f;
+        }
+        else if(block == BlockValue.TRUNK)
+        {
+            return 10.0f;
+        }
+        return 100.0f;
+    }
+
+    public bool RenderBlockBreaking(long x, long y, long z, BlockValue blockHitting, float timeHitting, BlockStack itemHittingWith)
+    {
+        float timeNeeded = TimeNeededToBreak(blockHitting, itemHittingWith);
+        if (timeHitting > timeNeeded)
+        {
+            return true;
+        }
+        else
+        {
+            blocksBreaking.Enqueue(new Tuple<LVector3, float>(new LVector3(x, y, z), timeHitting / timeNeeded));
+            return false;
+        }
+    }
+    void ActuallyRenderBlockBreaking(long x, long y, long z, float howBroken)
+    {
+        long cx, cy, cz;
+        world.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+        Vector3 offset = (new Vector3(cx, cy, cz)) * chunkSize * worldScale;
+        renderTransform.transform.position += offset;
+
+        int brokenState = (int)Mathf.Clamp(Mathf.Round(howBroken * 8), 0.0f, 8.0f);
+        blockBreakingBuffer.SetData(new int[] { (int)(x - cx*chunkSize), (int)(y - cy * chunkSize), (int)(z - cz * chunkSize), brokenState });
+        if (Camera.current != uiCamera)
+        {
+            breakingMaterial.SetBuffer("DrawingThings", blockBreakingBuffer);
+            breakingMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+            breakingMaterial.SetInt("ptCloudWidth", chunkSize);
+            breakingMaterial.SetFloat("ptCloudScale", worldScale);
+            breakingMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+            breakingMaterial.SetPass(0);
+            Graphics.DrawProcedural(MeshTopology.Triangles, 1 * (36));
+        }
+        renderTransform.transform.position -= offset;
+    }
+
     public void RenderChunk(Chunk chunk)
     {
         //if (Camera.current != transform.GetComponent<Camera>() || settings.isOn)
@@ -3582,9 +3810,15 @@ public class BlocksWorld : MonoBehaviour {
         renderTransform.transform.position -= offset;
     }
 
+    LVector3 blockBreaking;
     void OnRenderObject()
     {
         world.Render();
+        while (blocksBreaking.Count > 0)
+        {
+            Tuple<LVector3, float> blockBreaking = blocksBreaking.Dequeue();
+            ActuallyRenderBlockBreaking(blockBreaking.a.x, blockBreaking.a.y, blockBreaking.a.z, 1.0f-blockBreaking.b);
+        }
     }
 
     bool cleanedUp = false;
@@ -3601,6 +3835,11 @@ public class BlocksWorld : MonoBehaviour {
             cubeOffsets = null;
         }
 
+        if (blockBreakingBuffer != null)
+        {
+            blockBreakingBuffer.Dispose();
+            blockBreakingBuffer = null;
+        }
 
         if (drawPositions1 != null)
         {
@@ -3624,6 +3863,18 @@ public class BlocksWorld : MonoBehaviour {
         {
             world.Dispose();
             world = null;
+        }
+
+        if (uvOffsets != null)
+        {
+            uvOffsets.Dispose();
+            uvOffsets = null;
+        }
+
+        if (breakingUVOffsets != null)
+        {
+            breakingUVOffsets.Dispose();
+            breakingUVOffsets = null;
         }
     }
     void Cleanup()

@@ -2,7 +2,7 @@
 
 // Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
 
-Shader "Unlit/SandDrawer" {
+Shader "Unlit/BreakingDrawer" {
 	Properties
 	{
 		_MainTex("Color (RGB) Alpha (A)", 2D) = "white"
@@ -55,11 +55,10 @@ Shader "Unlit/SandDrawer" {
 		// from https://answers.unity.com/questions/678193/is-it-possible-to-access-the-dimensions-of-a-textu.html
 		//_MainTex_TexelSize.z //contains width
 		//_MainTex_TexelSize.w //contains height
-		int numBlocks = 20;
-		uvOffset.y /= 3.0f;
-		uvOffset.y += (idI - 1) / (float)numBlocks;
-		//float3 pos = (idPt + offset*0.98 + 0.01) * ptCloudScale;
-		float3 pos = (idPt + offset) * ptCloudScale;
+		int numBlocks = 10;
+		uvOffset.y += (idI) / (float)numBlocks;
+		float3 pos = (idPt + (offset-float3(0.5,0.5,0.5))*1.02+float3(0.5, 0.5, 0.5)) * ptCloudScale;
+		//float3 pos = (idPt + offset) * ptCloudScale;
 		v2f o;
 		//o.col = col;
 		o.pos = UnityObjectToClipPos(mul(localToWorld, float4(pos + ptCloudOffset.xyz, 1)));

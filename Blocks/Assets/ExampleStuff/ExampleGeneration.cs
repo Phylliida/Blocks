@@ -155,7 +155,26 @@ public class ExampleGeneration : GenerationClass
             }
             else
             {
-                 outBlock.block = BlockValue.STONE;
+                if (Simplex.Noise.rand(x,y,z) < 0.8 && distFromSurface == 6)
+                {
+                    outBlock.block = BlockValue.LOOSE_ROCKS;
+                }
+                else if (Simplex.Noise.rand(x, y, z) < 0.5 && distFromSurface == 7)
+                {
+                    outBlock.block = BlockValue.LOOSE_ROCKS;
+                }
+                else if (Simplex.Noise.rand(x, y, z) < 0.2 && distFromSurface == 8)
+                {
+                    outBlock.block = BlockValue.LOOSE_ROCKS;
+                }
+                else if (Simplex.Noise.rand(x, y, z) < 0.04)
+                {
+                    outBlock.block = BlockValue.LOOSE_ROCKS;
+                }
+                else
+                {
+                    outBlock.block = BlockValue.STONE;
+                }
             }
         }
     }

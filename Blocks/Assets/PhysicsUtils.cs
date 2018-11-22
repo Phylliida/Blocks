@@ -466,6 +466,12 @@ public class PhysicsUtils {
 
     }
 
+
+    public static float fmod(float a, float b)
+    {
+        return a - b * Mathf.Floor(a / b);
+    }
+
     public static bool IsBlockSolid(int block)
     {
         return block != (int)BlockValue.AIR && block != (int)BlockValue.WATER && block != (int)BlockValue.WATER_NOFLOW;
