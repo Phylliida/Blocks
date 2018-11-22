@@ -40,6 +40,7 @@ public class BlocksPlayer : MonoBehaviour
     public float timeBreaking = 0.0f;
 
     LVector3 curBlockBreaking;
+    int curSelectionBreakingWith = -1;
 
     public void Update()
     {
@@ -161,13 +162,18 @@ public class BlocksPlayer : MonoBehaviour
                 {
                     timeBreaking = 0.0f;
                 }
+                if (curSelectionBreakingWith != inventoryGui.selection)
+                {
+                    timeBreaking = 0.0f;
+                    curSelectionBreakingWith = inventoryGui.selection;
+                }
                 curBlockBreaking = hitResults.hitBlock;
                 timeBreaking += Time.deltaTime;
                 if(World.mainWorld.blocksWorld.RenderBlockBreaking(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z, (BlockValue)hitResults.hitBlock.Block, timeBreaking, inventory.blocks[inventoryGui.selection]))
                 {
                     timeBreaking = 0.0f;
                     //Debug.Log("hit at pos " + hitPos);
-                    if(World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
+                    if(World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                     {
                         if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                         {
@@ -181,7 +187,7 @@ public class BlocksPlayer : MonoBehaviour
             }
             else
             {
-
+                timeBreaking = 0.0f;
                 //Debug.Log("mouse cast failed " + hitPos);
             }
         }
@@ -325,7 +331,10 @@ public class BlocksPlayer : MonoBehaviour
         body.SetRelativeDesiredMove(desiredMove);
     }
 
-
+    public void OnPostRender()
+    {
+        World.mainWorld.blocksWorld.RenderWorld();
+    }
 }
 
 

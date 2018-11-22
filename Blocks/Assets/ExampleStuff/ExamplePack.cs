@@ -8,6 +8,7 @@ public class ExamplePack : BlocksPack {
 	void Awake () {
         AddCustomBlock(BlockValue.GRASS, new Grass());
         AddCustomBlock(BlockValue.CLAY, new Clay());
+        AddCustomBlock(BlockValue.BARK, new Bark());
         SetCustomGeneration(new ExampleGeneration());
     }
 

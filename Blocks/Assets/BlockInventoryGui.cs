@@ -6,13 +6,24 @@ using UnityEngine;
 public class Recipe
 {
     BlockValue[,] recipe;
+    BlockValue[] unorderedRecipe;
     public BlockStack result;
     public Recipe(BlockValue[,] recipe, BlockStack result)
     {
         this.recipe = recipe;
+        this.unordered = false;
         this.result = result;
     }
 
+
+    public Recipe(BlockValue[] recipe, BlockStack result)
+    {
+        this.unorderedRecipe = recipe;
+        this.unordered = true;
+        this.result = result;
+    }
+
+    bool unordered = false;
 
     public bool InventoryMatchesRecipe(Inventory inventory, int nRows, int maxBlocks, bool useResources)
     {
@@ -30,137 +41,189 @@ public class Recipe
             return false;
         }
 
-        int nColumns = maxBlocks / nRows;
-        int numMatchesNeeded = recipe.GetLength(0) * recipe.GetLength(1);
-        for (int topLeftX = 0; topLeftX < nColumns; topLeftX++)
+
+        if (unordered)
         {
-            for (int topLeftY = 0; topLeftY < nRows; topLeftY++)
+            int numMatchesNeeded = unorderedRecipe.Length;
+            int numMatches = 0;
+            int[] matches = new int[unorderedRecipe.Length];
+            for (int i = 0; i < matches.Length; i++)
             {
-                int numMatches = 0;
-                for (int i = 0; i < recipe.GetLength(1); i++)
+                matches[i] = -1;
+            }
+            for (int i = 0; i < maxBlocks; i++)
+            {
+                if (inventory.blocks[i] != null)
                 {
-                    for (int j = 0; j < recipe.GetLength(0); j++)
+                    bool foundMatch = false;
+                    for (int j = 0; j < unorderedRecipe.Length; j++)
                     {
-                        int x = topLeftX + i;
-                        int y = topLeftY + j;
-                        if (x < nColumns && y < nRows)
+                        if (matches[j] == -1 && unorderedRecipe[j] == (BlockValue)inventory.blocks[i].block)
                         {
-                            int index = x + y * nColumns;
-                            BlockStack cur = inventory.blocks[index];
-                            BlockValue recipeCur = recipe[recipe.GetLength(0)-j-1, i];
-                            if (cur == null)
-                            {
-                                if (recipeCur == BlockValue.AIR || recipeCur == BlockValue.EMPTY)
-                                {
-                                    Debug.Log(x + " " + y + "inventory empty here and recipe is too, recipeCur=" + World.BlockToString((int)recipeCur));
-                                    numMatches += 1;
-                                }
-                                else
-                                {
-                                    Debug.Log(x + " " + y + "inventory empty here and recipe is not, recipeCur=" + World.BlockToString((int)recipeCur));
-                                }
-                            }
-                            else if(cur != null)
-                            {
-                                if ((BlockValue)cur.block == recipeCur)
-                                {
-                                    Debug.Log(x + " " + y + "same: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
-                                    numMatches += 1;
-                                }
-                                else
-                                {
-                                    Debug.Log(x + " " + y + "different: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
-                                }
-                            }
+                            matches[j] = i;
+                            foundMatch = true;
+                            numMatches += 1;
+                            break;
+                        }
+                    }
+                    if (!foundMatch)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            if (numMatches == numMatchesNeeded)
+            {
+                if (useResources)
+                {
+                    for (int i = 0; i < matches.Length; i++)
+                    {
+                        inventory.blocks[matches[i]].count -= 1;
+                        if (inventory.blocks[matches[i]].count <= 0)
+                        {
+                            inventory.blocks[matches[i]] = null;
                         }
                     }
                 }
-                Debug.Log("got num matches " + numMatches + " with top left x=" + topLeftX + " and topLeftY=" + topLeftY);
-                if (numMatches == numMatchesNeeded)
+                return true;
+            }
+
+
+
+            return false;
+        }
+        else
+        {
+            int nColumns = maxBlocks / nRows;
+            int numMatchesNeeded = recipe.GetLength(0) * recipe.GetLength(1);
+            for (int topLeftX = 0; topLeftX < nColumns; topLeftX++)
+            {
+                for (int topLeftY = 0; topLeftY < nRows; topLeftY++)
                 {
-                    bool hasExtraStuff = false;
-                    for (int x = 0; x < topLeftX; x++)
+                    int numMatches = 0;
+                    for (int i = 0; i < recipe.GetLength(1); i++)
                     {
-                        for (int y = 0; y < nRows; y++)
+                        for (int j = 0; j < recipe.GetLength(0); j++)
                         {
-                            int index = x + y * nColumns;
-                            if (inventory.blocks[index] != null)
+                            int x = topLeftX + i;
+                            int y = topLeftY + j;
+                            if (x < nColumns && y < nRows)
                             {
-                                hasExtraStuff = true;
-                                break;
-                            }
-                        }
-                        if (hasExtraStuff)
-                        {
-                            break;
-                        }
-                    }
-
-                    for (int x = topLeftX; x < nColumns; x++)
-                    {
-                        for (int y = 0; y < topLeftY; y++)
-                        {
-                            int index = x + y * nColumns;
-                            if (inventory.blocks[index] != null)
-                            {
-                                hasExtraStuff = true;
-                                break;
-                            }
-                        }
-                        if (hasExtraStuff)
-                        {
-                            break;
-                        }
-                    }
-                    if (hasExtraStuff)
-                    {
-                        Debug.Log("matches recipe but has extra stuff");
-                        return false;
-                    }
-                    else
-                    {
-                        Debug.Log("matches recipe completely");
-
-
-                        if (useResources)
-                        {
-                            for (int i = 0; i < recipe.GetLength(1); i++)
-                            {
-                                for (int j = 0; j < recipe.GetLength(0); j++)
+                                int index = x + y * nColumns;
+                                BlockStack cur = inventory.blocks[index];
+                                BlockValue recipeCur = recipe[recipe.GetLength(0)-j-1, i];
+                                if (cur == null)
                                 {
-                                    int x = topLeftX + i;
-                                    int y = topLeftY + j;
-                                    int index = x + y * nColumns;
-                                    if (inventory.blocks[index] != null)
+                                    if (recipeCur == BlockValue.AIR || recipeCur == BlockValue.EMPTY)
                                     {
-                                        inventory.blocks[index].count -= 1;
-                                        if (inventory.blocks[index].count <= 0)
-                                        {
-                                            inventory.blocks[index] = null;
-                                        }
+                                        Debug.Log(x + " " + y + "inventory empty here and recipe is too, recipeCur=" + World.BlockToString((int)recipeCur));
+                                        numMatches += 1;
+                                    }
+                                    else
+                                    {
+                                        Debug.Log(x + " " + y + "inventory empty here and recipe is not, recipeCur=" + World.BlockToString((int)recipeCur));
+                                    }
+                                }
+                                else if(cur != null)
+                                {
+                                    if ((BlockValue)cur.block == recipeCur)
+                                    {
+                                        Debug.Log(x + " " + y + "same: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
+                                        numMatches += 1;
+                                    }
+                                    else
+                                    {
+                                        Debug.Log(x + " " + y + "different: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
                                     }
                                 }
                             }
                         }
-                        return true;
                     }
-                }
-                else if(numMatches > numMatchesNeeded)
-                {
-                    Debug.LogWarning("numMatches = " + numMatches + " but maximum num matches is " + numMatchesNeeded + " this is invalid how u do this");
-                }
+                    Debug.Log("got num matches " + numMatches + " with top left x=" + topLeftX + " and topLeftY=" + topLeftY);
+                    if (numMatches == numMatchesNeeded)
+                    {
+                        bool hasExtraStuff = false;
+                        for (int x = 0; x < topLeftX; x++)
+                        {
+                            for (int y = 0; y < nRows; y++)
+                            {
+                                int index = x + y * nColumns;
+                                if (inventory.blocks[index] != null)
+                                {
+                                    hasExtraStuff = true;
+                                    break;
+                                }
+                            }
+                            if (hasExtraStuff)
+                            {
+                                break;
+                            }
+                        }
 
+                        for (int x = topLeftX; x < nColumns; x++)
+                        {
+                            for (int y = 0; y < topLeftY; y++)
+                            {
+                                int index = x + y * nColumns;
+                                if (inventory.blocks[index] != null)
+                                {
+                                    hasExtraStuff = true;
+                                    break;
+                                }
+                            }
+                            if (hasExtraStuff)
+                            {
+                                break;
+                            }
+                        }
+                        if (hasExtraStuff)
+                        {
+                            Debug.Log("matches recipe but has extra stuff");
+                            return false;
+                        }
+                        else
+                        {
+                            Debug.Log("matches recipe completely");
+
+
+                            if (useResources)
+                            {
+                                for (int i = 0; i < recipe.GetLength(1); i++)
+                                {
+                                    for (int j = 0; j < recipe.GetLength(0); j++)
+                                    {
+                                        int x = topLeftX + i;
+                                        int y = topLeftY + j;
+                                        int index = x + y * nColumns;
+                                        if (inventory.blocks[index] != null)
+                                        {
+                                            inventory.blocks[index].count -= 1;
+                                            if (inventory.blocks[index].count <= 0)
+                                            {
+                                                inventory.blocks[index] = null;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            return true;
+                        }
+                    }
+                    else if(numMatches > numMatchesNeeded)
+                    {
+                        Debug.LogWarning("numMatches = " + numMatches + " but maximum num matches is " + numMatchesNeeded + " this is invalid how u do this");
+                    }
+
+                }
             }
+            return false;
+
         }
-        return false;
+
     }
 }
-public class RecipeSet
-{
-    public RecipeSet()
-    {
-    }
-}
+
 
 public class BlockInventoryGui : MonoBehaviour {
 

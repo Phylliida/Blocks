@@ -8,6 +8,18 @@ public class BlockStack
     public int block;
     public int count;
 
+    public BlockValue Block
+    {
+        get
+        {
+            return (BlockValue)block;
+        }
+        set
+        {
+            block = (int)value;
+        }
+    }
+
     public BlockStack(int block, int count)
     {
         this.block = block;

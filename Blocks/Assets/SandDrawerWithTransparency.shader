@@ -2,7 +2,7 @@
 
 // Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
 
-Shader "Unlit/SandDrawer" {
+Shader "Unlit/SandDrawerWithTransparency" {
 	Properties
 	{
 		_MainTex("Color (RGB) Alpha (A)", 2D) = "white"
@@ -12,7 +12,7 @@ Shader "Unlit/SandDrawer" {
 		 Tags { "Queue" = "Transparent" "RenderType" = "Transparent" }
 		Pass{
 
-		ZWrite On
+		ZWrite Off
 		Blend SrcAlpha OneMinusSrcAlpha
 		Cull Front
 		CGPROGRAM

@@ -142,30 +142,33 @@ public class ChunkRenderer
 {
     Chunk chunk;
     int chunkSize;
-    public ComputeBuffer drawData;
+    public ComputeBuffer drawDataTransparent;
+    public ComputeBuffer drawDataNotTransparent;
     bool using1;
-    public int numRendereredCubes;
+    public int numRendereredCubesTransparent;
+    public int numRendereredCubesNotTransparent;
 
     public ChunkRenderer(Chunk chunk, int chunkSize)
     {
         this.chunk = chunk;
         this.chunkSize = chunkSize;
 
-        drawData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
+        drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
+        drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
     }
 
     public void Tick()
     {
 
     }
-    public void Render()
+    public void Render(bool onlyTransparent)
     {
         if (chunk.chunkData.needToBeUpdated)
         {
             chunk.chunkData.needToBeUpdated = false;
-            numRendereredCubes = chunk.world.blocksWorld.MakeChunkTris(chunk);
+            chunk.world.blocksWorld.MakeChunkTris(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent);
         }
-        chunk.world.blocksWorld.RenderChunk(chunk);
+        chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
     }
 
 
@@ -176,10 +179,16 @@ public class ChunkRenderer
         if (!cleanedUp)
         {
             cleanedUp = true;
-            if (drawData != null)
+            if (drawDataTransparent != null)
             {
-                drawData.Dispose();
-                drawData = null;
+                drawDataTransparent.Dispose();
+                drawDataTransparent = null;
+            }
+
+            if (drawDataNotTransparent != null)
+            {
+                drawDataNotTransparent.Dispose();
+                drawDataNotTransparent = null;
             }
         }
     }
@@ -262,9 +271,17 @@ public class ChunkBiomeData
 
 public enum BlockValue
 {
-    LARGE_ROCK = 16,
-    ROCK = 15,
-    STICK = 14,
+    AXE = -24,
+    PICKAXE = -23,
+    SHOVEL = -22,
+    STRING = -21,
+    WET_BARK = 20,
+    BARK = 19,
+    LARGE_SHARP_ROCK = -18,
+    SHARP_ROCK = -17,
+    LARGE_ROCK = -16,
+    ROCK = -15,
+    STICK = -14,
     LOOSE_ROCKS = 13,
     CLAY = 12,
     CHEST = 11,
@@ -272,7 +289,7 @@ public enum BlockValue
     LEAF = 9,
     TRUNK = 8,
     WATER_NOFLOW = 7,
-    WATER = 6,
+    WATER = -6,
     BEDROCK = 5,
     DIRT = 4,
     GRASS = 3,
@@ -288,7 +305,10 @@ public class BlockData : System.IDisposable
     // world.blockModifyState is incremented whenever a change occurs
     // this lets us not have to check for changes that may have occured unless the world's value of this is different than ours
     // once we make a change, we can set ours to the world's value since it will be incremented (see the getters of state1-3 and block below)
-    long curBlockModifyState = 0;
+    long curBlockModifyState1 = 0;
+    long curBlockModifyState2 = 0;
+    long curBlockModifyState3 = 0;
+    long curBlockModifyStateBlock = 0;
     public bool WasModified
     {
         get
@@ -315,12 +335,29 @@ public class BlockData : System.IDisposable
 
     BlockGetter world;
 
-    public int state1 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 1) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState = world.blockModifyState; } } }
-    public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
-    public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 1); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
-    public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
+    int cachedState1 = 0;
+    int cachedState2 = 0;
+    int cachedState3 = 0;
+    BlockValue cachedBlock = BlockValue.AIR;
+
+    public int state1 { get { if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, 1); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state1) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
+    public int state2 { get { if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, 2); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != state2) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
+    public int state3 { get { if (world.blockModifyState != curBlockModifyState3) { cachedState3 = world.GetState(wx, wy, wz, cx, cy, cz, 3); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != state3) { wasModified = true; cachedState3 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+    public BlockValue block { get { if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = (BlockValue)world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
+    //public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 2); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
+    //public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 3); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
+    //public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
     ChunkBiomeData chunkBiomeData;
     public bool needsAnotherTick;
+
+    // we just modified the world, if one of our other states are only 1 behind, we are the cause of the change, therefore they are still correct, update their states so they don't need to recheck to see that they are still right
+    public void CheckLocalStates()
+    {
+        if (curBlockModifyState1 == world.blockModifyState - 1) curBlockModifyState1 = world.blockModifyState;
+        if (curBlockModifyState2 == world.blockModifyState - 1) curBlockModifyState2 = world.blockModifyState;
+        if (curBlockModifyState3 == world.blockModifyState - 1) curBlockModifyState3 = world.blockModifyState;
+        if (curBlockModifyStateBlock == world.blockModifyState - 1) curBlockModifyStateBlock = world.blockModifyState;
+    }
 
     public BlockData(BlockGetter world, long x, long y, long z)
     {
@@ -349,7 +386,10 @@ public class BlockData : System.IDisposable
 
     public void ReassignValues(long x, long y, long z)
     {
-        this.curBlockModifyState = 0;
+        this.curBlockModifyState1 = 0;
+        this.curBlockModifyState2 = 0;
+        this.curBlockModifyState3 = 0;
+        this.curBlockModifyStateBlock = 0;
         this.wasModified = false;
         this.wx = x;
         this.wy = y;
@@ -383,6 +423,16 @@ public class BlockDataGetter
     public void SetBlock(long x, long y, long z, BlockValue value)
     {
         blockGetter[x, y, z] = (int)value;
+    }
+
+    public int GetState(long x, long y, long z, int stateI)
+    {
+        return blockGetter.GetState(x, y, z, stateI);
+    }
+
+    public void SetState(long x, long y, long z, int state, int stateI)
+    {
+        blockGetter.SetState(x, y, z, state, stateI);
     }
 
     public BlockData GetBlockData(long x, long y, long z)
@@ -1010,6 +1060,12 @@ public class Chunk
                                 chunkData.AddBlockUpdate(x, y, z - 1);
                                 chunkData.AddBlockUpdate(x, y, z + 1);
                             }
+                            if (block.block == BlockValue.AIR)
+                            {
+                                block.state1 = 0;
+                                block.state2 = 0;
+                                block.state3 = 0;
+                            }
                         }
                     }
                 }
@@ -1071,6 +1127,7 @@ public class Chunk
         if (!generating && addedUpdate)
         {
             world.AddBlockUpdateToNeighbors(x, y, z);
+            chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
         }
     }
     public int GetState(long x, long y, long z, int stateI)
@@ -1101,6 +1158,7 @@ public class Chunk
             if (!generating && addedUpdate)
             {
                 world.AddBlockUpdateToNeighbors(x, y, z);
+                chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
             }
         }
     }
@@ -1146,7 +1204,18 @@ public class ChunkData
         int totalLen = System.Math.Min(data.Length, chunkData.Length);
         for (int i = 0; i < totalLen; i++)
         {
-            if (data[i] != (int)BlockValue.WILDCARD)
+            if (i % 4 == 0)
+            {
+                if (data[i] != (int)BlockValue.WILDCARD)
+                {
+                    chunkData[i] = data[i];
+                }
+                else
+                {
+                    i += 4;
+                }
+            }
+            else
             {
                 chunkData[i] = data[i];
             }
@@ -1699,7 +1768,7 @@ public class World : BlockGetter
 {
     public static World mainWorld;
 
-    public const int numBlocks = 20;
+    public const int numBlocks = 30;
     public const int numBreakingFrames = 10;
 
     
@@ -1723,9 +1792,15 @@ public class World : BlockGetter
     {
         switch (block)
         {
+            case BlockValue.ROCK: return "Rock";
+            case BlockValue.SHARP_ROCK: return "Sharp Rock";
+            case BlockValue.LARGE_ROCK: return "Large Rock";
+            case BlockValue.LARGE_SHARP_ROCK: return "Large Sharp Rock";
             case BlockValue.CLAY: return "Clay"; ;
             case BlockValue.LEAF: return "Leaf"; ;
             case BlockValue.TRUNK: return "Log";
+            case BlockValue.BARK: return "Bark";
+            case BlockValue.LOOSE_ROCKS: return "Loose Rocks";
             case BlockValue.WATER_NOFLOW: return "Water (no flow)";
             case BlockValue.WATER: return "Water";
             case BlockValue.BEDROCK: return "Bedrock";
@@ -1736,7 +1811,7 @@ public class World : BlockGetter
             case BlockValue.WILDCARD: return "Wildcard";
             case BlockValue.CHEST: return "Chest";
             case BlockValue.EMPTY: return "Empty";
-            default: return "unknown";
+            default: return "unknown??";
         }
     }
 
@@ -1772,44 +1847,94 @@ public class World : BlockGetter
     public List<Structure> unfinishedStructures;
 
 
-    public bool DropBlockOnDestroy(BlockValue block, Vector3 positionOfBlock, Vector3 posOfOpening)
+    public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
     {
-        if (block == BlockValue.LOOSE_ROCKS)
+        using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
         {
-            if (Random.value < 0.8f)
+            if (block == BlockValue.WET_BARK)
             {
-                CreateBlockEntity(BlockValue.ROCK, posOfOpening);
-                return false;
+                for (int i = 0; i < 6; i++)
+                {
+                    if (i <= 1 || Random.value < 0.8f)
+                    {
+                        CreateBlockEntity(BlockValue.STRING, positionOfBlock + Random.insideUnitSphere * 0.1f);
+                    }
+                }
+                return true;
             }
-            else if (Random.value <= 0.2f)
+            else if (block == BlockValue.LOOSE_ROCKS)
             {
-                CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
-                return false;
+                if (blockData.state1 > 0)
+                {
+                    blockData.state1 -= 1;
+                    CreateBlockEntity(BlockValue.ROCK, posOfOpening);
+                    return false;
+                }
+                else
+                {
+                    CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
+                    return true;
+                }
+            }
+            else if (block == BlockValue.ROCK || block == BlockValue.LARGE_ROCK)
+            {
+                if (thingHolding == null)
+                {
+                    CreateBlockEntity(block, positionOfBlock);
+                }
+                else if (thingHolding.Block == BlockValue.ROCK || thingHolding.Block == BlockValue.LARGE_ROCK || thingHolding.Block == BlockValue.SHARP_ROCK || thingHolding.Block == BlockValue.LARGE_SHARP_ROCK || thingHolding.Block == BlockValue.SHOVEL || thingHolding.Block == BlockValue.PICKAXE || thingHolding.Block == BlockValue.AXE)
+                {
+                    if (block == BlockValue.ROCK)
+                    {
+                        CreateBlockEntity(BlockValue.SHARP_ROCK, positionOfBlock);
+                    }
+                    else // if(block == BlockValue.LARGE_ROCK)
+                    {
+                        CreateBlockEntity(BlockValue.LARGE_SHARP_ROCK, positionOfBlock);
+                    }
+                }
+                else
+                {
+                    CreateBlockEntity(block, positionOfBlock);
+                }
+            }
+            else if (block == BlockValue.LEAF)
+            {
+                if (Random.value < 0.8f)
+                {
+                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
+                }
+                else
+                {
+                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
+                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
+                }
+            }
+            else if (block == BlockValue.TRUNK)
+            {
+                if (blockData.state1 > 0)
+                {
+                    CreateBlockEntity(BlockValue.BARK, posOfOpening);
+                    blockData.state1 -= 1;
+                    return false;
+                }
+                else
+                {
+                    CreateBlockEntity(BlockValue.TRUNK, positionOfBlock);
+                }
             }
             else
             {
-                CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
-                return true;
+                CreateBlockEntity(block, positionOfBlock);
             }
+            return true;
         }
-        else if (block == BlockValue.LEAF)
-        {
-            if (Random.value < 0.8f)
-            {
-                CreateBlockEntity(BlockValue.STICK, positionOfBlock);
-            }
-        }
-        else
-        {
-            CreateBlockEntity(block, positionOfBlock);
-        }
-        return true;
     }
 
     public BlockValue[] items = new BlockValue[] {
         BlockValue.STICK,
-        BlockValue.ROCK,
-        BlockValue.LARGE_ROCK
+        BlockValue.SHARP_ROCK,
+        BlockValue.LARGE_SHARP_ROCK
     };
 
     public bool AllowedtoPlaceBlock(BlockValue block)
@@ -1862,6 +1987,10 @@ public class World : BlockGetter
         stackableSize[(int)BlockValue.STICK] = 64;
         stackableSize[(int)BlockValue.ROCK] = 64;
         stackableSize[(int)BlockValue.LARGE_ROCK] = 64;
+        stackableSize[(int)BlockValue.SHARP_ROCK] = 64;
+        stackableSize[(int)BlockValue.LARGE_SHARP_ROCK] = 64;
+        stackableSize[(int)BlockValue.BARK] = 64;
+        stackableSize[(int)BlockValue.STRING] = 64;
 
 
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -3190,9 +3319,15 @@ public class World : BlockGetter
 
     public void Render()
     {
+        // render non-transparent
         foreach (Chunk chunk in allChunks)
         {
-            chunk.chunkRenderer.Render();
+            chunk.chunkRenderer.Render(false);
+        }
+        // render transparent
+        foreach (Chunk chunk in allChunks)
+        {
+            chunk.chunkRenderer.Render(true);
         }
     }
 
@@ -3239,6 +3374,7 @@ public class BlocksWorld : MonoBehaviour {
     ComputeBuffer linesOffsets;
     Material outlineMaterial;
     public Material triMaterial;
+    public Material triMaterialWithTransparency;
     public Material breakingMaterial;
     public Transform renderTransform;
 
@@ -3529,6 +3665,8 @@ public class BlocksWorld : MonoBehaviour {
 
         triMaterial.SetBuffer("cubeOffsets", cubeOffsets);
         triMaterial.SetBuffer("uvOffsets", uvOffsets);
+        triMaterialWithTransparency.SetBuffer("cubeOffsets", cubeOffsets);
+        triMaterialWithTransparency.SetBuffer("uvOffsets", uvOffsets);
         breakingMaterial.SetBuffer("cubeOffsets", cubeOffsets);
         breakingMaterial.SetBuffer("uvOffsets", breakingUVOffsets);
 
@@ -3587,6 +3725,7 @@ public class BlocksWorld : MonoBehaviour {
 
         chunkBlockData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
         cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
+        cullBlocksShader.SetBuffer(1, "DataIn", chunkBlockData);
     }
 
     void LoadMaterials()
@@ -3609,6 +3748,26 @@ public class BlocksWorld : MonoBehaviour {
             lineMaterial.SetInt("_ZWrite", 0);
             */
             
+        }
+
+        if (!triMaterialWithTransparency)
+        {
+            // Unity has a built-in shader that is useful for drawing
+            // simple colored things.
+            Shader shader = Shader.Find("Unlit/SandDrawerWithTransparency");
+            triMaterialWithTransparency = new Material(shader);
+            triMaterialWithTransparency.hideFlags = HideFlags.HideAndDontSave;
+            // Turn on alpha blending
+            //lineMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            //lineMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+
+            // Turn backface culling off
+            //lineMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            /*
+            // Turn off depth writes
+            lineMaterial.SetInt("_ZWrite", 0);
+            */
+
         }
 
         if (!outlineMaterial)
@@ -3688,28 +3847,133 @@ public class BlocksWorld : MonoBehaviour {
 
 
 
-    public int MakeChunkTris(Chunk chunk)
+    public void MakeChunkTris(Chunk chunk, out int numNotTransparent, out int numTransparent)
     {
-        chunk.chunkRenderer.drawData.SetCounterValue(0);
-        chunkBlockData.SetData(chunk.chunkData.GetRawData());
-        cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawData);
-        cullBlocksShader.Dispatch(0, chunkSize/8, chunkSize / 8, chunkSize / 8);
         int[] args = new int[] { 0 };
-        ComputeBuffer.CopyCount(chunk.chunkRenderer.drawData, world.argBuffer, 0);
+
+
+        chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
+        chunkBlockData.SetData(chunk.chunkData.GetRawData());
+        // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+        cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+        cullBlocksShader.Dispatch(0, chunkSize/8, chunkSize / 8, chunkSize / 8);
+
+        ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
         world.argBuffer.GetData(args);
-        return args[0];
+        numNotTransparent = args[0];
+
+
+        chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
+        chunkBlockData.SetData(chunk.chunkData.GetRawData());
+        // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+        cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
+        cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+        ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
+        world.argBuffer.GetData(args);
+        numTransparent = args[0];
     }
 
     public Queue<Tuple<LVector3, float>> blocksBreaking = new Queue<Tuple<LVector3, float>>();
 
-    public float TimeNeededToBreak(BlockValue block, BlockStack itemHittingWith)
+    public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
     {
+        Debug.Log("calling time needed to break with block = " + World.BlockToString(block) + " and item hitting with = " + itemHittingWith);
         if (block == BlockValue.LOOSE_ROCKS)
         {
-            return 3.0f;
+            if (itemHittingWith == null)
+            {
+                return 1.0f;
+            }
+            else if (itemHittingWith.Block == BlockValue.PICKAXE)
+            {
+                return 0.3f;
+            }
+            else if(itemHittingWith.Block == BlockValue.SHOVEL || itemHittingWith.Block == BlockValue.AXE)
+            {
+                return 0.5f;
+            }
+            else
+            {
+                return 1.0f;
+            }
         }
-        else if (block == BlockValue.ROCK)
+        else if(block == BlockValue.ROCK || block == BlockValue.LARGE_ROCK)
         {
+            Debug.Log("hitting rock or large rock");
+            if (itemHittingWith == null)
+            {
+                Debug.Log("hitting rock or large rock with nothing");
+                return 0.0f;
+            }
+            else
+            {
+                Debug.Log("hitting rock or large rock with " + World.BlockToString(itemHittingWith.Block));
+                if (itemHittingWith.Block == BlockValue.ROCK || itemHittingWith.Block == BlockValue.SHARP_ROCK)
+                {
+                    Debug.Log("hitting rock or large rock with ROCK or SHARP ROCK");
+                    if (block == BlockValue.ROCK)
+                    {
+                        return 4.0f;
+                    }
+                    else if (block == BlockValue.LARGE_ROCK)
+                    {
+                        return 7.0f;
+                    }
+                }
+                else if (itemHittingWith.Block == BlockValue.LARGE_ROCK || itemHittingWith.Block == BlockValue.LARGE_SHARP_ROCK)
+                {
+                    Debug.Log("hitting rock or large rock with LARGE ROCK or LARGE SHARP ROCK");
+                    if (block == BlockValue.ROCK)
+                    {
+                        return 2.0f;
+                    }
+                    else if (block == BlockValue.LARGE_ROCK)
+                    {
+                        return 4.0f;
+                    }
+                }
+                else if (itemHittingWith.Block == BlockValue.PICKAXE)
+                {
+                    if (block == BlockValue.ROCK)
+                    {
+                        return 0.7f;
+                    }
+                    else if (block == BlockValue.LARGE_ROCK)
+                    {
+                        return 1.5f;
+                    }
+                }
+                else if (itemHittingWith.Block == BlockValue.SHOVEL || itemHittingWith.Block == BlockValue.AXE)
+                {
+                    if (block == BlockValue.ROCK)
+                    {
+                        return 1.5f;
+                    }
+                    else if (block == BlockValue.LARGE_ROCK)
+                    {
+                        return 3.0f;
+                    }
+                }
+                else
+                {
+                    return 0.0f;
+                }
+            }
+        }
+        else if(block == BlockValue.BARK)
+        {
+            return 0.0f;
+        }
+        else if(block == BlockValue.WET_BARK)
+        {
+            return 0.0f;
+        }
+        else if (block == BlockValue.STONE)
+        {
+            if (itemHittingWith != null && itemHittingWith.Block == BlockValue.PICKAXE)
+            {
+                return 3.0f;
+            }
             return 20.0f;
         }
         else if (block == BlockValue.SAND)
@@ -3734,14 +3998,54 @@ public class BlocksWorld : MonoBehaviour {
         }
         else if(block == BlockValue.TRUNK)
         {
-            return 10.0f;
+            using (BlockData blockData = world.GetBlockData(blockPos.x, blockPos.y, blockPos.z))
+            {
+                if (blockData.state1 > 0)
+                {
+                    if (itemHittingWith == null)
+                    {
+                        return 1.0f;
+                    }
+                    else if (itemHittingWith.Block == BlockValue.AXE)
+                    {
+                        return 0.5f;
+                    }
+                    else
+                    {
+                        return 1.0f;
+                    }
+                }
+                else
+                {
+                    if (itemHittingWith == null)
+                    {
+                        return 10.0f;
+                    }
+                    else if (itemHittingWith.Block == BlockValue.AXE)
+                    {
+                        return 2.0f;
+                    }
+                    else
+                    {
+                        return 10.0f;
+                    }
+                }
+            }
+        }
+        if (itemHittingWith == null)
+        {
+            Debug.Log("warning, fell through, block = " + World.BlockToString(block) + " and block hitting with = " + itemHittingWith);
+        }
+        else
+        {
+            Debug.Log("warning, fell through, block = " + World.BlockToString(block) + " and block hitting with = " + World.BlockToString(itemHittingWith.Block));
         }
         return 100.0f;
     }
 
     public bool RenderBlockBreaking(long x, long y, long z, BlockValue blockHitting, float timeHitting, BlockStack itemHittingWith)
     {
-        float timeNeeded = TimeNeededToBreak(blockHitting, itemHittingWith);
+        float timeNeeded = TimeNeededToBreak(new LVector3(x,y,z), blockHitting, itemHittingWith);
         if (timeHitting > timeNeeded)
         {
             return true;
@@ -3774,7 +4078,7 @@ public class BlocksWorld : MonoBehaviour {
         renderTransform.transform.position -= offset;
     }
 
-    public void RenderChunk(Chunk chunk)
+    public void RenderChunk(Chunk chunk, bool onlyTransparent)
     {
         //if (Camera.current != transform.GetComponent<Camera>() || settings.isOn)
         //{
@@ -3798,20 +4102,34 @@ public class BlocksWorld : MonoBehaviour {
 
         if (Camera.current != uiCamera)
         {
-            triMaterial.SetBuffer("DrawingThings", chunk.chunkRenderer.drawData);
-            triMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-            triMaterial.SetInt("ptCloudWidth", chunkSize);
-            //triMaterial.SetBuffer("PixelData", sandPixelData);
-            triMaterial.SetFloat("ptCloudScale", worldScale);
-            triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
-            triMaterial.SetPass(0);
-            Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubes * (36));
+            if (onlyTransparent)
+            {
+                triMaterialWithTransparency.SetBuffer("DrawingThings", chunk.chunkRenderer.drawDataTransparent);
+                triMaterialWithTransparency.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                triMaterialWithTransparency.SetInt("ptCloudWidth", chunkSize);
+                //triMaterial.SetBuffer("PixelData", sandPixelData);
+                triMaterialWithTransparency.SetFloat("ptCloudScale", worldScale);
+                triMaterialWithTransparency.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                triMaterialWithTransparency.SetPass(0);
+                Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesTransparent * (36));
+            }
+            else
+            {
+                triMaterial.SetBuffer("DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+                triMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                triMaterial.SetInt("ptCloudWidth", chunkSize);
+                //triMaterial.SetBuffer("PixelData", sandPixelData);
+                triMaterial.SetFloat("ptCloudScale", worldScale);
+                triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                triMaterial.SetPass(0);
+                Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent * (36));
+            }
         }
         renderTransform.transform.position -= offset;
     }
 
     LVector3 blockBreaking;
-    void OnRenderObject()
+    public void RenderWorld()
     {
         world.Render();
         while (blocksBreaking.Count > 0)

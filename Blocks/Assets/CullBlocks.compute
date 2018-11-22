@@ -1,10 +1,11 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+#pragma kernel CSMainNoTransparent
+#pragma kernel CSMainOnlyTransparent
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWStructuredBuffer<int4> DataIn;
-AppendStructuredBuffer<uint4> DrawingThings;
+AppendStructuredBuffer<int4> DrawingThings;
 
 
 #define CHUNK_SIZE 16
@@ -16,7 +17,7 @@ int T3(uint3 id)
 
 
 [numthreads(8,8,8)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+void CSMainNoTransparent(uint3 id : SV_DispatchThreadID)
 {
 	int blockVal = DataIn[T3(id)].x;
 	// 0 is air
@@ -25,12 +26,32 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
 
 	bool hasAirNeighbors =
-		DataIn[T3(ids + int3(0, 0, 1))] == 0 || DataIn[T3(ids + int3(0, 0, -1))] == 0 ||
-		DataIn[T3(ids + int3(0, 1, 0))] == 0 || DataIn[T3(ids + int3(0, -1, 0))] == 0 ||
-		DataIn[T3(ids + int3(1, 0, 0))] == 0 || DataIn[T3(ids + int3(-1, 0, 0))] == 0;
+		DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
+		DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
+		DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
 
-	if (blockVal != 0 && (edge || hasAirNeighbors))
+	if (blockVal > 0 && (edge || hasAirNeighbors))
 	{
-		DrawingThings.Append(uint4(id.x, id.y, id.z, blockVal));
+		DrawingThings.Append(int4(id.x, id.y, id.z, blockVal));
+	}
+}
+
+[numthreads(8, 8, 8)]
+void CSMainOnlyTransparent(uint3 id : SV_DispatchThreadID)
+{
+	int blockVal = DataIn[T3(id)].x;
+	// 0 is air
+
+	int3 ids = id;
+	bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
+
+	bool hasAirNeighbors =
+		DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
+		DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
+		DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
+
+	if (blockVal < 0 && (edge || hasAirNeighbors))
+	{
+		DrawingThings.Append(int4(id.x, id.y, id.z, blockVal));
 	}
 }

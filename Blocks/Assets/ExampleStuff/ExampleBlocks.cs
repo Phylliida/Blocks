@@ -43,3 +43,25 @@ public class Clay : Block
     {
     }
 }
+
+
+
+public class Bark : Block
+{
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = true;
+        foreach (BlockData neighbor in Get26Neighbors(block))
+        {
+            if (neighbor.block == BlockValue.WATER || neighbor.block == BlockValue.WATER_NOFLOW)
+            {
+                if (Random.value < 0.05f)
+                {
+                    block.block = BlockValue.WET_BARK;
+                    block.needsAnotherTick = false;
+                    break;
+                }
+            }
+        }
+    }
+}
