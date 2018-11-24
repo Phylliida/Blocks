@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -115,7 +116,7 @@ public class Recipe
                                 BlockValue recipeCur = recipe[recipe.GetLength(0)-j-1, i];
                                 if (cur == null)
                                 {
-                                    if (recipeCur == BlockValue.AIR || recipeCur == BlockValue.EMPTY)
+                                    if (recipeCur == BlockValue.Air)
                                     {
                                         Debug.Log(x + " " + y + "inventory empty here and recipe is too, recipeCur=" + World.BlockToString((int)recipeCur));
                                         numMatches += 1;

@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Example_pack;
 
 public class CraftingDesk : InventoryListener {
 
@@ -60,37 +61,37 @@ public class CraftingDesk : InventoryListener {
         // ordered recipe: requires this shape
         Recipe makingChest = new Recipe(new BlockValue[,]
         {
-            { BlockValue.EMPTY, BlockValue.STONE },
-            { BlockValue.TRUNK, BlockValue.EMPTY },
-        }, new BlockStack(BlockValue.CHEST, 1));
+            { BlockValue.Rock, BlockValue.Rock },
+            { BlockValue.Rock, BlockValue.Rock },
+        }, new BlockStack(BlockValue.CraftingTable, 1));
 
 
         recipes.Add(new Recipe(new BlockValue[,]
         {
-            { BlockValue.EMPTY, BlockValue.LARGE_ROCK,  BlockValue.EMPTY},
-            { BlockValue.STRING, BlockValue.STICK, BlockValue.STRING },
-            { BlockValue.EMPTY, BlockValue.STICK, BlockValue.EMPTY }
-        }, new BlockStack(BlockValue.SHOVEL, 1)));
+            { BlockValue.Air, BlockValue.LargeRock,  BlockValue.Air},
+            { BlockValue.String, BlockValue.Stick, BlockValue.String },
+            { BlockValue.Air, BlockValue.Stick, BlockValue.Air }
+        }, new BlockStack(BlockValue.Shovel, 1)));
 
 
         recipes.Add(new Recipe(new BlockValue[,]
         {
-            { BlockValue.EMPTY, BlockValue.LARGE_SHARP_ROCK,  BlockValue.EMPTY},
-            { BlockValue.STRING, BlockValue.STICK, BlockValue.STRING },
-            { BlockValue.EMPTY, BlockValue.STICK, BlockValue.EMPTY }
-        }, new BlockStack(BlockValue.AXE, 1)));
+            { BlockValue.Air, BlockValue.LargeSharpRock,  BlockValue.Air},
+            { BlockValue.String, BlockValue.Stick, BlockValue.String },
+            { BlockValue.Air, BlockValue.Stick, BlockValue.Air }
+        }, new BlockStack(BlockValue.Axe, 1)));
 
 
         recipes.Add(new Recipe(new BlockValue[,]
         {
-            { BlockValue.LARGE_SHARP_ROCK, BlockValue.LARGE_ROCK,  BlockValue.LARGE_SHARP_ROCK},
-            { BlockValue.STRING, BlockValue.STICK, BlockValue.STRING },
-            { BlockValue.EMPTY, BlockValue.STICK, BlockValue.EMPTY }
-        }, new BlockStack(BlockValue.PICKAXE, 1)));
+            { BlockValue.LargeSharpRock, BlockValue.LargeRock,  BlockValue.LargeSharpRock},
+            { BlockValue.String, BlockValue.Stick, BlockValue.String },
+            { BlockValue.Air, BlockValue.Stick, BlockValue.Air }
+        }, new BlockStack(BlockValue.Pickaxe, 1)));
 
         // unordered recipe: any shape is ok as long as it has these ingredients somewhere in it
         //Recipe makingSharpRock = new Recipe(new BlockValue[]
-        //{BlockValue.ROCK, BlockValue.ROCK, BlockValue.ROCK}, new BlockStack(BlockValue.SHARP_ROCK, 1));
+        //{BlockValue.ROCK, BlockValue.ROCK, BlockValue.ROCK}, new BlockStack(BlockValue.SharpRock, 1));
 
 
         recipes.Add(makingChest);

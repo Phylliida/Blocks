@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -21,7 +22,6 @@ public class BlocksPlayer : MonoBehaviour
     int hotbarSize = 8;
     public void Start()
     {
-        blockPlacing = (int)BlockValue.GRASS;
         inventory = new Inventory(16);
         inventoryGui.playerUsing = this;
         inventoryGui.inventory = inventory;
@@ -169,13 +169,13 @@ public class BlocksPlayer : MonoBehaviour
                 }
                 curBlockBreaking = hitResults.hitBlock;
                 timeBreaking += Time.deltaTime;
-                if(World.mainWorld.blocksWorld.RenderBlockBreaking(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z, (BlockValue)hitResults.hitBlock.Block, timeBreaking, inventory.blocks[inventoryGui.selection]))
+                if(World.mainWorld.blocksWorld.RenderBlockBreaking(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z, hitResults.hitBlock.BlockV, timeBreaking, inventory.blocks[inventoryGui.selection]))
                 {
                     timeBreaking = 0.0f;
                     //Debug.Log("hit at pos " + hitPos);
-                    if(World.mainWorld.DropBlockOnDestroy((BlockValue)hitResults.hitBlock.Block, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
+                    if(World.mainWorld.DropBlockOnDestroy(hitResults.hitBlock.BlockV, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                     {
-                        if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                        if (hitResults.hitBlock.BlockV == BlockValue.CraftingTable && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                         {
                             Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
                             chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
@@ -206,7 +206,7 @@ public class BlocksPlayer : MonoBehaviour
                 LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
                 LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                 LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-                if (hitResults.hitBlock.Block == (int)BlockValue.CHEST && showingHotbarOnly)
+                if (hitResults.hitBlock.Block == (int)BlockValue.CraftingTable && showingHotbarOnly)
                 {
                     Inventory blockInventory;
                     if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
@@ -263,51 +263,7 @@ public class BlocksPlayer : MonoBehaviour
         }
 
         body.jumping = Input.GetKey(KeyCode.Space);
-
-        if (Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            blockPlacing = (int)BlockValue.GRASS;
-            Debug.Log("placing grass");
-        }
-
-        if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            blockPlacing = (int)BlockValue.DIRT;
-            Debug.Log("placing dirt");
-        }
-
-        if (Input.GetKeyDown(KeyCode.Alpha3))
-        {
-            blockPlacing = (int)BlockValue.STONE;
-            Debug.Log("placing stone");
-        }
-
-
-        if (Input.GetKeyDown(KeyCode.Alpha4))
-        {
-            blockPlacing = (int)BlockValue.SAND;
-            Debug.Log("placing sand");
-        }
-
-        if (Input.GetKeyDown(KeyCode.Alpha5))
-        {
-            blockPlacing = (int)BlockValue.BEDROCK;
-            Debug.Log("placing bedrock");
-        }
-
-
-        if (Input.GetKeyDown(KeyCode.Alpha6))
-        {
-            blockPlacing = (int)BlockValue.WATER;
-            Debug.Log("placing water");
-        }
-
-
-        if (Input.GetKeyDown(KeyCode.Alpha7))
-        {
-            blockPlacing = (int)BlockValue.WATER_NOFLOW;
-            Debug.Log("placing pushed water");
-        }
+        
 
         Vector3 desiredMove = Vector3.zero;
         if (Input.GetKey(KeyCode.W))

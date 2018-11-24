@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,12 +19,12 @@ public class Grass : Block
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
             // if neighbor is dirt and it has air above it, try growing into it
-            if (neighbor.block == BlockValue.DIRT && GetBlock(neighbor.x, neighbor.y+1, neighbor.z) == BlockValue.AIR)
+            if (neighbor.block == BlockValue.Dirt && GetBlock(neighbor.x, neighbor.y+1, neighbor.z) == BlockValue.Air)
             {
                 if (rand() < 0.01f)
                 {
                     // grow
-                    neighbor.block = BlockValue.GRASS;
+                    neighbor.block = BlockValue.Grass;
                 }
                 else
                 {
@@ -53,11 +54,11 @@ public class Bark : Block
         block.needsAnotherTick = true;
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
-            if (neighbor.block == BlockValue.WATER || neighbor.block == BlockValue.WATER_NOFLOW)
+            if (neighbor.block == BlockValue.Water || neighbor.block == BlockValue.WaterNoFlow)
             {
                 if (Random.value < 0.05f)
                 {
-                    block.block = BlockValue.WET_BARK;
+                    block.block = BlockValue.WetBark;
                     block.needsAnotherTick = false;
                     break;
                 }

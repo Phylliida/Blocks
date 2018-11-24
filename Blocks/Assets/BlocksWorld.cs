@@ -1,5 +1,7 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 
@@ -269,6 +271,7 @@ public class ChunkBiomeData
 
 }
 
+/*
 public enum BlockValue
 {
     AXE = -24,
@@ -295,9 +298,11 @@ public enum BlockValue
     GRASS = 3,
     STONE = 2,
     SAND = 1,
-    AIR = 0,
-    WILDCARD = -1
+    Air = 0,
+    Wildcard = -1
 }
+*/
+
 
 public class BlockData : System.IDisposable
 {
@@ -338,7 +343,7 @@ public class BlockData : System.IDisposable
     int cachedState1 = 0;
     int cachedState2 = 0;
     int cachedState3 = 0;
-    BlockValue cachedBlock = BlockValue.AIR;
+    BlockValue cachedBlock = BlockValue.Air;
 
     public int state1 { get { if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, 1); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state1) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
     public int state2 { get { if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, 2); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != state2) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
@@ -1060,7 +1065,7 @@ public class Chunk
                                 chunkData.AddBlockUpdate(x, y, z - 1);
                                 chunkData.AddBlockUpdate(x, y, z + 1);
                             }
-                            if (block.block == BlockValue.AIR)
+                            if (block.block == BlockValue.Air)
                             {
                                 block.state1 = 0;
                                 block.state2 = 0;
@@ -1193,7 +1198,7 @@ public class ChunkData
         {
             for (int i= 0; i < data.Length; i++)
             {
-                data[i] = (int)BlockValue.WILDCARD;
+                data[i] = (int)BlockValue.Wildcard;
             }
         }
     }
@@ -1206,7 +1211,7 @@ public class ChunkData
         {
             if (i % 4 == 0)
             {
-                if (data[i] != (int)BlockValue.WILDCARD)
+                if (data[i] != (int)BlockValue.Wildcard)
                 {
                     chunkData[i] = data[i];
                 }
@@ -1561,7 +1566,7 @@ public class Structure : BlockGetter
             blockModifyState += 1;
             if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
-                if ((BlockValue)value != BlockValue.WILDCARD)
+                if ((BlockValue)value != BlockValue.Wildcard)
                 {
                     baseChunk[x, y, z] = value;
                 }
@@ -1586,7 +1591,7 @@ public class Structure : BlockGetter
                 }
                 else
                 {
-                    if ((BlockValue)value != BlockValue.WILDCARD)
+                    if ((BlockValue)value != BlockValue.Wildcard)
                     {
                         bool wasGenerating = chunk.generating;
                         chunk.generating = true;
@@ -1768,7 +1773,7 @@ public class World : BlockGetter
 {
     public static World mainWorld;
 
-    public const int numBlocks = 30;
+    public const int numBlocks = 64;
     public const int numBreakingFrames = 10;
 
     
@@ -1790,29 +1795,39 @@ public class World : BlockGetter
 
     public static string BlockToString(BlockValue block)
     {
+        try
+        {
+
+            return BlockUtils.BlockIdToString((int)block);
+        }
+        catch
+        {
+            return "Unknown block id " + (int)block;
+        }
+        /*
         switch (block)
         {
-            case BlockValue.ROCK: return "Rock";
-            case BlockValue.SHARP_ROCK: return "Sharp Rock";
-            case BlockValue.LARGE_ROCK: return "Large Rock";
-            case BlockValue.LARGE_SHARP_ROCK: return "Large Sharp Rock";
-            case BlockValue.CLAY: return "Clay"; ;
-            case BlockValue.LEAF: return "Leaf"; ;
-            case BlockValue.TRUNK: return "Log";
-            case BlockValue.BARK: return "Bark";
-            case BlockValue.LOOSE_ROCKS: return "Loose Rocks";
-            case BlockValue.WATER_NOFLOW: return "Water (no flow)";
-            case BlockValue.WATER: return "Water";
-            case BlockValue.BEDROCK: return "Bedrock";
-            case BlockValue.DIRT: return "Dirt";
-            case BlockValue.GRASS: return "Grass";
-            case BlockValue.STONE: return "Stone";
-            case BlockValue.AIR: return "Air";
-            case BlockValue.WILDCARD: return "Wildcard";
-            case BlockValue.CHEST: return "Chest";
-            case BlockValue.EMPTY: return "Empty";
+            case BlockValue.Rock: return "Rock";
+            case BlockValue.SharpRock: return "Sharp Rock";
+            case BlockValue.LargeRock: return "Large Rock";
+            case BlockValue.LargeSharpRock: return "Large Sharp Rock";
+            case BlockValue.Clay: return "Clay"; ;
+            //case BlockValue.LEAF: return "Leaf"; ;
+           // case BlockValue.TRUNK: return "Log";
+            case BlockValue.Bark: return "Bark";
+            case BlockValue.LooseRocks: return "Loose Rocks";
+            case BlockValue.WaterNoFlow: return "Water (no flow)";
+            case BlockValue.Water: return "Water";
+            case BlockValue.Bedrock: return "Bedrock";
+            case BlockValue.Dirt: return "Dirt";
+            case BlockValue.Grass: return "Grass";
+            case BlockValue.Stone: return "Stone";
+            case BlockValue.Air: return "Air";
+            case BlockValue.Wildcard: return "Wildcard";
+            case BlockValue.CraftingTable: return "Chest";
             default: return "unknown??";
         }
+        */
     }
 
     public float worldScale
@@ -1851,46 +1866,46 @@ public class World : BlockGetter
     {
         using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
         {
-            if (block == BlockValue.WET_BARK)
+            if (block == BlockValue.WetBark)
             {
                 for (int i = 0; i < 6; i++)
                 {
                     if (i <= 1 || Random.value < 0.8f)
                     {
-                        CreateBlockEntity(BlockValue.STRING, positionOfBlock + Random.insideUnitSphere * 0.1f);
+                        CreateBlockEntity(BlockValue.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
                     }
                 }
                 return true;
             }
-            else if (block == BlockValue.LOOSE_ROCKS)
+            else if (block == BlockValue.LooseRocks)
             {
                 if (blockData.state1 > 0)
                 {
                     blockData.state1 -= 1;
-                    CreateBlockEntity(BlockValue.ROCK, posOfOpening);
+                    CreateBlockEntity(BlockValue.Rock, posOfOpening);
                     return false;
                 }
                 else
                 {
-                    CreateBlockEntity(BlockValue.LARGE_ROCK, posOfOpening);
+                    CreateBlockEntity(BlockValue.LargeRock, posOfOpening);
                     return true;
                 }
             }
-            else if (block == BlockValue.ROCK || block == BlockValue.LARGE_ROCK)
+            else if (block == BlockValue.Rock || block == BlockValue.LargeRock)
             {
                 if (thingHolding == null)
                 {
                     CreateBlockEntity(block, positionOfBlock);
                 }
-                else if (thingHolding.Block == BlockValue.ROCK || thingHolding.Block == BlockValue.LARGE_ROCK || thingHolding.Block == BlockValue.SHARP_ROCK || thingHolding.Block == BlockValue.LARGE_SHARP_ROCK || thingHolding.Block == BlockValue.SHOVEL || thingHolding.Block == BlockValue.PICKAXE || thingHolding.Block == BlockValue.AXE)
+                else if (thingHolding.Block == BlockValue.Rock || thingHolding.Block == BlockValue.LargeRock || thingHolding.Block == BlockValue.SharpRock || thingHolding.Block == BlockValue.LargeSharpRock || thingHolding.Block == BlockValue.Shovel || thingHolding.Block == BlockValue.Pickaxe || thingHolding.Block == BlockValue.Axe)
                 {
-                    if (block == BlockValue.ROCK)
+                    if (block == BlockValue.Rock)
                     {
-                        CreateBlockEntity(BlockValue.SHARP_ROCK, positionOfBlock);
+                        CreateBlockEntity(BlockValue.SharpRock, positionOfBlock);
                     }
                     else // if(block == BlockValue.LARGE_ROCK)
                     {
-                        CreateBlockEntity(BlockValue.LARGE_SHARP_ROCK, positionOfBlock);
+                        CreateBlockEntity(BlockValue.LargeSharpRock, positionOfBlock);
                     }
                 }
                 else
@@ -1898,29 +1913,29 @@ public class World : BlockGetter
                     CreateBlockEntity(block, positionOfBlock);
                 }
             }
-            else if (block == BlockValue.LEAF)
+            else if (block == BlockValue.Leaf)
             {
                 if (Random.value < 0.8f)
                 {
-                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
+                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
                 }
                 else
                 {
-                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
-                    CreateBlockEntity(BlockValue.STICK, positionOfBlock);
+                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
+                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
                 }
             }
-            else if (block == BlockValue.TRUNK)
+            else if (block == BlockValue.Trunk)
             {
                 if (blockData.state1 > 0)
                 {
-                    CreateBlockEntity(BlockValue.BARK, posOfOpening);
+                    CreateBlockEntity(BlockValue.Bark, posOfOpening);
                     blockData.state1 -= 1;
                     return false;
                 }
                 else
                 {
-                    CreateBlockEntity(BlockValue.TRUNK, positionOfBlock);
+                    CreateBlockEntity(BlockValue.Trunk, positionOfBlock);
                 }
             }
             else
@@ -1932,9 +1947,9 @@ public class World : BlockGetter
     }
 
     public BlockValue[] items = new BlockValue[] {
-        BlockValue.STICK,
-        BlockValue.SHARP_ROCK,
-        BlockValue.LARGE_SHARP_ROCK
+        BlockValue.Stick,
+        BlockValue.SharpRock,
+        BlockValue.LargeSharpRock
     };
 
     public bool AllowedtoPlaceBlock(BlockValue block)
@@ -1977,20 +1992,20 @@ public class World : BlockGetter
 
 
         stackableSize = new Dictionary<int, int>();
-        stackableSize[(int)BlockValue.DIRT] = 16;
-        stackableSize[(int)BlockValue.STONE] = 45;
-        stackableSize[(int)BlockValue.GRASS] = 64;
-        stackableSize[(int)BlockValue.SAND] = 32;
-        stackableSize[(int)BlockValue.BEDROCK] = 16;
-        stackableSize[(int)BlockValue.CLAY] = 64;
-        stackableSize[(int)BlockValue.LEAF] = 64;
-        stackableSize[(int)BlockValue.STICK] = 64;
-        stackableSize[(int)BlockValue.ROCK] = 64;
-        stackableSize[(int)BlockValue.LARGE_ROCK] = 64;
-        stackableSize[(int)BlockValue.SHARP_ROCK] = 64;
-        stackableSize[(int)BlockValue.LARGE_SHARP_ROCK] = 64;
-        stackableSize[(int)BlockValue.BARK] = 64;
-        stackableSize[(int)BlockValue.STRING] = 64;
+        stackableSize[(int)BlockValue.Dirt] = 16;
+        stackableSize[(int)BlockValue.Stone] = 45;
+        stackableSize[(int)BlockValue.Grass] = 64;
+        stackableSize[(int)BlockValue.Sand] = 32;
+        stackableSize[(int)BlockValue.Bedrock] = 16;
+        stackableSize[(int)BlockValue.Clay] = 64;
+        stackableSize[(int)BlockValue.Leaf] = 64;
+        stackableSize[(int)BlockValue.Stick] = 64;
+        stackableSize[(int)BlockValue.Rock] = 64;
+        stackableSize[(int)BlockValue.LargeRock] = 64;
+        stackableSize[(int)BlockValue.SharpRock] = 64;
+        stackableSize[(int)BlockValue.LargeSharpRock] = 64;
+        stackableSize[(int)BlockValue.Bark] = 64;
+        stackableSize[(int)BlockValue.String] = 64;
 
 
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -2007,12 +2022,12 @@ public class World : BlockGetter
         unfinishedStructures = new List<Structure>();
 
         maxCapacities = new Dictionary<int, int>();
-        maxCapacities[(int)BlockValue.DIRT] = 3;
-        maxCapacities[(int)BlockValue.STONE] = 5;
-        maxCapacities[(int)BlockValue.GRASS] = 4;
-        maxCapacities[(int)BlockValue.SAND] = 0;
-        maxCapacities[(int)BlockValue.AIR] = 0;
-        maxCapacities[(int)BlockValue.BEDROCK] = 6;
+        maxCapacities[(int)BlockValue.Dirt] = 3;
+        maxCapacities[(int)BlockValue.Stone] = 5;
+        maxCapacities[(int)BlockValue.Grass] = 4;
+        maxCapacities[(int)BlockValue.Sand] = 0;
+        maxCapacities[(int)BlockValue.Air] = 0;
+        maxCapacities[(int)BlockValue.Bedrock] = 6;
 
         int viewDist = 5;
         this.worldGeneration.world = this;
@@ -2128,7 +2143,7 @@ public class World : BlockGetter
 
     public bool NeedsInitialUpdate(int block)
     {
-        if (block == (int)BlockValue.GRASS)
+        if (block == (int)BlockValue.Grass)
         {
             return true;
         }
@@ -2151,11 +2166,11 @@ public class World : BlockGetter
 
     public int TrickleSupportPowerUp(int blockFrom, int powerFrom, int blockTo)
     {
-        if (blockTo == (int)BlockValue.AIR)
+        if (blockTo == (int)BlockValue.Air)
         {
             return 0;
         }
-        if (blockFrom == (int)BlockValue.AIR)
+        if (blockFrom == (int)BlockValue.Air)
         {
             return 0;
         }
@@ -2169,11 +2184,11 @@ public class World : BlockGetter
     }
     public int TrickleSupportPowerSidewaysOrDown(int blockFrom, int powerFrom, int blockTo)
     {
-        if (blockTo == (int)BlockValue.AIR)
+        if (blockTo == (int)BlockValue.Air)
         {
             return 0;
         }
-        if (blockFrom == (int)BlockValue.AIR)
+        if (blockFrom == (int)BlockValue.Air)
         {
             return 0;
         }
@@ -2378,33 +2393,33 @@ public class World : BlockGetter
     //        else tp there as unpushed
     //     if not found, replace self with "not pushed"
     
-    // if a unpushed water block gets an update, flood fill back and replace all water on top of water with pushed water
+    // if a unpushed water block gets an update, flood fill back and replace all wate on top of water with pushed water
      
 
     public bool IsWater(int block)
     {
-        return block == (int)BlockValue.WATER || block == (int)BlockValue.WATER_NOFLOW;
+        return block == (int)BlockValue.Water || block == (int)BlockValue.WaterNoFlow;
     }
     
     public int GetNumAirNeighbors(long wx, long wy, long wz)
     {
         return
-            (this[wx + 1, wy, wz] == (int)BlockValue.AIR ? 1 : 0) +
-            (this[wx - 1, wy, wz] == (int)BlockValue.AIR ? 1 : 0) +
-            (this[wx, wy + 1, wz] == (int)BlockValue.AIR ? 1 : 0) +
-            (this[wx, wy - 1, wz] == (int)BlockValue.AIR ? 1 : 0) +
-            (this[wx, wy, wz + 1] == (int)BlockValue.AIR ? 1 : 0) +
-            (this[wx, wy, wz - 1] == (int)BlockValue.AIR ? 1 : 0);
+            (this[wx + 1, wy, wz] == (int)BlockValue.Air ? 1 : 0) +
+            (this[wx - 1, wy, wz] == (int)BlockValue.Air ? 1 : 0) +
+            (this[wx, wy + 1, wz] == (int)BlockValue.Air ? 1 : 0) +
+            (this[wx, wy - 1, wz] == (int)BlockValue.Air ? 1 : 0) +
+            (this[wx, wy, wz + 1] == (int)BlockValue.Air ? 1 : 0) +
+            (this[wx, wy, wz - 1] == (int)BlockValue.Air ? 1 : 0);
 
     }
 
     public int GetWaterAirOnlyAbove(long wx, long wy, long wz)
     {
-        if (this[wx, wy+1, wz] == (int)BlockValue.AIR &&
-            this[wx+1, wy, wz] != (int)BlockValue.AIR &&
-            this[wx-1, wy, wz] != (int)BlockValue.AIR &&
-            this[wx, wy, wz+1] != (int)BlockValue.AIR &&
-            this[wx, wy, wz-1] != (int)BlockValue.AIR)
+        if (this[wx, wy+1, wz] == (int)BlockValue.Air &&
+            this[wx+1, wy, wz] != (int)BlockValue.Air &&
+            this[wx-1, wy, wz] != (int)BlockValue.Air &&
+            this[wx, wy, wz+1] != (int)BlockValue.Air &&
+            this[wx, wy, wz-1] != (int)BlockValue.Air)
         {
             return 1;
         }
@@ -2421,24 +2436,24 @@ public class World : BlockGetter
     public int GetNewerWaterNeighborValues(long wx, long wy, long wz, int state1)
     {
         return
-            ((this[wx + 1, wy, wz] == (int)BlockValue.WATER && GetState(wx + 1, wy, wz, 1) < state1) ? GetState(wx + 1, wy, wz, 2) : 0) +
-            ((this[wx - 1, wy, wz] == (int)BlockValue.WATER && GetState(wx - 1, wy, wz, 1) < state1) ? GetState(wx - 1, wy, wz, 2) : 0) +
-            ((this[wx, wy + 1, wz] == (int)BlockValue.WATER && GetState(wx, wy + 1, wz, 1) < state1) ? GetState(wx, wy + 1, wz, 2) : 0) +
-            ((this[wx, wy - 1, wz] == (int)BlockValue.WATER && GetState(wx, wy - 1, wz, 1) < state1) ? GetState(wx, wy - 1, wz, 2) : 0) +
-            ((this[wx, wy, wz + 1] == (int)BlockValue.WATER && GetState(wx, wy, wz + 1, 1) < state1) ? GetState(wx, wy, wz + 1, 2) : 0) +
-            ((this[wx, wy, wz - 1] == (int)BlockValue.WATER && GetState(wx, wy, wz - 1, 1) < state1) ? GetState(wx, wy, wz - 1, 2) : 0);
+            ((this[wx + 1, wy, wz] == (int)BlockValue.Water && GetState(wx + 1, wy, wz, 1) < state1) ? GetState(wx + 1, wy, wz, 2) : 0) +
+            ((this[wx - 1, wy, wz] == (int)BlockValue.Water && GetState(wx - 1, wy, wz, 1) < state1) ? GetState(wx - 1, wy, wz, 2) : 0) +
+            ((this[wx, wy + 1, wz] == (int)BlockValue.Water && GetState(wx, wy + 1, wz, 1) < state1) ? GetState(wx, wy + 1, wz, 2) : 0) +
+            ((this[wx, wy - 1, wz] == (int)BlockValue.Water && GetState(wx, wy - 1, wz, 1) < state1) ? GetState(wx, wy - 1, wz, 2) : 0) +
+            ((this[wx, wy, wz + 1] == (int)BlockValue.Water && GetState(wx, wy, wz + 1, 1) < state1) ? GetState(wx, wy, wz + 1, 2) : 0) +
+            ((this[wx, wy, wz - 1] == (int)BlockValue.Water && GetState(wx, wy, wz - 1, 1) < state1) ? GetState(wx, wy, wz - 1, 2) : 0);
     }
 
     // water state 3 = air accessable by me + air accessable by olders (sum of state 3 of olders)
     public int GetOlderWaterNeighborValues(long wx, long wy, long wz, int state1)
     {
         return
-            ((this[wx + 1, wy, wz] == (int)BlockValue.WATER && GetState(wx + 1, wy, wz, 1) > state1) ? GetState(wx + 1, wy, wz, 3) : 0) +
-            ((this[wx - 1, wy, wz] == (int)BlockValue.WATER && GetState(wx - 1, wy, wz, 1) > state1) ? GetState(wx - 1, wy, wz, 3) : 0) +
-            ((this[wx, wy + 1, wz] == (int)BlockValue.WATER && GetState(wx, wy + 1, wz, 1) > state1) ? GetState(wx, wy + 1, wz, 3) : 0) +
-            ((this[wx, wy - 1, wz] == (int)BlockValue.WATER && GetState(wx, wy - 1, wz, 1) > state1) ? GetState(wx, wy - 1, wz, 3) : 0) +
-            ((this[wx, wy, wz + 1] == (int)BlockValue.WATER && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
-            ((this[wx, wy, wz - 1] == (int)BlockValue.WATER && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
+            ((this[wx + 1, wy, wz] == (int)BlockValue.Water && GetState(wx + 1, wy, wz, 1) > state1) ? GetState(wx + 1, wy, wz, 3) : 0) +
+            ((this[wx - 1, wy, wz] == (int)BlockValue.Water && GetState(wx - 1, wy, wz, 1) > state1) ? GetState(wx - 1, wy, wz, 3) : 0) +
+            ((this[wx, wy + 1, wz] == (int)BlockValue.Water && GetState(wx, wy + 1, wz, 1) > state1) ? GetState(wx, wy + 1, wz, 3) : 0) +
+            ((this[wx, wy - 1, wz] == (int)BlockValue.Water && GetState(wx, wy - 1, wz, 1) > state1) ? GetState(wx, wy - 1, wz, 3) : 0) +
+            ((this[wx, wy, wz + 1] == (int)BlockValue.Water && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
+            ((this[wx, wy, wz - 1] == (int)BlockValue.Water && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
     }
 
 
@@ -2463,12 +2478,12 @@ public class World : BlockGetter
         resState2 = state2;
         resState3 = state3;
         //Debug.Log("updating block " + wx + " " + wy + " " + wz + " " + block + " " + state);
-        if (block == (int)BlockValue.AIR)
+        if (block == (int)BlockValue.Air)
         {
             resState1 = 0;
             resState2 = 0;
             needsAnotherUpdate = false;
-            return (int)BlockValue.AIR;
+            return (int)BlockValue.Air;
         }
 
 
@@ -2480,11 +2495,11 @@ public class World : BlockGetter
         // should ensure no cycles unless we get overflows and manage to loop back to the same number again, but that should rarely happen? idk something to consider
 
 
-        if (block == (int)BlockValue.SAND)
+        if (block == (int)BlockValue.Sand)
         {
-            if (this[wx, wy-1, wz] == (int)BlockValue.AIR)
+            if (this[wx, wy-1, wz] == (int)BlockValue.Air)
             {
-                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.Water;
                 SetState(wx, wy - 1, wz, GetWaterFrameT(), 1);
                 // reset initial air neighbors because it'll have to recompute that anyway
                 SetState(wx, wy - 1, wz, 0, 2);
@@ -2631,19 +2646,19 @@ public class World : BlockGetter
         // good water, slightly inefficient
         
 
-        if (block == (int)BlockValue.SAND)
+        if (block == (int)BlockValue.Sand)
         {
-            if (this[wx, wy-1, wz] == (int)BlockValue.WATER || this[wx, wy-1, wz] == (int)BlockValue.WATER_NOFLOW)
+            if (this[wx, wy-1, wz] == (int)BlockValue.Water || this[wx, wy-1, wz] == (int)BlockValue.WaterNoFlow)
             {
-                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.Water;
                 needsAnotherUpdate = true;
                 resState1 = 1 - state1;
                 SetState(wx, wy - 1, wz, resState1, 1);
                 return block;
             }
-            else if(this[wx, wy-1, wz] == (int)BlockValue.AIR)
+            else if(this[wx, wy-1, wz] == (int)BlockValue.Air)
             {
-                this[wx, wy - 1, wz] = (int)BlockValue.WATER;
+                this[wx, wy - 1, wz] = (int)BlockValue.Water;
                 //SetState(wx, wy - 1, wz, 1, 3);
                 return block;
             }
@@ -2653,7 +2668,7 @@ public class World : BlockGetter
         // water: state 2 = time I got here
 
 
-        if (block == (int)BlockValue.WATER || block == (int)BlockValue.WATER_NOFLOW)
+        if (block == (int)BlockValue.Water || block == (int)BlockValue.WaterNoFlow)
         {
 
             needsAnotherUpdate = false;
@@ -2661,20 +2676,20 @@ public class World : BlockGetter
 
 
             // if we are WATER without water above and with water below, pathfind to look for open space
-            if (block == (int)BlockValue.WATER && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
+            if (block == (int)BlockValue.Water && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
             {
                 // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
                 //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                 numWaterUpdatesThisTick += 1;
                 if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                 {
-                    return by < wy && (b == (int)BlockValue.WATER || b == (int)BlockValue.WATER_NOFLOW);
+                    return by < wy && (b == (int)BlockValue.Water || b == (int)BlockValue.WaterNoFlow);
                     },
                    isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                    {
-                       if (b == (int)BlockValue.AIR && by < wy)
+                       if (b == (int)BlockValue.Air && by < wy)
                        {
-                           this[bx, by, bz] = (int)BlockValue.WATER;
+                           this[bx, by, bz] = (int)BlockValue.Water;
                            SetState(bx, by, bz, GetNumAirNeighbors(bx, by, bz), 3);
                            return true;
                        }
@@ -2683,24 +2698,24 @@ public class World : BlockGetter
                 ))
                 {
                     resState3 = 0;
-                    return (int)BlockValue.AIR;
+                    return (int)BlockValue.Air;
                 }
                 else
                 {
                     needsAnotherUpdate = true;
-                    return (int)BlockValue.WATER_NOFLOW;
+                    return (int)BlockValue.WaterNoFlow;
                 }
             }
             else
             {
 
                 // if air below, set below = water and us = air
-                if (this[wx, wy - 1, wz] == (int)BlockValue.AIR)
+                if (this[wx, wy - 1, wz] == (int)BlockValue.Air)
                 {
-                    this[wx, wy - 1, wz] = (int)BlockValue.WATER;
+                    this[wx, wy - 1, wz] = (int)BlockValue.Water;
                     resState3 = 0;
                     SetState(wx, wy - 1, wz, GetNumAirNeighbors(wx, wy - 1, wz) + 1, 3); // +1 because we are now air instead of water
-                    return (int)BlockValue.AIR;
+                    return (int)BlockValue.Air;
                 }
                 else
                 {
@@ -2710,21 +2725,21 @@ public class World : BlockGetter
                         LVector3 pos = new LVector3(wx, wy, wz);
                         LVector3 nPos = pos + neighbor;
                         LVector3 nPos2 = pos + neighbor * 2;
-                        if (nPos.Block == (int)BlockValue.AIR)
+                        if (nPos.Block == (int)BlockValue.Air)
                         {
-                            if (this[nPos.x, nPos.y - 1, nPos.z] == (int)BlockValue.AIR)
+                            if (this[nPos.x, nPos.y - 1, nPos.z] == (int)BlockValue.Air)
                             {
-                                this[nPos.x, nPos.y - 1, nPos.z] = (int)BlockValue.WATER;
+                                this[nPos.x, nPos.y - 1, nPos.z] = (int)BlockValue.Water;
                                 resState3 = 0;
                                 SetState(nPos.x, nPos.y, nPos.z, GetNumAirNeighbors(nPos.x, nPos.y, nPos.z) + 1, 3); // +1 because we are now air instead of water
-                                return (int)BlockValue.AIR;
+                                return (int)BlockValue.Air;
                             }
-                            else if (this[nPos2.x, nPos2.y - 1, nPos2.z] == (int)BlockValue.AIR)
+                            else if (this[nPos2.x, nPos2.y - 1, nPos2.z] == (int)BlockValue.Air)
                             {
-                                this[nPos2.x, nPos2.y - 1, nPos2.z] = (int)BlockValue.WATER;
+                                this[nPos2.x, nPos2.y - 1, nPos2.z] = (int)BlockValue.Water;
                                 resState3 = 0;
                                 SetState(nPos2.x, nPos2.y - 1, nPos2.z, GetNumAirNeighbors(nPos2.x, nPos2.y - 1, nPos2.z) + 1, 3); // +1 because we are now air instead of water
-                                return (int)BlockValue.AIR;
+                                return (int)BlockValue.Air;
                             }
                         }
                     }
@@ -2738,7 +2753,7 @@ public class World : BlockGetter
                     LVector3 airNeighbor = new LVector3(wx, wy, wz);
                     foreach (LVector3 neighbor in AllNeighborsRelative(new LVector3(wx, wy, wz)))
                     {
-                        if (neighbor.Block == (int)BlockValue.AIR)
+                        if (neighbor.Block == (int)BlockValue.Air)
                         {
                             airNeighbor = neighbor;
                             break;
@@ -2750,13 +2765,13 @@ public class World : BlockGetter
                     //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     {
-                        return (b == (int)BlockValue.WATER || b == (int)BlockValue.WATER_NOFLOW);
+                        return (b == (int)BlockValue.Water || b == (int)BlockValue.WaterNoFlow);
                     },
                        isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                        {
-                           if (b == (int)BlockValue.WATER_NOFLOW && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
+                           if (b == (int)BlockValue.WaterNoFlow && IsWater(this[bx, by - 1, bz]) && airNeighbor.y < by)
                            {
-                               this[bx, by, bz] = (int)BlockValue.AIR;
+                               this[bx, by, bz] = (int)BlockValue.Air;
                                return true;
                            }
                            return false;
@@ -2764,16 +2779,16 @@ public class World : BlockGetter
                     ))
                     {
 
-                        this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = (int)BlockValue.WATER;
+                        this[airNeighbor.x, airNeighbor.y, airNeighbor.z] = (int)BlockValue.Water;
                         SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
                         resState3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
                         needsAnotherUpdate = true;
-                        return (int)BlockValue.WATER;
+                        return (int)BlockValue.Water;
                     }
                     else
                     {
                         needsAnotherUpdate = true;
-                        return (int)BlockValue.WATER_NOFLOW;
+                        return (int)BlockValue.WaterNoFlow;
                     }
                 }
 
@@ -2789,7 +2804,7 @@ public class World : BlockGetter
         }
         if (state1 > 1)
         {
-            if (block == (int)BlockValue.AIR)
+            if (block == (int)BlockValue.Air)
             {
                 //Debug.Log("bad " + block + " " + state1);
                 resState1 = 0;
@@ -2804,14 +2819,14 @@ public class World : BlockGetter
         }
 
         int supportPower = state2;
-        if (block == (int)BlockValue.BEDROCK)
+        if (block == (int)BlockValue.Bedrock)
         {
-            supportPower = maxCapacities[(int)BlockValue.BEDROCK];
+            supportPower = maxCapacities[(int)BlockValue.Bedrock];
         }
-        else if (block != (int)BlockValue.AIR)
+        else if (block != (int)BlockValue.Air)
         {
             int greatestNeighborSupportPower = 0;
-            if (this[wx, wy - 1, wz] != (int)BlockValue.AIR)
+            if (this[wx, wy - 1, wz] != (int)BlockValue.Air)
             {
                 int belowSupportPower = GetState(wx, wy - 1, wz, 2);
                 greatestNeighborSupportPower = TrickleSupportPowerUp(this[wx, wy - 1, wz], belowSupportPower, block);
@@ -2849,7 +2864,7 @@ public class World : BlockGetter
 
         resState2 = supportPower;
 
-        if (supportPower <= 0 && this[wx, wy-1, wz] == (int)BlockValue.AIR)
+        if (supportPower <= 0 && this[wx, wy-1, wz] == (int)BlockValue.Air)
         {
             Debug.Log("rip me support power is not good enough and I have air below");
             this[wx, wy - 1, wz] = block;
@@ -2858,26 +2873,26 @@ public class World : BlockGetter
             resState2 = 0;
             needsAnotherUpdate = true;
             AddBlockUpdateToNeighbors(wx, wy, wz);
-            return (int)BlockValue.AIR;
+            return (int)BlockValue.Air;
         }
         else
         {
             resState1 = 0;
         }
 
-        if (block == (int)BlockValue.GRASS)
+        if (block == (int)BlockValue.Grass)
         {
             float prGrass = 0.005f;
             //Debug.Log("updating grass block " + wx + " " + wy + " " + wz + " " + block + " " + state);
-            if (this[wx, wy + 1, wz] == (int)BlockValue.AIR)
+            if (this[wx, wy + 1, wz] == (int)BlockValue.Air)
             {
                 for (int y = -1; y <= 1; y++)
                 {
-                    if (this[wx + 1, wy+y, wz] == (int)BlockValue.DIRT && this[wx + 1, wy + y+1, wz] == (int)BlockValue.AIR)
+                    if (this[wx + 1, wy+y, wz] == (int)BlockValue.Dirt && this[wx + 1, wy + y+1, wz] == (int)BlockValue.Air)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx + 1, wy + y, wz] = (int)BlockValue.GRASS;
+                            this[wx + 1, wy + y, wz] = (int)BlockValue.Grass;
                         }
                         else
                         {
@@ -2885,11 +2900,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx - 1, wy + y, wz] == (int)BlockValue.DIRT && this[wx - 1, wy + y + 1, wz] == (int)BlockValue.AIR)
+                    if (this[wx - 1, wy + y, wz] == (int)BlockValue.Dirt && this[wx - 1, wy + y + 1, wz] == (int)BlockValue.Air)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx - 1, wy + y, wz] = (int)BlockValue.GRASS;
+                            this[wx - 1, wy + y, wz] = (int)BlockValue.Grass;
                         }
                         else
                         {
@@ -2897,11 +2912,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx, wy + y, wz + 1] == (int)BlockValue.DIRT && this[wx, wy + y + 1, wz+1] == (int)BlockValue.AIR)
+                    if (this[wx, wy + y, wz + 1] == (int)BlockValue.Dirt && this[wx, wy + y + 1, wz+1] == (int)BlockValue.Air)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx, wy + y, wz + 1] = (int)BlockValue.GRASS;
+                            this[wx, wy + y, wz + 1] = (int)BlockValue.Grass;
                         }
                         else
                         {
@@ -2909,11 +2924,11 @@ public class World : BlockGetter
                         }
                     }
 
-                    if (this[wx, wy + y, wz - 1] == (int)BlockValue.DIRT && this[wx, wy + y + 1, wz-1] == (int)BlockValue.AIR)
+                    if (this[wx, wy + y, wz - 1] == (int)BlockValue.Dirt && this[wx, wy + y + 1, wz-1] == (int)BlockValue.Air)
                     {
                         if (Random.value < prGrass)
                         {
-                            this[wx, wy + y, wz - 1] = (int)BlockValue.GRASS;
+                            this[wx, wy + y, wz - 1] = (int)BlockValue.Grass;
                         }
                         else
                         {
@@ -2922,32 +2937,32 @@ public class World : BlockGetter
                     }
                 }
                 //Debug.Log("updating grass block " + needsAnotherUpdate + " <- needs update? with air above " + wx + " " + wy + " " + wz + " " + block + " " + state);
-                return (int)BlockValue.GRASS;
+                return (int)BlockValue.Grass;
             }
             else
             {
-                return (int)BlockValue.DIRT;
+                return (int)BlockValue.Dirt;
             }
         }
-        else if (block == (int)BlockValue.SAND)
+        else if (block == (int)BlockValue.Sand)
         {
             if (state1 <= 0)
             {
                 // if air below, fall
-                if (this[wx, wy - 1, wz] == (int)BlockValue.AIR)
+                if (this[wx, wy - 1, wz] == (int)BlockValue.Air)
                 {
-                    this[wx, wy - 1, wz] = (int)BlockValue.SAND;
+                    this[wx, wy - 1, wz] = (int)BlockValue.Sand;
                     SetState(wx, wy - 1, wz, 1, 1); // don't update again until next tick
                     resState1 = 0; 
                     needsAnotherUpdate = true;
-                    return (int)BlockValue.AIR;
+                    return (int)BlockValue.Air;
                 }
                 // block below, don't fall
                 else
                 {
                     resState1 = 0;
                     needsAnotherUpdate = false;
-                    return (int)BlockValue.SAND;
+                    return (int)BlockValue.Sand;
                 }
             }
             // we already moved this tick, set our state to zero so we can try moving again next tick
@@ -2955,7 +2970,7 @@ public class World : BlockGetter
             {
                 needsAnotherUpdate = true;
                 resState1 = state1 - 1;
-                return (int)BlockValue.SAND;
+                return (int)BlockValue.Sand;
             }
         }
         else
@@ -3365,6 +3380,269 @@ public class World : BlockGetter
     }
 }
 
+
+[System.Serializable]
+public class Pack
+{
+    public string packName;
+    public string packRootDir;
+    public List<PackBlock> packBlocks;
+    public Texture2D packTexture;
+
+    public Pack(string directory)
+    {
+        DirectoryInfo info = new DirectoryInfo(directory);
+        packBlocks = new List<PackBlock>();
+        if (info.Exists)
+        {
+            packRootDir = info.FullName;
+            packName = info.Name;
+            Debug.Log("---processing pack " + packName + " with root directory " + packRootDir);
+            string[] pDirectories = Directory.GetDirectories(packRootDir, "*", SearchOption.TopDirectoryOnly);
+            foreach (string pDirectory in pDirectories)
+            {
+                DirectoryInfo pInfo = new DirectoryInfo(pDirectory);
+                if (pInfo.Exists)
+                {
+                    if (pInfo.Name == "blocks")
+                    {
+                        Debug.Log("got blocks directory " + pInfo.FullName + " with name " + pInfo.Name);
+                        string[] blockDirectories = Directory.GetDirectories(pInfo.FullName, "*", SearchOption.TopDirectoryOnly);
+                        foreach (string blockDirectory in blockDirectories)
+                        {
+                            DirectoryInfo binfo = new DirectoryInfo(blockDirectory);
+                            if (binfo.Exists)
+                            {
+                                Debug.Log("got block directory " + binfo.FullName + " with name " + binfo.Name);
+                                PackBlock packBlock = new PackBlock(binfo.FullName);
+                                if (packBlock.isValid)
+                                {
+                                    packBlocks.Add(packBlock);
+                                }
+                                else
+                                {
+                                    Debug.LogError("pack " + packName + " at path " + packRootDir + " could not make block at path " + binfo.FullName + " with name " + binfo.Name);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("got other directory " + directory + " in pack with name " + info.Name);
+                    }
+                }
+            }
+        }
+        else
+        {
+            Debug.LogError("error: pack directory " + directory + " does not exist");
+        }
+
+        if (packBlocks.Count > 0)
+        {
+            Debug.Log("got more than 1 block, making pack texture");
+            MakePackTexture();
+        }
+    }
+
+    void MakePackTexture()
+    {
+        packTexture = new Texture2D(16 * 2, 16 * 3 * 64, TextureFormat.ARGB32, false, true);
+        Color32[] colors = new Color32[packTexture.width * packTexture.height];
+        for (int j = 0; j < colors.Length; j++)
+        {
+            colors[j] = new Color32(255, 255, 255, 255);
+        }
+        packTexture.SetPixels32(colors);
+        packTexture.Apply();
+        packTexture.wrapMode = TextureWrapMode.Clamp;
+        packTexture.filterMode = FilterMode.Point;
+        int startOffset = 2;
+        int i = startOffset; // start offset since 0 is empty and -1 is wildcard
+        foreach (PackBlock block in packBlocks)
+        {
+            byte[] imageData = File.ReadAllBytes(block.blockImagePath);
+            Texture2D blockTexture = new Texture2D(2, 2);
+            blockTexture.LoadImage(imageData); // (will automatically resize as needed)
+            blockTexture.Apply();
+            Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
+            argbTexture.SetPixels(blockTexture.GetPixels());
+            argbTexture.Apply();
+            Color32[] argbColors = argbTexture.GetPixels32();
+            // check for transparency
+            block.isTransparent = false;
+            for (int j = 0; j < argbColors.Length; j++)
+            {
+                if (argbColors[j].a < 240) // if it is only 240/255 or higher it isn't noticable enough to actually use the transparency
+                {
+                    block.isTransparent = true;
+                    break;
+                }
+            }
+            if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+            {
+                Debug.Log("rescaling texture of block " + block.blockName + " at path " + block.blockRootDir + " with block image path " + block.blockImagePath);
+                TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+            }
+            argbTexture.Apply();
+            Color[] pixels = argbTexture.GetPixels();
+            packTexture.SetPixels(0, i * 16 * 3, 16 * 2, 16 * 3, pixels);
+            packTexture.Apply();
+            i += 1;
+        }
+        string assetsPath = Application.dataPath;
+        // strip any trailing path seperators
+        while (assetsPath[assetsPath.Length - 1] == '/' || assetsPath[assetsPath.Length - 1] == '\\')
+        {
+            assetsPath = assetsPath.Substring(0, assetsPath.Length - 1);
+        }
+        // append pack textures directory
+        assetsPath = assetsPath.Replace("\\", "/") + "/PackTextures";
+
+        DirectoryInfo assetsPathInfo = new DirectoryInfo(assetsPath);
+        if (!assetsPathInfo.Exists)
+        {
+            Directory.CreateDirectory(assetsPath);
+        }
+
+        packTexture.alphaIsTransparency = true;
+        string assetsPathDir = assetsPathInfo.FullName;
+
+        File.WriteAllBytes(assetsPathDir + "/" + packName + ".png", packTexture.EncodeToPNG());
+
+        // delete meta file so unity will reload it
+        if (File.Exists(assetsPathDir + "/" + packName + ".png.meta"))
+        {
+            File.Delete(assetsPathDir + "/" + packName + ".png.meta");
+        }
+
+
+        string exampleThings =
+"namespace " + packName + @"_pack {
+    public enum BlockValue
+    {
+        Air = 0,
+        Wildcard = -1,
+";
+        string afterExampleThings = @"
+    }
+";
+        string testFunc = @"
+    public class BlockUtils {
+        public static string BlockIdToString(int blockId){
+            if (blockId < 0){ blockId = -blockId; }
+            if (blockId == 0){ return 'Air'; }
+            if (blockId == 1){ return 'Wildcard'; }
+            if (blockId == 2){ return '?? 2 is invalid'; }
+";
+        string testFunc2 = @"
+        public static int StringToBlockId(string blockName){
+            if (blockName == 'Air'){ return 0; }
+            if (blockName == 'Wildcard'){ return -1; }
+";
+        for (int b = 0; b < packBlocks.Count; b++)
+        {
+            int index = b + startOffset+1;
+
+
+            testFunc += "            if(blockId == " + index + "){ return '" + packBlocks[b].blockName + "';}\r\n";
+
+
+            // we flag a block as transparent by making it's index negative. These negative signs are igored in the shaders, and are just used for choosing a rendering order (transparent blocks aren't rendered until all non-transparent ones are)
+            if (packBlocks[b].isTransparent)
+            {
+                index = -index;
+            }
+
+            testFunc2 += "            if(blockName == '" + packBlocks[b].blockName + "'){ return " + index + ";}\r\n";
+
+
+            exampleThings += "        " + packBlocks[b].blockName + "=" + index;
+            if (b != packBlocks.Count - 1)
+            {
+                exampleThings += ",\n";
+            }
+        }
+        testFunc += @"
+            return 'Unknown block id ' + blockId;
+        }
+        ";
+
+        testFunc2 += @"
+            UnityEngine.Debug.LogError('Unknown block name ' + blockName);
+            throw new System.ArgumentOutOfRangeException('Unknown block name ' + blockName);
+        }
+    }
+        ";
+
+        // I used single quotes above because it was cleaner in code but double quotes are required for strings in c# so we will replace them here accordingly
+        testFunc = testFunc.Replace("'", "\"");
+        testFunc2 = testFunc2.Replace("'", "\"");
+
+        exampleThings += afterExampleThings + testFunc + testFunc2  + "\r\n}";
+
+        File.WriteAllText(assetsPathDir + "/" + packName + "Pack" + " .cs", exampleThings);
+
+        // delete meta file so unity will reload it
+        if (File.Exists(assetsPathDir + "/" + packName + "Pack" + " .cs.meta"))
+        {
+            File.Delete(assetsPathDir + "/" + packName + "Pack" + " .cs.meta");
+        }
+    }
+}
+
+
+public class PackBlock
+{
+    public string blockName;
+    public string blockRootDir;
+    public string blockImagePath;
+    public bool isValid;
+    public bool isTransparent;
+    public PackBlock(string blockDirectory)
+    {
+        isValid = false;
+        DirectoryInfo info = new DirectoryInfo(blockDirectory);
+        if (info.Exists)
+        {
+            blockName = info.Name;
+            blockRootDir = info.FullName;
+            string[] filesInBlock = Directory.GetFiles(info.FullName, "*", SearchOption.TopDirectoryOnly);
+            Debug.Log("parsing block " + blockName + " with root path " + blockRootDir);
+            foreach (string blockFile in filesInBlock)
+            {
+                FileInfo fInfo = new FileInfo(blockFile);
+                if (fInfo.Exists)
+                {
+                    if (fInfo.Extension.ToLower() == ".png" || fInfo.Extension.ToLower() == ".jpg")
+                    {
+                        Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                        if (fInfo.Name == blockName + fInfo.Extension)
+                        {
+                            Debug.Log("image matches block name, using it for block art");
+                            blockImagePath = fInfo.FullName;
+                            isValid = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("got non-image for block " + blockName + " with path " + fInfo.FullName + " and name " + fInfo.Name + " and extension " + fInfo.Extension);
+                    }
+                }
+            }
+            if (!isValid)
+            {
+                Debug.LogError("could not find any images for block " + blockName + " at path " + blockRootDir + " so we are ignoring this block");
+            }
+        }
+        else
+        {
+            Debug.LogError("pack block directory " + blockDirectory + " does not exist");
+        }
+    }
+}
+
 public class BlocksWorld : MonoBehaviour {
 
     public ComputeShader cullBlocksShader;
@@ -3388,6 +3666,8 @@ public class BlocksWorld : MonoBehaviour {
     ComputeBuffer bufferDrawingWith;
     public float worldScale = 0.1f;
     public Camera uiCamera;
+
+    public Pack[] packs;
 
     public InventoryGui otherObjectInventoryGui;
 
@@ -3878,17 +4158,17 @@ public class BlocksWorld : MonoBehaviour {
     public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
     {
         Debug.Log("calling time needed to break with block = " + World.BlockToString(block) + " and item hitting with = " + itemHittingWith);
-        if (block == BlockValue.LOOSE_ROCKS)
+        if (block == BlockValue.LooseRocks)
         {
             if (itemHittingWith == null)
             {
                 return 1.0f;
             }
-            else if (itemHittingWith.Block == BlockValue.PICKAXE)
+            else if (itemHittingWith.Block == BlockValue.Pickaxe)
             {
                 return 0.3f;
             }
-            else if(itemHittingWith.Block == BlockValue.SHOVEL || itemHittingWith.Block == BlockValue.AXE)
+            else if(itemHittingWith.Block == BlockValue.Shovel || itemHittingWith.Block == BlockValue.Axe)
             {
                 return 0.5f;
             }
@@ -3897,7 +4177,7 @@ public class BlocksWorld : MonoBehaviour {
                 return 1.0f;
             }
         }
-        else if(block == BlockValue.ROCK || block == BlockValue.LARGE_ROCK)
+        else if(block == BlockValue.Rock || block == BlockValue.LargeRock)
         {
             Debug.Log("hitting rock or large rock");
             if (itemHittingWith == null)
@@ -3908,48 +4188,48 @@ public class BlocksWorld : MonoBehaviour {
             else
             {
                 Debug.Log("hitting rock or large rock with " + World.BlockToString(itemHittingWith.Block));
-                if (itemHittingWith.Block == BlockValue.ROCK || itemHittingWith.Block == BlockValue.SHARP_ROCK)
+                if (itemHittingWith.Block == BlockValue.Rock || itemHittingWith.Block == BlockValue.SharpRock)
                 {
                     Debug.Log("hitting rock or large rock with ROCK or SHARP ROCK");
-                    if (block == BlockValue.ROCK)
+                    if (block == BlockValue.Rock)
                     {
                         return 4.0f;
                     }
-                    else if (block == BlockValue.LARGE_ROCK)
+                    else if (block == BlockValue.LargeRock)
                     {
                         return 7.0f;
                     }
                 }
-                else if (itemHittingWith.Block == BlockValue.LARGE_ROCK || itemHittingWith.Block == BlockValue.LARGE_SHARP_ROCK)
+                else if (itemHittingWith.Block == BlockValue.LargeRock || itemHittingWith.Block == BlockValue.LargeSharpRock)
                 {
                     Debug.Log("hitting rock or large rock with LARGE ROCK or LARGE SHARP ROCK");
-                    if (block == BlockValue.ROCK)
+                    if (block == BlockValue.Rock)
                     {
                         return 2.0f;
                     }
-                    else if (block == BlockValue.LARGE_ROCK)
+                    else if (block == BlockValue.LargeRock)
                     {
                         return 4.0f;
                     }
                 }
-                else if (itemHittingWith.Block == BlockValue.PICKAXE)
+                else if (itemHittingWith.Block == BlockValue.Pickaxe)
                 {
-                    if (block == BlockValue.ROCK)
+                    if (block == BlockValue.Rock)
                     {
                         return 0.7f;
                     }
-                    else if (block == BlockValue.LARGE_ROCK)
+                    else if (block == BlockValue.LargeRock)
                     {
                         return 1.5f;
                     }
                 }
-                else if (itemHittingWith.Block == BlockValue.SHOVEL || itemHittingWith.Block == BlockValue.AXE)
+                else if (itemHittingWith.Block == BlockValue.Shovel || itemHittingWith.Block == BlockValue.Axe)
                 {
-                    if (block == BlockValue.ROCK)
+                    if (block == BlockValue.Rock)
                     {
                         return 1.5f;
                     }
-                    else if (block == BlockValue.LARGE_ROCK)
+                    else if (block == BlockValue.LargeRock)
                     {
                         return 3.0f;
                     }
@@ -3960,43 +4240,43 @@ public class BlocksWorld : MonoBehaviour {
                 }
             }
         }
-        else if(block == BlockValue.BARK)
+        else if(block == BlockValue.Bark)
         {
             return 0.0f;
         }
-        else if(block == BlockValue.WET_BARK)
+        else if(block == BlockValue.WetBark)
         {
             return 0.0f;
         }
-        else if (block == BlockValue.STONE)
+        else if (block == BlockValue.Stone)
         {
-            if (itemHittingWith != null && itemHittingWith.Block == BlockValue.PICKAXE)
+            if (itemHittingWith != null && itemHittingWith.Block == BlockValue.Pickaxe)
             {
                 return 3.0f;
             }
             return 20.0f;
         }
-        else if (block == BlockValue.SAND)
+        else if (block == BlockValue.Sand)
         {
             return 1.0f;
         }
-        else if (block == BlockValue.CLAY)
+        else if (block == BlockValue.Clay)
         {
             return 1.0f;
         }
-        else if (block == BlockValue.GRASS)
+        else if (block == BlockValue.Grass)
         {
             return 2.0f;
         }
-        else if(block == BlockValue.DIRT)
+        else if(block == BlockValue.Dirt)
         {
             return 2.0f;
         }
-        else if(block == BlockValue.LEAF)
+        else if(block == BlockValue.Leaf)
         {
             return 0.5f;
         }
-        else if(block == BlockValue.TRUNK)
+        else if(block == BlockValue.Trunk)
         {
             using (BlockData blockData = world.GetBlockData(blockPos.x, blockPos.y, blockPos.z))
             {
@@ -4006,7 +4286,7 @@ public class BlocksWorld : MonoBehaviour {
                     {
                         return 1.0f;
                     }
-                    else if (itemHittingWith.Block == BlockValue.AXE)
+                    else if (itemHittingWith.Block == BlockValue.Axe)
                     {
                         return 0.5f;
                     }
@@ -4021,7 +4301,7 @@ public class BlocksWorld : MonoBehaviour {
                     {
                         return 10.0f;
                     }
-                    else if (itemHittingWith.Block == BlockValue.AXE)
+                    else if (itemHittingWith.Block == BlockValue.Axe)
                     {
                         return 2.0f;
                     }

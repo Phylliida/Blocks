@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -37,6 +38,7 @@ public class BlockEntity : MonoBehaviour {
                 playerThrowing = null;
             }
         }
+
         if (blockStack != null)
         {
             if (blockStack.count <= 0)
@@ -79,7 +81,7 @@ public class BlockEntity : MonoBehaviour {
         {
             GetComponent<UnityEngine.UI.Outline>().enabled = selected;
         }
-		if ((displayedBlockId != blockId && !(blockId == -1 && displayedBlockId == (int)BlockValue.EMPTY)) || !initialized)
+		if ((displayedBlockId != blockId && !(blockId == -1 && displayedBlockId == (int)BlockValue.Air)) || !initialized)
         {
             initialized = true;
             displayedBlockId = blockId;
@@ -89,7 +91,7 @@ public class BlockEntity : MonoBehaviour {
             }
             if (blockId == -1)
             {
-                displayedBlockId = (int)BlockValue.EMPTY;
+                displayedBlockId = (int)BlockValue.Air;
             }
             if (transform.GetComponent<UnityEngine.UI.Image>() != null)
             {

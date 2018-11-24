@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -43,7 +44,7 @@ public class BlockMob : MonoBehaviour {
         bool isCurrentlyValid = true;
         for (int i = 0; i < blocksHeight; i++)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
         }
         // bad:
         // X  
@@ -55,17 +56,17 @@ public class BlockMob : MonoBehaviour {
         // 1 
         if (pos.y > prevPos.y)
         {
-            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == (int)BlockValue.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == (int)BlockValue.Air;
         }
         else if(pos.y < prevPos.y)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == (int)BlockValue.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == (int)BlockValue.Air;
         }
         if (prevPos.y == pos.y && pos.z != prevPos.z && pos.x != prevPos.x)
         {
-            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == (int)BlockValue.AIR || world[pos.x, prevPos.y, prevPos.z] == (int)BlockValue.AIR);
+            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == (int)BlockValue.Air || world[pos.x, prevPos.y, prevPos.z] == (int)BlockValue.Air);
         }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.AIR;
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
     }
 
 
@@ -74,9 +75,9 @@ public class BlockMob : MonoBehaviour {
         bool isCurrentlyValid = true;
         for (int i = 0; i < blocksHeight; i++)
         {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.AIR;
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
         }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.AIR;
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
     }
 
 

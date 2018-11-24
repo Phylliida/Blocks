@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,9 +7,9 @@ public class ExamplePack : BlocksPack {
 
 	// Use this for initialization
 	void Awake () {
-        AddCustomBlock(BlockValue.GRASS, new Grass());
-        AddCustomBlock(BlockValue.CLAY, new Clay());
-        AddCustomBlock(BlockValue.BARK, new Bark());
+        AddCustomBlock(BlockValue.Grass, new Grass());
+        AddCustomBlock(BlockValue.Clay, new Clay());
+        AddCustomBlock(BlockValue.Bark, new Bark());
         SetCustomGeneration(new ExampleGeneration());
     }
 

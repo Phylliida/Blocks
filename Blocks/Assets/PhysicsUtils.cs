@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using Example_pack;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -86,6 +87,19 @@ public struct LVector3
         set
         {
             World.mainWorld[this] = value;
+        }
+    }
+
+
+    public BlockValue BlockV
+    {
+        get
+        {
+            return (BlockValue)World.mainWorld[this];
+        }
+        set
+        {
+            World.mainWorld[this] = (int)value;
         }
     }
 
@@ -474,7 +488,7 @@ public class PhysicsUtils {
 
     public static bool IsBlockSolid(int block)
     {
-        return block != (int)BlockValue.AIR && block != (int)BlockValue.WATER && block != (int)BlockValue.WATER_NOFLOW;
+        return block != (int)BlockValue.Air && block != (int)BlockValue.Water && block != (int)BlockValue.WaterNoFlow;
     }
 
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)
