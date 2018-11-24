@@ -445,7 +445,48 @@ public class BlockDataGetter
         return blockGetter.GetBlockData(x, y, z);
     }
 }
-public abstract class Block : BlockDataGetter
+
+public abstract class StaticBlock : Block
+{
+    public override void OnTick(BlockData block)
+    {
+        
+    }
+}
+
+
+public abstract class Block : BlockOrItem
+{
+    public override bool CanBePlaced()
+    {
+        return true;
+    }
+}
+
+public abstract class Item : BlockOrItem
+{
+    public override bool CanBePlaced()
+    {
+        return false;
+    }
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        destroyBlock = true;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.0f;
+    }
+}
+
+public abstract class BlockOrItem : BlockDataGetter
 {
     public float rand()
     {
@@ -655,6 +696,18 @@ public abstract class Block : BlockDataGetter
     }
 
     public abstract void OnTick(BlockData block);
+    public abstract float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith);
+    public abstract void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock);
+    public abstract bool CanBePlaced();
+
+
+    public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
+    {
+        GameObject blockEntity = GameObject.Instantiate(World.mainWorld.blocksWorld.blockEntityPrefab);
+        blockEntity.transform.position = position;
+        blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
+        return blockEntity.GetComponent<BlockEntity>();
+    }
 }
 
 
@@ -1038,7 +1091,7 @@ public class Chunk
                     BlockValue blockValue = block.block;
                     if (world.customBlocks.ContainsKey(blockValue))
                     {
-                        Block customBlock = world.customBlocks[blockValue];
+                        BlockOrItem customBlock = world.customBlocks[blockValue];
                         customBlock.OnTick(block);
                         if (block.needsAnotherTick)
                         {
@@ -1752,12 +1805,12 @@ public class BlockDataCache
     }
 }
 
-public class BlocksPack : MonoBehaviour
+public abstract class BlocksPack : MonoBehaviour
 {
-    public Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
+    public Dictionary<BlockValue, BlockOrItem> customBlocks = new Dictionary<BlockValue, BlockOrItem>();
     public GenerationClass customGeneration;
 
-    public void AddCustomBlock(BlockValue block, Block customBlock)
+    public void AddCustomBlock(BlockValue block, BlockOrItem customBlock)
     {
         customBlocks[block] = customBlock;
     }
@@ -1767,6 +1820,14 @@ public class BlocksPack : MonoBehaviour
         this.customGeneration = customGeneration;
     }
 
+
+    public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
+    {
+        GameObject blockEntity = GameObject.Instantiate(World.mainWorld.blocksWorld.blockEntityPrefab);
+        blockEntity.transform.position = position;
+        blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
+        return blockEntity.GetComponent<BlockEntity>();
+    }
 }
 
 public class World : BlockGetter
@@ -1864,86 +1925,23 @@ public class World : BlockGetter
 
     public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
     {
-        using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
+        if (thingHolding == null)
         {
-            if (block == BlockValue.WetBark)
-            {
-                for (int i = 0; i < 6; i++)
-                {
-                    if (i <= 1 || Random.value < 0.8f)
-                    {
-                        CreateBlockEntity(BlockValue.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
-                    }
-                }
-                return true;
-            }
-            else if (block == BlockValue.LooseRocks)
-            {
-                if (blockData.state1 > 0)
-                {
-                    blockData.state1 -= 1;
-                    CreateBlockEntity(BlockValue.Rock, posOfOpening);
-                    return false;
-                }
-                else
-                {
-                    CreateBlockEntity(BlockValue.LargeRock, posOfOpening);
-                    return true;
-                }
-            }
-            else if (block == BlockValue.Rock || block == BlockValue.LargeRock)
-            {
-                if (thingHolding == null)
-                {
-                    CreateBlockEntity(block, positionOfBlock);
-                }
-                else if (thingHolding.Block == BlockValue.Rock || thingHolding.Block == BlockValue.LargeRock || thingHolding.Block == BlockValue.SharpRock || thingHolding.Block == BlockValue.LargeSharpRock || thingHolding.Block == BlockValue.Shovel || thingHolding.Block == BlockValue.Pickaxe || thingHolding.Block == BlockValue.Axe)
-                {
-                    if (block == BlockValue.Rock)
-                    {
-                        CreateBlockEntity(BlockValue.SharpRock, positionOfBlock);
-                    }
-                    else // if(block == BlockValue.LARGE_ROCK)
-                    {
-                        CreateBlockEntity(BlockValue.LargeSharpRock, positionOfBlock);
-                    }
-                }
-                else
-                {
-                    CreateBlockEntity(block, positionOfBlock);
-                }
-            }
-            else if (block == BlockValue.Leaf)
-            {
-                if (Random.value < 0.8f)
-                {
-                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
-                }
-                else
-                {
-                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
-                    CreateBlockEntity(BlockValue.Stick, positionOfBlock);
-                }
-            }
-            else if (block == BlockValue.Trunk)
-            {
-                if (blockData.state1 > 0)
-                {
-                    CreateBlockEntity(BlockValue.Bark, posOfOpening);
-                    blockData.state1 -= 1;
-                    return false;
-                }
-                else
-                {
-                    CreateBlockEntity(BlockValue.Trunk, positionOfBlock);
-                }
-            }
-            else
-            {
-                CreateBlockEntity(block, positionOfBlock);
-            }
-            return true;
+            thingHolding = new BlockStack(BlockValue.Air, 1);
         }
+        if (customBlocks.ContainsKey(block))
+        {
+            BlockOrItem customBlock = customBlocks[block];
+            bool destroyBlock;
+            using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
+            {
+                customBlock.DropBlockOnDestroy(blockData, thingHolding, positionOfBlock, posOfOpening, out destroyBlock);
+            }
+            return destroyBlock;
+        }
+        Debug.Log("warning, drop block on destroy fell through, block = " + World.BlockToString(block) + " and block hitting with = " + World.BlockToString(thingHolding.Block));
+        CreateBlockEntity(block, positionOfBlock);
+        return true;
     }
 
     public BlockValue[] items = new BlockValue[] {
@@ -1972,14 +1970,14 @@ public class World : BlockGetter
         return blockEntity.GetComponent<BlockEntity>();
     }
 
-    public Dictionary<BlockValue, Block> customBlocks;
+    public Dictionary<BlockValue, BlockOrItem> customBlocks;
     public GenerationClass worldGeneration;
 
     public World(BlocksWorld blocksWorld, int chunkSize, BlocksPack blocksPack)
     {
         this.worldGeneration = blocksPack.customGeneration;
         this.customBlocks = blocksPack.customBlocks;
-        foreach (KeyValuePair<BlockValue, Block> customBlock in customBlocks)
+        foreach (KeyValuePair<BlockValue, BlockOrItem> customBlock in customBlocks)
         {
             customBlock.Value.blockGetter = this;
             customBlock.Value.world = this;
@@ -4157,6 +4155,22 @@ public class BlocksWorld : MonoBehaviour {
 
     public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
     {
+        if (itemHittingWith == null)
+        {
+            itemHittingWith = new BlockStack(BlockValue.Air, 1);
+        }
+        if (world.customBlocks.ContainsKey(block))
+        {
+            BlockOrItem customBlock = world.customBlocks[block];
+            using (BlockData blockData = world.GetBlockData(blockPos.x, blockPos.y, blockPos.z))
+            {
+                return customBlock.TimeNeededToBreak(blockData, itemHittingWith);
+            }
+        }
+        Debug.Log("warning, fell through, block = " + World.BlockToString(block) + " and block hitting with = " + World.BlockToString(itemHittingWith.Block));
+        return 1.0f;
+        /*
+
         Debug.Log("calling time needed to break with block = " + World.BlockToString(block) + " and item hitting with = " + itemHittingWith);
         if (block == BlockValue.LooseRocks)
         {
@@ -4321,6 +4335,7 @@ public class BlocksWorld : MonoBehaviour {
             Debug.Log("warning, fell through, block = " + World.BlockToString(block) + " and block hitting with = " + World.BlockToString(itemHittingWith.Block));
         }
         return 100.0f;
+        */
     }
 
     public bool RenderBlockBreaking(long x, long y, long z, BlockValue blockHitting, float timeHitting, BlockStack itemHittingWith)

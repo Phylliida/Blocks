@@ -68,11 +68,11 @@ public class InventoryGui : MonoBehaviour {
         int actualMaxItems = inventory.capacity;
         if (maxItems != -1)
         {
-            actualMaxItems = maxItems;
+            actualMaxItems = Mathf.Min(maxItems, actualMaxItems);
         }
-        if (selection > actualMaxItems)
+        if (selection > actualMaxItems-1)
         {
-            selection = actualMaxItems;
+            selection = actualMaxItems-1;
         }
 
         ShowInventory(numRows, maxItems);
