@@ -150,6 +150,26 @@ public class MovingEntity : MonoBehaviour {
         }
     }
 
+    bool IsInWater(Vector3 pos)
+    {
+        LVector3 bPos = LVector3.FromUnityVector3(pos);
+        return bPos.BlockV == Example_pack.BlockValue.Water || bPos.BlockV == Example_pack.BlockValue.WaterNoFlow;
+    }
+    bool TouchingWater()
+    {
+        return IsInWater(transform.position) ||
+            IsInWater(transform.position - new Vector3(0, heightBelowHead, 0)) ||
+            IsInWater(transform.position - new Vector3(0, heightBelowHead / 2.0f, 0)) ||
+            IsInWater(transform.position - new Vector3(0, 2.0f * heightBelowHead / 3.0f, 0)) ||
+            IsInWater(transform.position - new Vector3(0, heightBelowHead / 3.0f, 0)) ||
+
+            IsInWater(transform.position + new Vector3(0, heightAboveHead, 0)) ||
+            IsInWater(transform.position + new Vector3(0, heightAboveHead / 2.0f, 0)) ||
+            IsInWater(transform.position + new Vector3(0, 2.0f * heightAboveHead / 3.0f, 0)) ||
+            IsInWater(transform.position + new Vector3(0, heightAboveHead / 3.0f, 0));
+
+    }
+
     // Update is called once per frame
     void Update () {
         
@@ -218,13 +238,28 @@ public class MovingEntity : MonoBehaviour {
             transform.position += new Vector3(0, 0.1f, 0);
         }
 
-
-
-
-
+        bool touchingWater = TouchingWater();
         if (!IsTouchingGround())
         {
-            vel -= Vector3.up * gravity * Time.deltaTime;
+            if (touchingWater)
+            {
+                if (jumping && vel.y < jumpSpeed)
+                {
+                    vel.y += jumpSpeed * Time.deltaTime*2.0f;
+                    if (vel.y > jumpSpeed/2.0f)
+                    {
+                        vel.y = jumpSpeed / 2.0f;
+                    }
+                }
+                else if(!jumping)
+                {
+                    vel -= Vector3.up * gravity * Time.deltaTime*0.1f;
+                }
+            }
+            else
+            {
+                vel -= Vector3.up * gravity * Time.deltaTime;
+            }
         }
         else
         {
@@ -234,7 +269,18 @@ public class MovingEntity : MonoBehaviour {
             }
             if (jumping)
             {
-                vel.y = jumpSpeed;
+                if (touchingWater)
+                {
+                    vel.y += jumpSpeed * Time.deltaTime * 2.0f;
+                    if (vel.y > jumpSpeed / 2.0f)
+                    {
+                        vel.y = jumpSpeed / 2.0f;
+                    }
+                }
+                else
+                {
+                    vel.y = jumpSpeed;
+                }
             }
 
         }

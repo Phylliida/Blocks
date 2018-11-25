@@ -337,7 +337,17 @@ public class BlockData : System.IDisposable
     public long x { get { return wx; } private set { } }
     public long y { get { return wy; } private set { } }
     public long z { get { return wz; } private set { } }
+    public LVector3 pos
+    {
+        get
+        {
+            return new LVector3(wx, wy, wz);
+        }
+        private set
+        {
 
+        }
+    }
     BlockGetter world;
 
     int cachedState1 = 0;

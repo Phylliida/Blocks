@@ -8,6 +8,7 @@ public class BlockEntity : MonoBehaviour {
 
 
     public int blockId;
+    public string blockName;
     public BlockStack blockStack;
     int displayedBlockId = -1;
     public MovingEntity playerPulling;
@@ -25,6 +26,11 @@ public class BlockEntity : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 
+        if (blockName != "")
+        {
+            blockId = BlockUtils.StringToBlockId(blockName);
+            blockName = "";
+        }
         if (playerThrowing != null)
         {
             GetComponent<MovingEntity>().speed = 5.0f;

@@ -208,6 +208,72 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &215592272
+Prefab:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalPosition.x
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalPosition.y
+      value: 2.62
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalPosition.z
+      value: -0.271
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4046244015844462, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_RootOrder
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: blockId
+      value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 114159355056178456, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1582410441544872, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+      propertyPath: m_Name
+      value: Entity (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: blockName
+      value: CraftingTable
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 100100000, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
+  m_IsPrefabParent: 0
 --- !u!1 &282840810
 GameObject:
   m_ObjectHideFlags: 0
@@ -689,6 +755,11 @@ Prefab:
         type: 2}
       propertyPath: m_Enabled
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 114165452365392226, guid: 491f439a3d84a3a44b04dca7a77f24bd,
+        type: 2}
+      propertyPath: blockName
+      value: Sand
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 491f439a3d84a3a44b04dca7a77f24bd, type: 2}
