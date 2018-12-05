@@ -19,6 +19,7 @@ public class ExampleGeneration : GenerationClass
 
     public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
     {
+        
         float elevation = outBlock.GetChunkProperty(elevationProp);
         //if (y <= 0)
         //{

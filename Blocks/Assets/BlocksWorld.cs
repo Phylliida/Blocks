@@ -163,7 +163,7 @@ public class ChunkRenderer
     {
 
     }
-    public void Render(bool onlyTransparent)
+    public void Render(bool onlyTransparent, Chunk chunk)
     {
         if (chunk.chunkData.needToBeUpdated)
         {
@@ -401,11 +401,13 @@ public class BlockData : System.IDisposable
 
     public void ReassignValues(long x, long y, long z)
     {
-        this.curBlockModifyState1 = 0;
-        this.curBlockModifyState2 = 0;
-        this.curBlockModifyState3 = 0;
-        this.curBlockModifyStateBlock = 0;
+        this.curBlockModifyState1 = -1;
+        this.curBlockModifyState2 = -1;
+        this.curBlockModifyState3 = -1;
+        this.needsAnotherTick = false;
+        this.curBlockModifyStateBlock = -1;
         this.wasModified = false;
+        this.chunkBiomeData = null;
         this.wx = x;
         this.wy = y;
         this.wz = z;
@@ -432,26 +434,31 @@ public class BlockDataGetter
 
     public BlockValue GetBlock(long x, long y, long z)
     {
+        //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
         return (BlockValue)blockGetter[x, y, z];
     }
 
     public void SetBlock(long x, long y, long z, BlockValue value)
     {
+        //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
         blockGetter[x, y, z] = (int)value;
     }
 
     public int GetState(long x, long y, long z, int stateI)
     {
+        //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
         return blockGetter.GetState(x, y, z, stateI);
     }
 
     public void SetState(long x, long y, long z, int state, int stateI)
     {
+        //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
         blockGetter.SetState(x, y, z, state, stateI);
     }
 
     public BlockData GetBlockData(long x, long y, long z)
     {
+        //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
         return blockGetter.GetBlockData(x, y, z);
     }
 }
@@ -467,6 +474,19 @@ public abstract class StaticBlock : Block
 
 public abstract class Block : BlockOrItem
 {
+    public override void OnTickStart()
+    {
+        
+    }
+    public override bool CanBePlaced()
+    {
+        return true;
+    }
+}
+
+
+public abstract class Block2 : BlockOrItem
+{
     public override bool CanBePlaced()
     {
         return true;
@@ -475,6 +495,10 @@ public abstract class Block : BlockOrItem
 
 public abstract class Item : BlockOrItem
 {
+    public override void OnTickStart()
+    {
+        
+    }
     public override bool CanBePlaced()
     {
         return false;
@@ -709,6 +733,7 @@ public abstract class BlockOrItem : BlockDataGetter
     public abstract float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith);
     public abstract void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock);
     public abstract bool CanBePlaced();
+    public abstract void OnTickStart();
 
 
     public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
@@ -789,6 +814,7 @@ public abstract class GenerationClass : BlockDataGetter
 
 public class Chunk
 {
+    public bool valid = true;
     public long cx, cy, cz;
     
     public long GetPos(int d)
@@ -840,26 +866,35 @@ public class Chunk
         chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
     }
     
+    public void CreateStuff()
+    {
+        this.chunkRenderer = new ChunkRenderer(this, chunkSize);
+        chunkData = new ChunkData(chunkSize);
+        chunkData.attachedChunks.Add(this);
+    }
 
 
-    public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSize)
+    public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSize, bool createStuff=true)
     {
         this.world = world;
         this.chunkSize = chunkSize;
-        this.chunkRenderer = new ChunkRenderer(this, chunkSize);
-        this.chunkBiomeData = new ChunkBiomeData(chunkProperties, chunkX, chunkY, chunkZ);
         this.cx = chunkX;
         this.cy = chunkY;
         this.cz = chunkZ;
+        this.chunkBiomeData = new ChunkBiomeData(chunkProperties, cx, cy, cz);
         posChunks = new Chunk[] { null, null, null };
         negChunks = new Chunk[] { null, null, null };
-        chunkData = new ChunkData(chunkSize);
 
         long baseX = chunkX * chunkSize;
         long baseY = chunkY * chunkSize;
         long baseZ = chunkZ * chunkSize;
 
         generating = true;
+
+        if (createStuff)
+        {
+            CreateStuff();
+        }
 
     }
 
@@ -1056,11 +1091,20 @@ public class Chunk
         */
     }
 
-    public void TickStart()
+    public void TickStart(long chunkId)
     {
+        if (valid && this.chunkData.TickStart(chunkId)) // this.chunkData.TickStart(chunkId) only returns true if it is the first TickStart called this frame. That ensures that we don't swap around valid multiple times during a single tick start
+        {
+            int maxNews = 10;
+            Chunk newValidOne = chunkData.attachedChunks[Random.Range(0, Mathf.Min(maxNews, chunkData.attachedChunks.Count))];
 
-        this.chunkData.TickStart();
+            // this ordering of these two statements is important because newValidOne could be us
+            this.valid = false;
+            newValidOne.valid = true; 
+
+        }
     }
+
 
     public bool Tick()
     {
@@ -1072,8 +1116,14 @@ public class Chunk
 
             generating = false;
         }
+
         this.chunkRenderer.Tick();
 
+
+        if (!valid)
+        {
+            return false;
+        }
 
         if (chunkData.blocksNeedUpdating.Count != 0)
         {
@@ -1087,6 +1137,8 @@ public class Chunk
             }
             chunkData.blocksNeedUpdating.Clear();
             */
+            bool relevantChunk = true;
+            int k = 0;
             foreach (int i in chunkData.blocksNeedUpdating)
             {
                 long ind = (long)(i);
@@ -1095,7 +1147,8 @@ public class Chunk
                 long wx = x + cx * chunkSize;
                 long wy = y + cy * chunkSize;
                 long wz = z + cz * chunkSize;
-
+                long mwx, mwy, mwz;
+                //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
                 using (BlockData block = world.GetBlockData(wx, wy, wz))
                 {
                     BlockValue blockValue = block.block;
@@ -1177,6 +1230,9 @@ public class Chunk
                 */
             }
         }
+
+        chunkData.blocksNeedUpdating.Clear();
+
         return didGenerate;
     }
 
@@ -1251,6 +1307,9 @@ public class ChunkData
     public HashSet<int> blocksNeedUpdatingNextFrame = new HashSet<int>();
     int[] data;
     int chunkSize, chunkSize_2, chunkSize_3;
+
+    public List<Chunk> attachedChunks = new List<Chunk>();
+
     public ChunkData(int chunkSize, bool fillWithWildcard = false)
     {
         this.chunkSize = chunkSize;
@@ -1290,12 +1349,23 @@ public class ChunkData
         }
     }
 
-    public void TickStart()
+    long curFrame = -1;
+
+    public bool TickStart(long frameId)
     {
-        HashSet<int> tmp = blocksNeedUpdating;
-        blocksNeedUpdating = blocksNeedUpdatingNextFrame;
-        blocksNeedUpdatingNextFrame = tmp;
-        blocksNeedUpdatingNextFrame.Clear();
+        if (curFrame != frameId)
+        {
+            curFrame = frameId;
+            HashSet<int> tmp = blocksNeedUpdating;
+            blocksNeedUpdating = blocksNeedUpdatingNextFrame;
+            blocksNeedUpdatingNextFrame = tmp;
+            blocksNeedUpdatingNextFrame.Clear();
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     public int[] GetRawData()
@@ -1935,6 +2005,8 @@ public class World : BlockGetter
 
     public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
     {
+        CreateBlockEntity(block, positionOfBlock);
+        return true;
         if (thingHolding == null)
         {
             thingHolding = new BlockStack(BlockValue.Air, 1);
@@ -2036,21 +2108,23 @@ public class World : BlockGetter
         maxCapacities[(int)BlockValue.Sand] = 0;
         maxCapacities[(int)BlockValue.Air] = 0;
         maxCapacities[(int)BlockValue.Bedrock] = 6;
-
-        int viewDist = 5;
         this.worldGeneration.world = this;
         this.worldGeneration.blockGetter = this;
         this.worldGeneration.OnGenerationInit();
+        GenerateChunk(0, 0, 0);
+        //return;
+        int viewDist = 1;
         for (int i = -viewDist; i <= viewDist; i++)
         {
-            for (int j = -3; j <= 3; j++)
+            for (int j = -viewDist; j <= viewDist; j++)
             {
                 for (int k = -viewDist; k <= viewDist; k++)
                 {
-                    GenerateChunk(i,j,k);
+                    GenerateChunk(i, j, k);
                 }
             }
         }
+        
     }
 
     public void AddUnfinishedStructure(Structure structure)
@@ -3071,6 +3145,8 @@ public class World : BlockGetter
         }
     }
 
+
+
     public Chunk GetOrGenerateChunk(long chunkX, long chunkY, long chunkZ)
     {
         Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
@@ -3171,8 +3247,31 @@ public class World : BlockGetter
                 return existingChunk;
             }
         }
-        Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSize);
+        Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSize, createStuff:false);
         AddChunkToDataStructures(res);
+        return res;
+    }
+
+    // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer
+    public static int GoodMod(int a, int b)
+    {
+        int res = a % b;
+        if (res < 0)
+        {
+            res = b + res;
+        }
+        return res;
+    }
+
+
+    // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer
+    public static long GoodMod(long a, long b)
+    {
+        long res = a % b;
+        if (res < 0)
+        {
+            res = b + res;
+        }
         return res;
     }
 
@@ -3237,16 +3336,82 @@ public class World : BlockGetter
 
 
         */
-        /*
-        // fun code that makes chunks repeat around in a very non-euclidean way
-        if (allChunks.Count > 32)
+
+
+        chunk.CreateStuff();
+        return;
+
+        int loopMax = 2;
+
+        Chunk otherLoop = chunk;
+
+        long otherLoopCx, otherLoopCy, otherLoopCz;
+        PhysicsUtils.ModChunkPos(chunk.cx, chunk.cy, chunk.cz, out otherLoopCx, out otherLoopCy, out otherLoopCz);
+
+        if (otherLoopCx != chunk.cx || otherLoopCy != chunk.cy ||  otherLoopCz != chunk.cz)
         {
-            chunk.chunkData = allChunks[off].chunkData;
-            off = (off + 1) % 32;
-            return;
+            otherLoop = GetOrGenerateChunk(otherLoopCx, otherLoopCy, otherLoopCz);
+        }
+        
+        /*
+
+        if (otherLoop.cx > loopMax)
+        {
+            otherLoop = GetOrGenerateChunk(-loopMax, otherLoop.cy, otherLoop.cz);
         }
 
+        if (otherLoop.cx < -loopMax)
+        {
+            otherLoop = GetOrGenerateChunk(loopMax, otherLoop.cy, otherLoop.cz);
+        }
+
+        if (otherLoop.cz > loopMax)
+        {
+            otherLoop = GetOrGenerateChunk(otherLoop.cx, otherLoop.cy, -loopMax);
+        }
+
+        if (otherLoop.cz < -loopMax)
+        {
+            otherLoop = GetOrGenerateChunk(otherLoop.cx, otherLoop.cy, loopMax);
+        }
         */
+
+        if (otherLoop.cx != chunk.cx || otherLoop.cy != chunk.cy || otherLoop.cz != chunk.cz)
+        {
+            chunk.chunkData = otherLoop.chunkData;
+            chunk.chunkRenderer = otherLoop.chunkRenderer;
+            otherLoop.chunkData.attachedChunks.Add(chunk);
+            chunk.generating = false;
+            chunk.valid = false;
+        }
+        else
+        {
+            chunk.CreateStuff();
+        }
+        /*
+        int initialCount = 0;
+        // fun code that makes chunks repeat around in a very non-euclidean way
+        if (allChunks.Count > initialCount+8)
+        {
+            if (chunk.cy > -3)
+            {
+                chunk.chunkData.Dispose();
+                chunk.chunkRenderer.Dispose();
+                chunk.chunkData = allChunks[off + initialCount].chunkData;
+                chunk.chunkRenderer = allChunks[off + initialCount].chunkRenderer;
+                chunk.generating = false;
+                off = (off + 1) % 8;
+                Debug.Log("changing, off = " + (off + initialCount));
+                return;
+            }
+        }
+        else
+        {
+            Debug.Log("not changing size=" + allChunks.Count);
+        }
+        */
+
+        
     }
 
     public Chunk GetOrGenerateChunkAtPos(long x, long y, long z)
@@ -3345,20 +3510,44 @@ public class World : BlockGetter
         // render non-transparent
         foreach (Chunk chunk in allChunks)
         {
-            chunk.chunkRenderer.Render(false);
+            chunk.chunkRenderer.Render(false, chunk);
         }
         // render transparent
         foreach (Chunk chunk in allChunks)
         {
-            chunk.chunkRenderer.Render(true);
+            chunk.chunkRenderer.Render(true, chunk);
         }
     }
 
+    public static void Shuffle<T>(List<T> arr)
+    {
+        for (int i = 1; i < arr.Count; i++)
+        {
+            int toPos = Random.Range(0, i + 1);
+            if (toPos != i)
+            {
+                T tmp = arr[i];
+                arr[i] = arr[toPos];
+                arr[toPos] = tmp;
+            }
+        }
+    }
+
+    long frameId = 0;
     public void Tick()
     {
+        frameId += 1;
+        foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
+        {
+            block.Value.OnTickStart();
+        }
         // what direction is checked first: goes in a weird order after that
         globalPreference = (globalPreference + 1) % 4;
         List<Chunk> allChunksHere = new List<Chunk>(allChunks);
+
+        // Randomly shuffle the order we update the chunks in, for the memes when they are tiled procedurally
+        //Shuffle(allChunksHere);
+
 
         numBlockUpdatesThisTick = 0;
         numWaterUpdatesThisTick = 0;
@@ -3366,7 +3555,7 @@ public class World : BlockGetter
 
         foreach (Chunk chunk in allChunksHere)
         {
-            chunk.TickStart();
+            chunk.TickStart(frameId);
         }
 
         foreach (Chunk chunk in allChunksHere)
@@ -3654,6 +3843,7 @@ public class PackBlock
 public class BlocksWorld : MonoBehaviour {
 
     public ComputeShader cullBlocksShader;
+    ComputeBuffer cubeNormals;
     ComputeBuffer cubeOffsets;
     ComputeBuffer uvOffsets;
     ComputeBuffer breakingUVOffsets;
@@ -3685,7 +3875,7 @@ public class BlocksWorld : MonoBehaviour {
 
     int[] worldData;
 
-    int chunkSize = 16;
+    public const int chunkSize = 64;
 
     public World world;
 
@@ -3707,16 +3897,21 @@ public class BlocksWorld : MonoBehaviour {
         LoadMaterials();
 
         float[] texOffsets = new float[36 * 4];
+        float[] vertNormals = new float[36 * 4];
+        List<Vector2> texOffsetsGood = new List<Vector2>();
+        List<Vector3> vertOffsetsGood = new List<Vector3>();
         float[] triOffsets = new float[36 * 4];
         for (int i = 0; i < 36; i++)
         {
             Vector3 offset = Vector3.zero;
             Vector3 texOffset = Vector2.zero;
+            Vector3 normal = Vector3.one.normalized;
             switch (i)
             {
                 // bottom, top
                 // left, right
                 // front, back
+
                 // bottom
                 case 0: offset = new Vector3(1, 0, 1); break;
                 case 1: offset = new Vector3(1, 0, 0); break;
@@ -3771,36 +3966,42 @@ public class BlocksWorld : MonoBehaviour {
             {
                 texX = offset.x + 1.0f;
                 texY = offset.z + 2.0f;
+                normal = new Vector3(0, -1, 0);
             }
             // top
             else if (i >= 6 && i <= 11)
             {
                 texX = offset.x;
                 texY = offset.z + 2.0f;
+                normal = new Vector3(0, 1, 0);
             }
             // left
             else if (i >= 12 && i <= 17)
             {
                 texX = offset.x;
                 texY = offset.y + 1.0f;
+                normal = new Vector3(0, 0, -1);
             }
             // right
             else if (i >= 18 && i <= 23)
             {
                 texX = offset.x + 1.0f;
                 texY = offset.y + 1.0f;
+                normal = new Vector3(0, 0, 1);
             }
             // forward
             else if (i >= 24 && i <= 29)
             {
                 texX = offset.z;
                 texY = offset.y;
+                normal = new Vector3(-1, 0, 0);
             }
             // back
             else if (i >= 30 && i <= 35)
             {
                 texX = offset.z + 1.0f;
                 texY = offset.y;
+                normal = new Vector3(1, 0, 0);
             }
             texOffset = new Vector2(texX, texY);
             triOffsets[i * 4] = offset.x;
@@ -3809,15 +4010,25 @@ public class BlocksWorld : MonoBehaviour {
             triOffsets[i * 4 + 3] = 0;
 
 
-            texOffsets[i * 4] = texOffset.x/2.0f;
-            texOffsets[i * 4 + 1] = texOffset.y/(float)World.numBlocks;
+            texOffsets[i * 4] = texOffset.x / 2.0f;
+            texOffsets[i * 4 + 1] = texOffset.y / (float)World.numBlocks;
             texOffsets[i * 4 + 2] = 0;
             texOffsets[i * 4 + 3] = 0;
+
+            vertNormals[i * 4] = normal.x;
+            vertNormals[i * 4+1] = normal.y;
+            vertNormals[i * 4+2] = normal.z;
+            vertNormals[i * 4+3] = 0.0f;
+
+            texOffsetsGood.Add(new Vector2(texOffset.x / 2.0f, texOffset.y / 3.0f));
+            vertOffsetsGood.Add(offset - new Vector3(0.5f, 0.5f, 0.5f));
         }
 
         blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4, ComputeBufferType.GPUMemory);
         cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
         cubeOffsets.SetData(triOffsets);
+        cubeNormals = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+        cubeNormals.SetData(vertNormals);
         uvOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
         uvOffsets.SetData(texOffsets);
 
@@ -3947,15 +4158,27 @@ public class BlocksWorld : MonoBehaviour {
             actualTriangles[i * 3+2] = triangles[i * 3];
         }
 
+        Mesh nice = new Mesh();
+        nice.SetVertices(vertOffsetsGood);
+        nice.SetUVs(0, texOffsetsGood);
+        nice.SetTriangles(actualTriangles, 0);
+        GameObject spruce = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        spruce.name = "dat boi";
+        spruce.GetComponent<MeshFilter>().mesh = nice;
+
+
         blockMesh.SetVertices(blockVertices);
         blockMesh.SetUVs(0, blockUvs);
         blockMesh.SetTriangles(actualTriangles, 0);
 
         triMaterial.SetBuffer("cubeOffsets", cubeOffsets);
+        triMaterial.SetBuffer("cubeNormals", cubeNormals);
         triMaterial.SetBuffer("uvOffsets", uvOffsets);
         triMaterialWithTransparency.SetBuffer("cubeOffsets", cubeOffsets);
+        triMaterialWithTransparency.SetBuffer("cubeNormals", cubeNormals);
         triMaterialWithTransparency.SetBuffer("uvOffsets", uvOffsets);
         breakingMaterial.SetBuffer("cubeOffsets", cubeOffsets);
+        breakingMaterial.SetBuffer("cubeNormals", cubeNormals);
         breakingMaterial.SetBuffer("uvOffsets", breakingUVOffsets);
 
         float[] lineOffsets = new float[24 * 4];
@@ -4165,6 +4388,7 @@ public class BlocksWorld : MonoBehaviour {
 
     public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
     {
+        return 0.2f;
         if (itemHittingWith == null)
         {
             itemHittingWith = new BlockStack(BlockValue.Air, 1);
@@ -4434,7 +4658,7 @@ public class BlocksWorld : MonoBehaviour {
     }
 
     LVector3 blockBreaking;
-    public void RenderWorld()
+    public void OnRenderObject()
     {
         world.Render();
         while (blocksBreaking.Count > 0)
@@ -4456,6 +4680,13 @@ public class BlocksWorld : MonoBehaviour {
         {
             cubeOffsets.Dispose();
             cubeOffsets = null;
+        }
+
+
+        if (cubeNormals != null)
+        {
+            cubeNormals.Dispose();
+            cubeNormals = null;
         }
 
         if (blockBreakingBuffer != null)

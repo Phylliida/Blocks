@@ -36,9 +36,75 @@ public class Sand : Block
 }
 
 
-
-public class Water : Block
+public class SimpleWater : Block2
 {
+    static int maxUpdates = 100;
+    static int numUpdatesThisTick = 0;
+    public override void OnTickStart()
+    {
+        numUpdatesThisTick = 0;
+    }
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        destroyBlock = false;
+    }
+
+    bool IsWater(long x, long y, long z)
+    {
+        BlockValue block = GetBlock(x, y, z);
+        return block == BlockValue.Water || block == BlockValue.WaterNoFlow;
+    }
+
+
+    public override void OnTick(BlockData block)
+    {
+        numUpdatesThisTick += 1;
+        if (maxUpdates < numUpdatesThisTick)
+        {
+            block.needsAnotherTick = true;
+            return;
+        }
+
+        // water: state 2 = time I got here
+
+
+            // if air below, set below = water and us = air
+        if (GetBlock(block.x, block.y - 1, block.z) == BlockValue.Air)
+        {
+            SetBlock(block.x, block.y - 1, block.z, BlockValue.Water);
+            block.block = BlockValue.Air;
+            return;
+        }
+        else
+        {
+            // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
+            foreach (BlockData neighbor in GetNeighbors(block, includingUp: false, includingDown: false))
+            {
+                if (neighbor.block == BlockValue.Air && GetBlock(neighbor.x, neighbor.y - 1, neighbor.z) == BlockValue.Air)
+                {
+                    SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, BlockValue.Water);
+                    block.block = BlockValue.Air;
+                    return;
+                }
+            }
+        }
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 10000.0f;
+    }
+}
+
+
+public class Water : Block2
+{
+    static int maxUpdates = 10;
+    static int numUpdatesThisTick = 0;
+    public override void OnTickStart()
+    {
+        numUpdatesThisTick = 0;
+    }
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = false;
@@ -64,13 +130,17 @@ public class Water : Block
 
     public override void OnTick(BlockData block)
     {
-
+        numUpdatesThisTick += 1;
+        if (maxUpdates < numUpdatesThisTick)
+        {
+            block.needsAnotherTick = true;
+            return;
+        }
 
         // water: state 2 = time I got here
 
 
         block.needsAnotherTick = false;
-
 
 
         // if we are WATER without water above and with water below, pathfind to look for open space
@@ -208,12 +278,23 @@ public class Water : Block
     }
 }
 
-public class Grass : Block
+public class Grass : Block2
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         CreateBlockEntity(BlockValue.Dirt, positionOfBlock);
         destroyBlock = true;
+    }
+
+    int numGrassTicks;
+    public override void OnTickStart()
+    {
+        if (numGrassTicks > 0)
+        {
+
+            Debug.Log("num grass ticks = " + numGrassTicks);
+            numGrassTicks = 0;
+        }
     }
 
     public override void OnTick(BlockData block)
@@ -224,13 +305,18 @@ public class Grass : Block
         long state1 = block.state1;
         long state2 = block.state2;
         long state3 = block.state3;
-
+        bool doesntNeedTick = true;
+        if (GetBlock(block.x, block.y+1, block.z) != BlockValue.Air)
+        {
+            block.block = BlockValue.Dirt;
+            return;
+        }
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
             // if neighbor is dirt and it has air above it, try growing into it
             if (neighbor.block == BlockValue.Dirt && GetBlock(neighbor.x, neighbor.y + 1, neighbor.z) == BlockValue.Air)
             {
-                if (rand() < 0.01f)
+                if (rand() < 2.0f)
                 {
                     // grow
                     neighbor.block = BlockValue.Grass;
@@ -239,8 +325,13 @@ public class Grass : Block
                 {
                     // we failed to grow but still need to, try again next tick
                     block.needsAnotherTick = true;
+                    doesntNeedTick = false;
                 }
             }
+        }
+        if (block.needsAnotherTick && doesntNeedTick)
+        {
+            Debug.Log("what u doin");
         }
     }
 
@@ -549,8 +640,10 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(BlockValue.Axe, new SimpleItem());
         AddCustomBlock(BlockValue.WetBark, new WetBark());
         AddCustomBlock(BlockValue.Sand, new Sand());
-        AddCustomBlock(BlockValue.Water, new Water());
-        AddCustomBlock(BlockValue.WaterNoFlow, new Water());
+        //AddCustomBlock(BlockValue.Water, new Water());
+        //AddCustomBlock(BlockValue.WaterNoFlow, new Water());
+        AddCustomBlock(BlockValue.Water, new SimpleWater());
+        AddCustomBlock(BlockValue.WaterNoFlow, new SimpleWater());
         SetCustomGeneration(new ExampleGeneration());
     }
 

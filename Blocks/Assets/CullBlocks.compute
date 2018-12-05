@@ -8,7 +8,7 @@ RWStructuredBuffer<int4> DataIn;
 AppendStructuredBuffer<int4> DrawingThings;
 
 
-#define CHUNK_SIZE 16
+#define CHUNK_SIZE 64
 
 int T3(uint3 id)
 {

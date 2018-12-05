@@ -11,7 +11,6 @@ Shader "Unlit/SandDrawerWithTransparency" {
 
 		 Tags { "Queue" = "Transparent" "RenderType" = "Transparent" }
 		Pass{
-
 		ZWrite Off
 		Blend SrcAlpha OneMinusSrcAlpha
 		Cull Front

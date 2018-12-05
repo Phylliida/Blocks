@@ -497,6 +497,51 @@ public class PhysicsUtils {
         return RayCast(origin, dir, maxDist, out results, maxSteps);
     }
 
+    public static void ModChunkPos(long cx, long cy, long cz, out long mcx, out long mcy, out long mcz)
+    {
+        mcx = cx;
+        mcy = cy;
+        mcz = cz;
+        return;
+        mcx = GoodMod(cx, 1);
+        mcy = GoodMod(cy, 1);
+        mcz = GoodMod(cz, 1);
+    }
+
+    public static void ModPos(long x, long y, long z, out long mx, out long my, out long mz)
+    {
+        mx = x;
+        my = y;
+        mz = z;
+        return;
+        mx = GoodMod(x, BlocksWorld.chunkSize * 1);
+        my = GoodMod(y, BlocksWorld.chunkSize * 1);
+        mz = GoodMod(z, BlocksWorld.chunkSize * 1);
+    }
+
+    // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer
+    public static int GoodMod(int a, int b)
+    {
+        int res = a % b;
+        if (res < 0)
+        {
+            res = b + res;
+        }
+        return res;
+    }
+
+
+    // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer
+    public static long GoodMod(long a, long b)
+    {
+        long res = a % b;
+        if (res < 0)
+        {
+            res = b + res;
+        }
+        return res;
+    }
+
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
     {

@@ -41,9 +41,36 @@ public class BlocksPlayer : MonoBehaviour
 
     LVector3 curBlockBreaking;
     int curSelectionBreakingWith = -1;
-
+    LVector3 chunkPos;
     public void Update()
     {
+        /*
+        float modAmount = World.mainWorld.chunkSize*World.mainWorld.blocksWorld.worldScale*8.0f;
+        transform.position = new Vector3(
+            PhysicsUtils.fmod(transform.position.x, modAmount),
+            PhysicsUtils.fmod(transform.position.y, modAmount),
+            PhysicsUtils.fmod(transform.position.z, modAmount));
+        */
+
+        LVector3 curChunkPos;
+        World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
+        if (curChunkPos != chunkPos)
+        {
+            chunkPos = curChunkPos;
+            int viewDist = 3;
+
+
+            for (int i = -viewDist; i <= viewDist; i++)
+            {
+                for (int j = -viewDist; j <= viewDist; j++)
+                {
+                    for (int k = -viewDist; k <= viewDist; k++)
+                    {
+                        //World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
+                    }
+                }
+            }
+        }
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             paused = true;
@@ -289,7 +316,6 @@ public class BlocksPlayer : MonoBehaviour
 
     public void OnPostRender()
     {
-        World.mainWorld.blocksWorld.RenderWorld();
     }
 }
 
