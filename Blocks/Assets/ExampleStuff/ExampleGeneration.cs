@@ -40,70 +40,78 @@ public class ExampleGeneration : GenerationClass
                 // low pr of making tree
                 if (Simplex.Noise.rand(x, y, z) < 0.01f)
                 {
-                    int treeHeight = (int)Math.Round(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
-                    for (int i = 0; i < treeHeight; i++)
+                    if (Simplex.Noise.rand(x*2+1, y, z) < 0.9f)
                     {
-                        if (i == 0)
+                        SetBlock(x, y + 1, z, BlockValue.FlowerWithNectar);
+                    }
+                    else
+                    {
+
+                        int treeHeight = (int)Math.Round(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
+                        for (int i = 0; i < treeHeight; i++)
                         {
-                            SetBlock(x, y + i, z, BlockValue.Trunk);
-                            using (BlockData trunkData = GetBlockData(x, y + i, z))
+                            if (i == 0)
                             {
-                                trunkData.state1 = 4;
-                            }
-                            continue;
-                        }
-                        float pAlong = (i + 1) / (float)(treeHeight);
-
-                        float maxWidth = 3.0f;
-                        float topWidth = 0.5f;
-                        float bottomWidth = 0.2f;
-                        float decreasePoint = 0.3f;
-
-                        float p;
-                        float minVal;
-                        float maxVal;
-                        if (pAlong < decreasePoint)
-                        {
-                            minVal = bottomWidth;
-                            maxVal = maxWidth;
-                            p = (decreasePoint - pAlong) / decreasePoint;
-                        }
-                        else
-                        {
-                            minVal = maxWidth;
-                            maxVal = topWidth;
-                            p = 1 - (pAlong - decreasePoint) / (1.0f - decreasePoint);
-                        }
-
-                        float width = minVal * p + maxVal * (1 - p);
-                        int widthI = (int)Math.Floor(width);
-
-
-                        bool addedLeaf = false;
-                        for (int j = -widthI; j <= widthI; j++)
-                        {
-                            for (int k = -widthI; k <= widthI; k++)
-                            {
-                                if (Math.Sqrt(j * j + k * k) <= width)
+                                SetBlock(x, y + i, z, BlockValue.Trunk);
+                                using (BlockData trunkData = GetBlockData(x, y + i, z))
                                 {
-                                    if (j != 0 || k != 0)
+                                    trunkData.state1 = 4;
+                                }
+                                continue;
+                            }
+                            float pAlong = (i + 1) / (float)(treeHeight);
+
+                            float maxWidth = 3.0f;
+                            float topWidth = 0.5f;
+                            float bottomWidth = 0.2f;
+                            float decreasePoint = 0.3f;
+
+                            float p;
+                            float minVal;
+                            float maxVal;
+                            if (pAlong < decreasePoint)
+                            {
+                                minVal = bottomWidth;
+                                maxVal = maxWidth;
+                                p = (decreasePoint - pAlong) / decreasePoint;
+                            }
+                            else
+                            {
+                                minVal = maxWidth;
+                                maxVal = topWidth;
+                                p = 1 - (pAlong - decreasePoint) / (1.0f - decreasePoint);
+                            }
+
+                            float width = minVal * p + maxVal * (1 - p);
+                            int widthI = (int)Math.Floor(width);
+
+
+                            bool addedLeaf = false;
+                            for (int j = -widthI; j <= widthI; j++)
+                            {
+                                for (int k = -widthI; k <= widthI; k++)
+                                {
+                                    if (Math.Sqrt(j * j + k * k) <= width)
                                     {
-                                        addedLeaf = true;
+                                        if (j != 0 || k != 0)
+                                        {
+                                            addedLeaf = true;
+                                        }
+                                        SetBlock(x + j, y + i, z + k, BlockValue.Leaf);
                                     }
-                                    SetBlock(x + j, y + i, z + k, BlockValue.Leaf);
                                 }
                             }
-                        }
-                        if (addedLeaf)
-                        {
-
-                            SetBlock(x, y + i, z, BlockValue.Trunk);
-                            using (BlockData trunkData = GetBlockData(x, y + i, z))
+                            if (addedLeaf)
                             {
-                                trunkData.state1 = 4;
+
+                                SetBlock(x, y + i, z, BlockValue.Trunk);
+                                using (BlockData trunkData = GetBlockData(x, y + i, z))
+                                {
+                                    trunkData.state1 = 4;
+                                }
                             }
+
                         }
-                        
                     }
                 }
                 else

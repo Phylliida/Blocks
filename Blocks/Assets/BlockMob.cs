@@ -12,7 +12,6 @@ public class BlockMob : MonoBehaviour {
 
 
     public MobType mobType;
-    public MovingEntity body;
 
 
     Vector3 offset;
@@ -23,155 +22,89 @@ public class BlockMob : MonoBehaviour {
 
     PathNode curPath;
 
-    public class PathNode
-    {
-        public LVector3 pos;
-        public PathNode prevNode;
-        public PathNode nextNode;
-
-        public PathNode(LVector3 pos, PathNode prevNode)
-        {
-            this.pos = pos;
-            this.prevNode = prevNode;
-        }
-    }
-
-
-    World world { get  { return World.mainWorld; }   }
-
-    public bool isValid(LVector3 prevPos, LVector3 pos)
-    {
-        bool isCurrentlyValid = true;
-        for (int i = 0; i < blocksHeight; i++)
-        {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
-        }
-        // bad:
-        // X  
-        //    2
-        // 1
-        // good:
-        // 
-        //     2
-        // 1 
-        if (pos.y > prevPos.y)
-        {
-            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == (int)BlockValue.Air;
-        }
-        else if(pos.y < prevPos.y)
-        {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == (int)BlockValue.Air;
-        }
-        if (prevPos.y == pos.y && pos.z != prevPos.z && pos.x != prevPos.x)
-        {
-            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == (int)BlockValue.Air || world[pos.x, prevPos.y, prevPos.z] == (int)BlockValue.Air);
-        }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
-    }
-
-
-    public bool isValid(LVector3 pos)
-    {
-        bool isCurrentlyValid = true;
-        for (int i = 0; i < blocksHeight; i++)
-        {
-            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
-        }
-        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
-    }
-
-
-    public IEnumerable<LVector3> AllNeighbors(LVector3 pos)
-    {
-        yield return new LVector3(pos.x + 1, pos.y, pos.z);
-        yield return new LVector3(pos.x - 1, pos.y, pos.z);
-        yield return new LVector3(pos.x + 1, pos.y, pos.z + 1);
-        yield return new LVector3(pos.x - 1, pos.y, pos.z + 1);
-        yield return new LVector3(pos.x + 1, pos.y, pos.z - 1);
-        yield return new LVector3(pos.x - 1, pos.y, pos.z - 1);
-        yield return new LVector3(pos.x + 1, pos.y + 1, pos.z);
-        yield return new LVector3(pos.x - 1, pos.y + 1, pos.z);
-        yield return new LVector3(pos.x + 1, pos.y - 1, pos.z);
-        yield return new LVector3(pos.x - 1, pos.y - 1, pos.z);
-        yield return new LVector3(pos.x, pos.y + 1, pos.z + 1);
-        yield return new LVector3(pos.x, pos.y + 1, pos.z - 1);
-        yield return new LVector3(pos.x, pos.y - 1, pos.z + 1);
-        yield return new LVector3(pos.x, pos.y - 1, pos.z - 1);
-        yield return new LVector3(pos.x, pos.y, pos.z + 1);
-        yield return new LVector3(pos.x, pos.y, pos.z - 1);
-    }
-
-    public void Pathfind(LVector3 startPos, LVector3 goalPos, int maxSteps = 100)
-    {
-        HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
-        Queue<PathNode> nodes = new Queue<PathNode>();
-        LVector3 myPos = startPos;
-        PathNode closest = new PathNode(myPos, null);
-        long closestDist = long.MaxValue;
-        for (int i = 0; i < 2; i++)
-        {
-            LVector3 tmpPos = myPos - new LVector3(0, i, 0);
-            if (!nodesSoFar.Contains(tmpPos) && isValid(tmpPos))
-            {
-                nodes.Enqueue(new PathNode(tmpPos, null));
-                nodesSoFar.Add(tmpPos);
-            }
-        }
-
-        int steps = 0;
-        if (nodes.Count == 0)
-        {
-            body.jumping = true;
-        }
-        while (nodes.Count > 0)
-        {
-            PathNode curNode = nodes.Dequeue();
-            long dist = LVector3.CityBlockDistance(curNode.pos, goalPos);
-            if (dist < closestDist)
-            {
-                closestDist = dist;
-                closest = curNode;
-            }
-            foreach (LVector3 neighbor in AllNeighbors(curNode.pos))
-            {
-                if (!nodesSoFar.Contains(neighbor) && isValid(curNode.pos, neighbor))
-                {
-                    nodes.Enqueue(new PathNode(neighbor, curNode));
-                    nodesSoFar.Add(neighbor);
-                }
-            }
-            steps += 1;
-            if (steps >= maxSteps || dist <= 1)
-            {
-                Debug.Log("found path with dist = " + dist + " in " + steps + " steps");
-                break;
-            }
-        }
-
-        curPath = closest;
-        if (curPath != null && curPath.prevNode != null)
-        {
-            PathNode curBlock = curPath.prevNode;
-            PathNode nextBlock = curPath;
-            while (curBlock.prevNode != null)
-            {
-                curBlock.nextNode = nextBlock;
-                nextBlock = curBlock;
-                curBlock = curBlock.prevNode;
-            }
-            curBlock.nextNode = nextBlock;
-            curPath = curBlock;
-        }
-
-    }
-
     public float pathfindsPerSecond = 4.0f;
 
     public long lastPathfind = 0;
 
-    public void Update()
+    public MovingEntity pathingTarget;
+
+    public void UpdatePathing()
     {
 
+
+        MovingEntity body = GetComponent<MovingEntity>();
+        if (pathingTarget == null)
+        {
+            body.desiredMove = Vector3.zero;
+        }
+        if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond)
+        {
+            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+            RaycastResults blockStandingOn = body.BlockStandingOn();
+            // if we are using shift and standing over an empty block, but our feet are on a neighboring block, use that neighboring block for pathfinding instead
+            if (blockStandingOn != null)
+            {
+                myPos = blockStandingOn.hitBlock + new LVector3(0, blocksHeight, 0);
+            }
+            LVector3 playerPos = LVector3.FromUnityVector3(pathingTarget.transform.position);
+            bool iShouldJump;
+            PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, playerPos, 200);
+
+            if (iShouldJump)
+            {
+                body.jumping = true;
+            }
+            lastPathfind = PhysicsUtils.millis();
+        }
+
+        body.desiredMove = Vector3.zero;
+        Vector3 targetPos = transform.position;
+        if (curPath != null)
+        {
+            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+            LVector3 myPosBeforeJump = myPos - new LVector3(0, 1, 0);
+            if (curPath.prevNode != null && (myPos == curPath.prevNode.pos || myPosBeforeJump == curPath.prevNode.pos))
+            {
+
+            }
+            else if (curPath.nextNode != null && (myPos == curPath.nextNode.pos || myPosBeforeJump == curPath.nextNode.pos))
+            {
+                curPath = curPath.nextNode;
+            }
+            else if (myPos == curPath.pos || myPosBeforeJump == curPath.pos)
+            {
+                if (curPath.nextNode != null)
+                {
+                    curPath = curPath.nextNode;
+                }
+            }
+
+            LVector3 targetBlock = curPath.pos;
+            if (targetBlock.y == LVector3.FromUnityVector3(transform.position).y)
+            {
+                body.usingShift = true;
+            }
+            else
+            {
+                body.usingShift = false;
+            }
+            if (targetBlock.y > myPos.y)
+            {
+                body.jumping = true;
+            }
+            else
+            {
+                body.jumping = false;
+            }
+            targetPos = targetBlock.BlockCentertoUnityVector3();
+            body.SetAbsoluteDesiredMove((targetPos - transform.position).normalized);
+        }
+    }
+
+    public void UpdateOld()
+    {
+
+        MovingEntity body = GetComponent<MovingEntity>();
         if (PhysicsUtils.millis() - lastPathfind > 1000.0/pathfindsPerSecond)
         {
             LVector3 myPos = LVector3.FromUnityVector3(transform.position);
@@ -182,7 +115,13 @@ public class BlockMob : MonoBehaviour {
                 myPos = blockStandingOn.hitBlock + new LVector3(0, blocksHeight, 0);
             }
             LVector3 playerPos = LVector3.FromUnityVector3(FindObjectOfType<BlocksPlayer>().transform.position);
-            Pathfind(myPos, playerPos, 200);
+            bool iShouldJump;
+            PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, playerPos, 200);
+
+            if (iShouldJump)
+            {
+                body.jumping = true;
+            }
             lastPathfind = PhysicsUtils.millis();
         }
 

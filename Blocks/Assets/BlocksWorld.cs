@@ -2005,8 +2005,8 @@ public class World : BlockGetter
 
     public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
     {
-        CreateBlockEntity(block, positionOfBlock);
-        return true;
+        //CreateBlockEntity(block, positionOfBlock);
+        //return true;
         if (thingHolding == null)
         {
             thingHolding = new BlockStack(BlockValue.Air, 1);
@@ -3572,6 +3572,7 @@ public class World : BlockGetter
                 }
 
                 unfinishedStructures = leftoverStructures;
+                break;
             }
         }
     }
@@ -3875,7 +3876,7 @@ public class BlocksWorld : MonoBehaviour {
 
     int[] worldData;
 
-    public const int chunkSize = 64;
+    public const int chunkSize = 32;
 
     public World world;
 
@@ -4388,7 +4389,6 @@ public class BlocksWorld : MonoBehaviour {
 
     public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
     {
-        return 0.2f;
         if (itemHittingWith == null)
         {
             itemHittingWith = new BlockStack(BlockValue.Air, 1);

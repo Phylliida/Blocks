@@ -68,6 +68,21 @@ public class PVector3
     }
 }
 
+
+public class PathNode
+{
+    public LVector3 pos;
+    public PathNode prevNode;
+    public PathNode nextNode;
+
+    public PathNode(LVector3 pos, PathNode prevNode)
+    {
+        this.pos = pos;
+        this.prevNode = prevNode;
+    }
+}
+
+
 public struct LVector3
 {
     public long x, y, z;
@@ -211,9 +226,14 @@ public struct LVector3
         return !(a == b);
     }
 
+    public static float EuclideanDistance(LVector3 a, LVector3 b)
+    {
+        LVector3 diff = a - b;
+        return diff.BlockCentertoUnityVector3().magnitude;
+    }
     public static long CityBlockDistance(LVector3 a, LVector3 b)
     {
-        return (long)(Vector3.Distance(a.BlockCentertoUnityVector3(), b.BlockCentertoUnityVector3())*10.0f);
+        //return (long)(Vector3.Distance(a.BlockCentertoUnityVector3(), b.BlockCentertoUnityVector3()));
         return System.Math.Abs(a.x - b.x) + System.Math.Abs(a.y - b.y) + System.Math.Abs(a.z - b.z);
     }
 
@@ -542,6 +562,14 @@ public class PhysicsUtils {
         return res;
     }
 
+
+
+    // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
+    public static bool RayCastAlsoHitWater(Vector3 origin, Vector3 dir, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
+    {
+        return CustomRaycast(origin, dir, maxDist, (b, bx, by, bz, pbx, pby, pbz) => { return (BlockValue)b == BlockValue.Air; }, (b, bx, by, bz, pbx, pby, pbz) => { return (BlockValue)b != BlockValue.Air; }, out hitResults, maxSteps: maxSteps);
+    }
+
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
     {
@@ -681,4 +709,477 @@ public class PhysicsUtils {
         }
         return false;
     }
+    
+
+
+    // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
+    public static bool CustomRaycast(Vector3 origin, Vector3 dir, float maxDist, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult, out RaycastResults hitResults, int maxSteps = -1)
+    {
+        dir = dir.normalized;
+        hitResults = null;
+        float worldScale = World.mainWorld.worldScale;
+        LVector3 hitPos;
+        LVector3 posBeforeHit;
+        Vector3 surfaceHitPos;
+        Vector3 normal;
+        long camX = (long)Mathf.Floor(origin.x / worldScale);
+        long camY = (long)Mathf.Floor(origin.y / worldScale);
+        long camZ = (long)Mathf.Floor(origin.z / worldScale);
+        int prevMinD = 0;
+        // start slightly back in case we are very very close to a block
+        float[] curPosF = new float[] { origin.x, origin.y, origin.z };
+        LVector3 curPosL = LVector3.FromUnityVector3(new Vector3(curPosF[0], curPosF[1], curPosF[2]));
+        LVector3 prevPosLTested = curPosL;
+        float[] rayDir = new float[] { dir.x, dir.y, dir.z };
+        hitPos = new LVector3(camX, camY, camZ);
+        surfaceHitPos = new Vector3(origin.x, origin.y, origin.z);
+        posBeforeHit = new LVector3(camX, camY, camZ);
+        normal = new Vector3(1, 1, 1).normalized;
+        if (maxSteps == -1)
+        {
+            maxSteps = 1000;
+        }
+        for (int i = 0; i < maxSteps; i++)
+        {
+            float minT = float.MaxValue;
+            int minD = -1;
+
+            // find first plane we will hit
+            for (int d = 0; d < curPosF.Length; d++)
+            {
+                // call velocity = rayDir[d]
+                // dist = velocity*time
+                // time = dist/velocity
+                if (rayDir[d] != 0)
+                {
+                    int offsetSign;
+                    float nextWall;
+                    if (rayDir[d] > 0)
+                    {
+                        nextWall = Mathf.Ceil(curPosF[d] / worldScale);
+                        if (Mathf.Abs(nextWall - curPosF[d] / worldScale) < 0.0001f)
+                        {
+                            nextWall += 1.0f;
+                        }
+                        offsetSign = 1;
+                    }
+                    else
+                    {
+                        nextWall = Mathf.Floor(curPosF[d] / worldScale);
+                        if (Mathf.Abs(nextWall - curPosF[d] / worldScale) < 0.0001f)
+                        {
+                            nextWall -= 1.0f;
+                        }
+                        offsetSign = -1;
+                    }
+                    long dest;
+                    long offset;
+                    /*
+                    // if on first step, try just going to the next face without an offset if it is ahead
+                    if (Mathf.Sign(curPosL[d] - curPosF[d] / world.worldScale) == offsetSign && i == 0)
+                    {
+                        dest = curPosL[d];
+                    }
+                    */
+
+
+                    //float nearestPointFive = Mathf.Round(curPosF[d]/world.worldScale) + offsetSign * 0.5f;
+                    //float dist = Mathf.Abs(curPosF[d] / world.worldScale - nearestPointFive);
+                    //float dist = Mathf.Abs(curPosF[d] / world.worldScale - dest);
+                    float dist = Mathf.Abs(curPosF[d] / worldScale - nextWall);
+                    float tToPlane = dist / Mathf.Abs(rayDir[d]);
+                    if (tToPlane > maxDist * World.mainWorld.worldScale) // too far
+                    {
+                        continue;
+                    }
+
+                    //Debug.Log("testing with tToPlane = " + tToPlane + " and camPos=" + curPosF[d] + " and dest=" + nextWall + " and dist=" + dist + " and hitPos = " + hitPos + " and minT = " + minT + " and curPosL = " + curPosL  + " and rayDir[d] = " + rayDir[d]);
+                    // if tToX (actual dist) is less than furthest block hit so far, this might be a good point, check if there is a block there
+                    if (tToPlane < minT)
+                    {
+                        minT = tToPlane;
+                        minD = d;
+                        if (i == 0)
+                        {
+                            prevMinD = minD;
+                        }
+                    }
+                }
+            }
+            if (minT > maxDist * World.mainWorld.worldScale)
+            {
+                //Debug.Log("too big " + minT + " greater than maxDist " + maxDist);
+                return false;
+            }
+            // step towards it and check if block
+            Vector3 prevPosF = new Vector3(curPosF[0], curPosF[1], curPosF[2]);
+            Vector3 resPosF = prevPosF + dir * minT * worldScale;
+            Vector3 midPoint = (prevPosF + resPosF) / 2.0f;
+            LVector3 newCurPosL = LVector3.FromUnityVector3(midPoint);
+            //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF);
+            curPosL = LVector3.FromUnityVector3(resPosF);
+
+            if (Vector3.Distance(prevPosF, origin) > maxDist) // too far
+            {
+                return false;
+            }
+            //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF + " with distance " + Vector3.Distance(prevPosF, origin) + " and max distance " + maxDist);
+
+
+
+            if (isBlockDesiredResult(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
+            //if (IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
+            {
+                hitPos = newCurPosL;
+                surfaceHitPos = prevPosF;
+                posBeforeHit = new LVector3(newCurPosL.x, newCurPosL.y, newCurPosL.z);
+                posBeforeHit[prevMinD] -= (long)Mathf.Sign(rayDir[prevMinD]);
+                float[] normalArr = new float[] { 0, 0, 0 };
+                normalArr[prevMinD] = -Mathf.Sign(rayDir[prevMinD]);
+                if (Mathf.Sign(rayDir[prevMinD]) == 0)
+                {
+                    Debug.Log("spooky why u 0");
+                    normalArr[prevMinD] = 0.0f;
+                }
+                normal = new Vector3(normalArr[0], normalArr[1], normalArr[2]);
+
+
+                hitResults = new RaycastResults(surfaceHitPos, hitPos, posBeforeHit, Vector3.Distance(prevPosF, origin), normal);
+                return true;
+            }
+
+
+            if (!isBlockValid(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
+            {
+                return false;
+            }
+
+            prevPosLTested = newCurPosL;
+
+            prevMinD = minD;
+            curPosF[0] = resPosF.x;
+            curPosF[1] = resPosF.y;
+            curPosF[2] = resPosF.z;
+        }
+        return false;
+    }
+
+
+
+
+
+    static World world { get { return World.mainWorld; } }
+
+    public static bool isValidForPathfind(int blocksHeight, LVector3 prevPos, LVector3 pos)
+    {
+        bool isCurrentlyValid = true;
+        for (int i = 0; i < blocksHeight; i++)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
+        }
+        // bad:
+        // X  
+        //    2
+        // 1
+        // good:
+        // 
+        //     2
+        // 1 
+        if (pos.y > prevPos.y)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[prevPos.x, prevPos.y + 1, prevPos.z] == (int)BlockValue.Air;
+        }
+        else if (pos.y < prevPos.y)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y + 1, pos.z] == (int)BlockValue.Air;
+        }
+        if (prevPos.y == pos.y && pos.z != prevPos.z && pos.x != prevPos.x)
+        {
+            isCurrentlyValid = isCurrentlyValid && (world[prevPos.x, prevPos.y, pos.z] == (int)BlockValue.Air || world[pos.x, prevPos.y, prevPos.z] == (int)BlockValue.Air);
+        }
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
+    }
+
+
+
+    public static bool isValidForPathfind(int blocksHeight, LVector3 pos)
+    {
+        bool isCurrentlyValid = true;
+        for (int i = 0; i < blocksHeight; i++)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[pos.x, pos.y - i, pos.z] == (int)BlockValue.Air;
+        }
+        return isCurrentlyValid && world[pos.x, pos.y - blocksHeight, pos.z] != (int)BlockValue.Air;
+    }
+
+
+
+    public static IEnumerable<LVector3> AllNeighbors(LVector3 pos)
+    {
+        yield return new LVector3(pos.x + 1, pos.y, pos.z);
+        yield return new LVector3(pos.x - 1, pos.y, pos.z);
+        yield return new LVector3(pos.x + 1, pos.y, pos.z + 1);
+        yield return new LVector3(pos.x - 1, pos.y, pos.z + 1);
+        yield return new LVector3(pos.x + 1, pos.y, pos.z - 1);
+        yield return new LVector3(pos.x - 1, pos.y, pos.z - 1);
+        yield return new LVector3(pos.x + 1, pos.y + 1, pos.z);
+        yield return new LVector3(pos.x - 1, pos.y + 1, pos.z);
+        yield return new LVector3(pos.x + 1, pos.y - 1, pos.z);
+        yield return new LVector3(pos.x - 1, pos.y - 1, pos.z);
+        yield return new LVector3(pos.x, pos.y + 1, pos.z + 1);
+        yield return new LVector3(pos.x, pos.y + 1, pos.z - 1);
+        yield return new LVector3(pos.x, pos.y - 1, pos.z + 1);
+        yield return new LVector3(pos.x, pos.y - 1, pos.z - 1);
+        yield return new LVector3(pos.x, pos.y, pos.z + 1);
+        yield return new LVector3(pos.x, pos.y, pos.z - 1);
+    }
+
+
+    static bool TryLinePathfind(int blocksHeight, ref PathNode curPath, out bool youShouldJump, LVector3 startPos, LVector3 goalPos)
+    {
+        youShouldJump = false;
+        Vector3 startPosVec3 = startPos.BlockCentertoUnityVector3();
+        Vector3 goalPosVec3 = goalPos.BlockCentertoUnityVector3();
+        long maxSteps = LVector3.CityBlockDistance(startPos, goalPos)+5;
+        RaycastResults results;
+        List<PathNode> positions = new List<PathNode>();
+        positions.Add(new PathNode(startPos, null));
+        if (CustomRaycast(startPosVec3, (goalPosVec3 - startPosVec3).normalized, 100000.0f, (b, bx, by, bz, pbx, pby, pbz) =>
+        {
+            if(isValidForPathfind(blocksHeight, pbx, pby, pbz, bx, by, bz))
+            {
+                Debug.Log("called in raycast " + bx + " " + by + " " + bz + " " + positions.Count);
+                PathNode nextNode = new PathNode(new LVector3(bx, by, bz), positions[positions.Count - 1]);
+                //PathNode curNode = positions[positions.Count - 1];
+                //nextNode.prevNode = curNode;
+                //curNode.nextNode = nextNode;
+                positions.Add(nextNode);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }, (b, bx, by, bz, pbx, pby, pbz) =>
+        {
+            if(isValidForPathfind(blocksHeight, pbx, pby, pbz, bx, by, bz) && LVector3.CityBlockDistance(new LVector3(bx, by, bz), goalPos) <= 1)
+            {
+                Debug.Log("called in raycast 2 " + bx + " " + by + " " + bz + " " + positions.Count);
+                PathNode nextNode = new PathNode(new LVector3(bx, by, bz), positions[positions.Count - 1]);
+                //PathNode curNode = positions[positions.Count - 1];
+                //nextNode.prevNode = curNode;
+                //curNode.nextNode = nextNode;
+                positions.Add(nextNode);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }, out results))
+        {
+            int pathLen = 0;
+            curPath = positions[positions.Count-1];
+            if (curPath != null && curPath.prevNode != null)
+            {
+                PathNode curBlock = curPath.prevNode;
+                PathNode nextBlock = curPath;
+                while (curBlock.prevNode != null)
+                {
+                    pathLen += 1;
+                    curBlock.nextNode = nextBlock;
+                    nextBlock = curBlock;
+                    curBlock = curBlock.prevNode;
+                }
+                curBlock.nextNode = nextBlock;
+                curPath = curBlock;
+            }
+            Debug.Log("line pathfind with path len = " + pathLen);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public static bool isValidForPathfind(int blocksHeight, long px, long py, long pz, long x, long y, long z)
+    {
+        bool isCurrentlyValid = true;
+        for (int i = 0; i < blocksHeight; i++)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[x, y - i, z] == (int)BlockValue.Air;
+        }
+        // bad:
+        // X  
+        //    2
+        // 1
+        // good:
+        // 
+        //     2
+        // 1 
+        if (y > py)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[px, py + 1, pz] == (int)BlockValue.Air;
+        }
+        else if (y < py)
+        {
+            isCurrentlyValid = isCurrentlyValid && world[x, y + 1, z] == (int)BlockValue.Air;
+        }
+        if (py == y && z != pz && x != px)
+        {
+            isCurrentlyValid = isCurrentlyValid && (world[px, py, z] == (int)BlockValue.Air || world[x, py, pz] == (int)BlockValue.Air);
+        }
+        return isCurrentlyValid && world[x, y - blocksHeight, z] != (int)BlockValue.Air;
+    }
+
+    public static void Pathfind(int blocksHeight, ref PathNode curPath, out bool youShouldJump, LVector3 startPos, LVector3 goalPos, int maxSteps = 100)
+    {
+
+        // doesn't quite work yet
+        //if (TryLinePathfind(blocksHeight, ref curPath, out youShouldJump, startPos, goalPos))
+        //{
+        //    Debug.Log("got line pathfind");
+        //    return;
+        //}
+        youShouldJump = false;
+        HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
+        Queue<PathNode> nodes = new Queue<PathNode>();
+        LVector3 myPos = startPos;
+        PathNode closest = new PathNode(myPos, null);
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < 2; i++)
+        {
+            LVector3 tmpPos = myPos - new LVector3(0, i, 0);
+            if (!nodesSoFar.Contains(tmpPos) && isValidForPathfind(blocksHeight, tmpPos))
+            {
+                nodes.Enqueue(new PathNode(tmpPos, null));
+                nodesSoFar.Add(tmpPos);
+            }
+        }
+
+        int steps = 0;
+        if (nodes.Count == 0)
+        {
+            //body.jumping = true;
+            youShouldJump = true;
+        }
+        while (nodes.Count > 0)
+        {
+            PathNode curNode = nodes.Dequeue();
+            float dist = LVector3.EuclideanDistance(curNode.pos, goalPos);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = curNode;
+            }
+            foreach (LVector3 neighbor in AllNeighbors(curNode.pos))
+            {
+                if (!nodesSoFar.Contains(neighbor) && isValidForPathfind(blocksHeight, curNode.pos, neighbor))
+                {
+                    nodes.Enqueue(new PathNode(neighbor, curNode));
+                    nodesSoFar.Add(neighbor);
+                }
+            }
+            steps += 1;
+            if (steps >= maxSteps || dist <= 1)
+            {
+                //Debug.Log("found path with dist = " + dist + " in " + steps + " steps");
+                break;
+            }
+        }
+
+        curPath = closest;
+        if (curPath != null && curPath.prevNode != null)
+        {
+            PathNode curBlock = curPath.prevNode;
+            PathNode nextBlock = curPath;
+            while (curBlock.prevNode != null)
+            {
+                curBlock.nextNode = nextBlock;
+                nextBlock = curBlock;
+                curBlock = curBlock.prevNode;
+            }
+            curBlock.nextNode = nextBlock;
+            curPath = curBlock;
+        }
+
+    }
+
+
+    public static void PathfindAway(int blocksHeight, ref PathNode curPath, out bool youShouldJump, LVector3 startPos, LVector3 goalPos, int maxSteps = 100)
+    {
+
+        // doesn't quite work yet
+        //if (TryLinePathfind(blocksHeight, ref curPath, out youShouldJump, startPos, goalPos))
+        //{
+        //    Debug.Log("got line pathfind");
+        //    return;
+        //}
+        youShouldJump = false;
+        HashSet<LVector3> nodesSoFar = new HashSet<LVector3>();
+        Queue<PathNode> nodes = new Queue<PathNode>();
+        LVector3 myPos = startPos;
+        PathNode furthest = new PathNode(myPos, null);
+        float furthestDist = float.MinValue;
+        for (int i = 0; i < 2; i++)
+        {
+            LVector3 tmpPos = myPos - new LVector3(0, i, 0);
+            if (!nodesSoFar.Contains(tmpPos) && isValidForPathfind(blocksHeight, tmpPos))
+            {
+                nodes.Enqueue(new PathNode(tmpPos, null));
+                nodesSoFar.Add(tmpPos);
+            }
+        }
+
+        int steps = 0;
+        if (nodes.Count == 0)
+        {
+            //body.jumping = true;
+            youShouldJump = true;
+        }
+        while (nodes.Count > 0)
+        {
+            PathNode curNode = nodes.Dequeue();
+            float dist = LVector3.EuclideanDistance(curNode.pos, goalPos);
+            if (dist > furthestDist)
+            {
+                furthestDist = dist;
+                furthest = curNode;
+            }
+            foreach (LVector3 neighbor in AllNeighbors(curNode.pos))
+            {
+                if (!nodesSoFar.Contains(neighbor) && isValidForPathfind(blocksHeight, curNode.pos, neighbor))
+                {
+                    nodes.Enqueue(new PathNode(neighbor, curNode));
+                    nodesSoFar.Add(neighbor);
+                }
+            }
+            steps += 1;
+            if (steps >= maxSteps || dist <= 1)
+            {
+                //Debug.Log("found path with dist = " + dist + " in " + steps + " steps");
+                break;
+            }
+        }
+
+        curPath = furthest;
+        if (curPath != null && curPath.prevNode != null)
+        {
+            PathNode curBlock = curPath.prevNode;
+            PathNode nextBlock = curPath;
+            while (curBlock.prevNode != null)
+            {
+                curBlock.nextNode = nextBlock;
+                nextBlock = curBlock;
+                curBlock = curBlock.prevNode;
+            }
+            curBlock.nextNode = nextBlock;
+            curPath = curBlock;
+        }
+
+    }
+
+
+
 }

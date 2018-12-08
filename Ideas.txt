@@ -305,3 +305,108 @@ All animals:
 - large grazing animal: fairly large, usable in an ox sort of way (pull a cart or something), a really big armadillo, with plates, burrows to make larva (worm kinda sense), stubby legs, sorta takes care of it until it metamorphisis to have small stubby legs at first, then it can walk around, parents chew up grass and then regurgitate for babies
 	quite useful to domesticate because fairly strong, [pull their neck in, put their face to the ground], with juveniles they might try to make a circle around the babies, and protect babies by sitting on them
 	animals will eventually give up killing them because its a waste of energy, they might keep scratch at it for a bit but then go and chase something easier
+	
+	
+	
+	
+	
+	
+	
+
+Stamina Meter: For jumping and sprinting and stuff
+	antelopes run away, predators strategy is to chase long enough that they can wear them out
+	varies based on the species, might also be genetic thing
+Hunger meter: low hunger means stamina doesn't replenish as fast
+	drains if they expend lots of stamina
+Injury and dehydration: reduce the stamina cap
+
+Stand animation: no stamina
+Walk: very little stamina: as long as a creature has enough food it can basically walk forever without needing to stop and rest
+Jump: take more stamina
+Sprint: take more stamina
+
+It makes sense that if an animal sees a food that they can eat that they'll actually eat it
+	they'll just have a list of kinds of foods they are willing to eat and they'll pick it up on the ground
+
+When two animals of the same species are in the same range they might approach each other to socialize, then tend to walk away from each other after a while to prevent clumping
+	butt heads: antlers
+	sniff each other
+	tilt heads at each other
+	etc.
+
+Genetic traits: personality stuff
+	weighted probabilities: if there is food or something scary, are they are more likely to go after scary thing or get food, how more likely are they to socialize, etc.
+	- Likely to run away from players or other spookers
+	- Socalize with same species
+	- Socialize with other species
+	- Run away or fight back
+		crocadog will be more likely to fight back if more crocadogs around because they like to fight in packs
+	- How distractable they are by something like looking for food
+
+		
+General things:
+	- Standing around
+	- Running away from spooker
+	- Fighting someone
+	- Socalize
+		- aggressiveness: butt heads vs sniff sniff with same species, for example
+	- Eating food
+	- Searching for food
+		- Chasing something if looking for prey
+			- If they see an animal, look at it, then decide to chase after
+				- if it takes too long, they might give up
+				- walk up to something and then start sprinting
+				- close enough they might start doing their rawr rawr thing and with mouthes to attack
+		- Some preferred pray: crocodogs might target small things like antelopes but if a group they might go after something larger
+			- They would probably go after something easier to get (piglike) vs spikey sheep
+			- Some personality variation into how willing they are to go after something that is a little bit too spicy
+
+
+			
+	- Laziness: whether they might stand around if nothing to do or wander around looking for something to do (if full and high on stamina)
+		most active might run around even when they don't need to - means they get places to find things to do faster but if they can't successfully find things to do it costs them
+	
+	- Sound files for different kinds of benavhiors
+		- socialize
+		- hunting
+		- injured: hurt noises
+		- very hungry noises
+			might have change in animation if they are very hungry or hurt, maybe hold head lower or ears droop down, vs plenty to eat and not hurt then ears up right and socializing
+		- crocodogs might run away or look at you or really friendly ones might go sniff sniff at you, tilt their head at you "huh who are you" when first see if friendy
+
+			
+	- Risk averse: how lightly they are willing to jump off a large ledge that might get them stuck or take fall damage
+			
+			
+			
+Crocodog: breeding behaviors
+
+
+
+Crocodogs and stuff have males and females
+	When males are ready to breed, they will make a pile of sticks and mulch, then sing a "hey ladies" song, then nearby lady crocodogs will come and check out burrow and see if the male and the borrow is good enough for them
+			Male's decision to dig a burrow can depend on:
+				how many females they have seen recently
+				how many burrows they have seen recently (if they see a lot they are less likely to dig one themselves)
+				If they have a burrow, they are more likely to be aggressive to males and more likely to be friendly to females
+		if so they will go in the burrow and breed and take care of babies/bring food to them
+		if not the male will walk off
+		
+Mammals with beaks are hemaphoridites
+
+		- 
+			
+			
+			
+
+		
+		
+		
+		
+		
+		
+cunningham in grak's scottish ancestry
+	
+	
+	
+
