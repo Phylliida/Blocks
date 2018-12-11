@@ -7,7 +7,7 @@ public class Sand : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        CreateBlockEntity(BlockValue.Sand, positionOfBlock);
+        CreateBlockEntity(Example.Sand, positionOfBlock);
         destroyBlock = true;
     }
 
@@ -16,15 +16,15 @@ public class Sand : Block
         block.needsAnotherTick = true;
         using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
         {
-            if (below.block == BlockValue.Water || below.block == BlockValue.WaterNoFlow)
+            if (below.block == Example.Water || below.block == Example.WaterNoFlow)
             {
-                below.block = BlockValue.Water;
+                below.block = Example.Water;
                 block.state1 = 1 - block.state1;
                 below.state1 = block.state1;
             }
-            else if (below.block == BlockValue.Air)
+            else if (below.block == Example.Air)
             {
-                below.block = BlockValue.Water;
+                below.block = Example.Water;
             }
         }
     }
@@ -52,7 +52,7 @@ public class SimpleWater : Block2
     bool IsWater(long x, long y, long z)
     {
         BlockValue block = GetBlock(x, y, z);
-        return block == BlockValue.Water || block == BlockValue.WaterNoFlow;
+        return block == Example.Water || block == Example.WaterNoFlow;
     }
 
 
@@ -69,10 +69,10 @@ public class SimpleWater : Block2
 
 
             // if air below, set below = water and us = air
-        if (GetBlock(block.x, block.y - 1, block.z) == BlockValue.Air)
+        if (GetBlock(block.x, block.y - 1, block.z) == Example.Air)
         {
-            SetBlock(block.x, block.y - 1, block.z, BlockValue.Water);
-            block.block = BlockValue.Air;
+            SetBlock(block.x, block.y - 1, block.z, Example.Water);
+            block.block = Example.Air;
             return;
         }
         else
@@ -80,10 +80,10 @@ public class SimpleWater : Block2
             // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
             foreach (BlockData neighbor in GetNeighbors(block, includingUp: false, includingDown: false))
             {
-                if (neighbor.block == BlockValue.Air && GetBlock(neighbor.x, neighbor.y - 1, neighbor.z) == BlockValue.Air)
+                if (neighbor.block == Example.Air && GetBlock(neighbor.x, neighbor.y - 1, neighbor.z) == Example.Air)
                 {
-                    SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, BlockValue.Water);
-                    block.block = BlockValue.Air;
+                    SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
+                    block.block = Example.Air;
                     return;
                 }
             }
@@ -113,18 +113,18 @@ public class Water : Block2
     bool IsWater(long x, long y, long z)
     {
         BlockValue block = GetBlock(x, y, z);
-        return block == BlockValue.Water || block == BlockValue.WaterNoFlow;
+        return block == Example.Water || block == Example.WaterNoFlow;
     }
 
     public int GetNumAirNeighbors(long wx, long wy, long wz)
     {
         return
-            (GetBlock(wx + 1, wy, wz) == (int)BlockValue.Air ? 1 : 0) +
-            (GetBlock(wx - 1, wy, wz) == (int)BlockValue.Air ? 1 : 0) +
-            (GetBlock(wx, wy + 1, wz) == (int)BlockValue.Air ? 1 : 0) +
-            (GetBlock(wx, wy - 1, wz) == (int)BlockValue.Air ? 1 : 0) +
-            (GetBlock(wx, wy, wz + 1) == (int)BlockValue.Air ? 1 : 0) +
-            (GetBlock(wx, wy, wz - 1) == (int)BlockValue.Air ? 1 : 0);
+            (GetBlock(wx + 1, wy, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlock(wx - 1, wy, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlock(wx, wy + 1, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlock(wx, wy - 1, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlock(wx, wy, wz + 1) == (int)Example.Air ? 1 : 0) +
+            (GetBlock(wx, wy, wz - 1) == (int)Example.Air ? 1 : 0);
 
     }
 
@@ -144,21 +144,21 @@ public class Water : Block2
 
 
         // if we are WATER without water above and with water below, pathfind to look for open space
-        //if (block == (int)BlockValue.Water && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
-        if (block.block == BlockValue.Water && IsWater(block.x, block.y-1, block.z) && !IsWater(block.x, block.y+1, block.z))
+        //if (block == (int)Example.Water && IsWater(this[wx, wy - 1, wz]) && !IsWater(this[wx, wy + 1, wz]))
+        if (block.block == Example.Water && IsWater(block.x, block.y-1, block.z) && !IsWater(block.x, block.y+1, block.z))
         {
             // returns true if search found something in maxSteps or less. Search "finds something" if isBlockDesiredResult was ever called and returned true
             //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
             //numWaterUpdatesThisTick += 1;
             if (PhysicsUtils.SearchOutwards(new LVector3(block.x, block.y, block.z), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
             {
-                return by < block.y && (b == (int)BlockValue.Water || b == (int)BlockValue.WaterNoFlow);
+                return by < block.y && (b == (int)Example.Water || b == (int)Example.WaterNoFlow);
             },
                 isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                 {
-                    if (b == (int)BlockValue.Air && by < block.y)
+                    if (b == (int)Example.Air && by < block.y)
                     {
-                        SetBlock(bx, by, bz, BlockValue.Water);
+                        SetBlock(bx, by, bz, Example.Water);
                         SetState(bx, by, bz, GetNumAirNeighbors(bx, by, bz), 3);
                         return true;
                     }
@@ -167,13 +167,13 @@ public class Water : Block2
             ))
             {
                 block.state3 = 0;
-                block.block = BlockValue.Air;
+                block.block = Example.Air;
                 return;
             }
             else
             {
                 block.needsAnotherTick = true;
-                block.block = BlockValue.WaterNoFlow;
+                block.block = Example.WaterNoFlow;
                 return;
             }
         }
@@ -181,12 +181,12 @@ public class Water : Block2
         {
 
             // if air below, set below = water and us = air
-            if (GetBlock(block.x, block.y-1, block.z) == BlockValue.Air)
+            if (GetBlock(block.x, block.y-1, block.z) == Example.Air)
             {
-                SetBlock(block.x, block.y-1, block.z, BlockValue.Water);
+                SetBlock(block.x, block.y-1, block.z, Example.Water);
                 block.state3 = 0;
                 SetState(block.x, block.y - 1, block.z, GetNumAirNeighbors(block.x, block.y - 1, block.z), 3); // +1 because we are now air instead of water
-                block.block = BlockValue.Air;
+                block.block = Example.Air;
                 return;
             }
             else
@@ -195,22 +195,22 @@ public class Water : Block2
                 foreach (BlockData neighbor in GetNeighbors(block, includingUp: false, includingDown: false))
                 {
                     LVector3 pos2 = 2 * (neighbor.pos - block.pos) + block.pos;
-                    if (neighbor.block == BlockValue.Air)
+                    if (neighbor.block == Example.Air)
                     {
-                        if (GetBlock(neighbor.x, neighbor.y-1, neighbor.z) == BlockValue.Air)
+                        if (GetBlock(neighbor.x, neighbor.y-1, neighbor.z) == Example.Air)
                         {
-                            SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, BlockValue.Water);
+                            SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
                             SetState(neighbor.x, neighbor.y - 1, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y-1, neighbor.z), 3);
                             block.state3 = 0;
-                            block.block = BlockValue.Air;
+                            block.block = Example.Air;
                             return;
                         }
-                        else if (pos2.BlockV == BlockValue.Air && GetBlock(pos2.x, pos2.y - 1, pos2.z) == BlockValue.Air)
+                        else if (pos2.BlockV == Example.Air && GetBlock(pos2.x, pos2.y - 1, pos2.z) == Example.Air)
                         {
-                            SetBlock(pos2.x, pos2.y - 1, pos2.z, BlockValue.Water);
+                            SetBlock(pos2.x, pos2.y - 1, pos2.z, Example.Water);
                             SetState(pos2.x, pos2.y - 1, pos2.z, GetNumAirNeighbors(pos2.x, pos2.y - 1, pos2.z), 3);
                             block.state3 = 0;
-                            block.block = BlockValue.Air;
+                            block.block = Example.Air;
                             return;
                         }
                     }
@@ -227,7 +227,7 @@ public class Water : Block2
                     LVector3 airNeighbor = new LVector3(block.x, block.y, block.z);
                     foreach (BlockData neighbor in GetNeighbors(block))
                     {
-                        if (neighbor.block == BlockValue.Air)
+                        if (neighbor.block == Example.Air)
                         {
                             airNeighbor = neighbor.pos;
                             break;
@@ -239,13 +239,13 @@ public class Water : Block2
                     //if (PhysicsUtils.SearchOutwards(new LVector3(wx, wy, wz), maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     if (PhysicsUtils.SearchOutwards(block.pos, maxSteps: 30, searchUp: true, searchDown: true, isBlockValid: (b, bx, by, bz, pbx, pby, pbz) =>
                     {
-                        return (b == (int)BlockValue.Water || b == (int)BlockValue.WaterNoFlow);
+                        return (b == (int)Example.Water || b == (int)Example.WaterNoFlow);
                     },
                         isBlockDesiredResult: (b, bx, by, bz, pbx, pby, pbz) =>
                         {
-                            if (b == (int)BlockValue.WaterNoFlow && IsWater(bx, by - 1, bz) && airNeighbor.y < by)
+                            if (b == (int)Example.WaterNoFlow && IsWater(bx, by - 1, bz) && airNeighbor.y < by)
                             {
-                                SetBlock(bx, by, bz, (int)BlockValue.Air);
+                                SetBlock(bx, by, bz, Example.Air);
                                 SetState(bx, by, bz, 0, 3);
                                 return true;
                             }
@@ -254,7 +254,7 @@ public class Water : Block2
                     ))
                     {
 
-                        SetBlock(airNeighbor.x, airNeighbor.y, airNeighbor.z, BlockValue.Water);
+                        SetBlock(airNeighbor.x, airNeighbor.y, airNeighbor.z, Example.Water);
                         SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
                         block.state3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
                         block.needsAnotherTick = true;
@@ -263,7 +263,7 @@ public class Water : Block2
                     else
                     {
                         block.needsAnotherTick = true;
-                        block.block = BlockValue.WaterNoFlow;
+                        block.block = Example.WaterNoFlow;
                         return;
                     }
                 }
@@ -282,7 +282,7 @@ public class Grass : Block2
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        CreateBlockEntity(BlockValue.Dirt, positionOfBlock);
+        CreateBlockEntity(Example.Dirt, positionOfBlock);
         destroyBlock = true;
     }
 
@@ -306,20 +306,20 @@ public class Grass : Block2
         long state2 = block.state2;
         long state3 = block.state3;
         bool doesntNeedTick = true;
-        if (GetBlock(block.x, block.y+1, block.z) != BlockValue.Air)
+        if (GetBlock(block.x, block.y+1, block.z) != Example.Air)
         {
-            block.block = BlockValue.Dirt;
+            block.block = Example.Dirt;
             return;
         }
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
             // if neighbor is dirt and it has air above it, try growing into it
-            if (neighbor.block == BlockValue.Dirt && GetBlock(neighbor.x, neighbor.y + 1, neighbor.z) == BlockValue.Air)
+            if (neighbor.block == Example.Dirt && GetBlock(neighbor.x, neighbor.y + 1, neighbor.z) == Example.Air)
             {
                 if (rand() < 2.0f)
                 {
                     // grow
-                    neighbor.block = BlockValue.Grass;
+                    neighbor.block = Example.Grass;
                 }
                 else
                 {
@@ -337,7 +337,7 @@ public class Grass : Block2
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
-        if (thingBreakingWith.Block == BlockValue.Shovel)
+        if (thingBreakingWith.Block == Example.Shovel)
         {
             return 1.0f;
         }
@@ -353,10 +353,10 @@ public class Leaf : StaticBlock
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        CreateBlockEntity(BlockValue.Stick, positionOfBlock);
+        CreateBlockEntity(Example.Stick, positionOfBlock);
         if (Random.value < 0.2f)
         {
-            CreateBlockEntity(BlockValue.Stick, positionOfBlock);
+            CreateBlockEntity(Example.Stick, positionOfBlock);
         }
         destroyBlock = true;
     }
@@ -374,29 +374,29 @@ public class Rock : StaticBlock
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
-        if (thingBreakingWith.Block == BlockValue.Rock || thingBreakingWith.Block == BlockValue.SharpRock ||
-            thingBreakingWith.Block == BlockValue.LargeRock || thingBreakingWith.Block == BlockValue.LargeSharpRock ||
-            thingBreakingWith.Block == BlockValue.Pickaxe)
+        if (thingBreakingWith.Block == Example.Rock || thingBreakingWith.Block == Example.SharpRock ||
+            thingBreakingWith.Block == Example.LargeRock || thingBreakingWith.Block == Example.LargeSharpRock ||
+            thingBreakingWith.Block == Example.Pickaxe)
         {
-            CreateBlockEntity(BlockValue.SharpRock, positionOfBlock);
+            CreateBlockEntity(Example.SharpRock, positionOfBlock);
         }
         else
         {
-            CreateBlockEntity(BlockValue.Rock, positionOfBlock);
+            CreateBlockEntity(Example.Rock, positionOfBlock);
         }
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
-        if (thingBreakingWith.Block == BlockValue.Rock || thingBreakingWith.Block == BlockValue.SharpRock)
+        if (thingBreakingWith.Block == Example.Rock || thingBreakingWith.Block == Example.SharpRock)
         {
             return 3.0f;
         }
-        else if(thingBreakingWith.Block == BlockValue.LargeRock || thingBreakingWith.Block == BlockValue.LargeSharpRock)
+        else if(thingBreakingWith.Block == Example.LargeRock || thingBreakingWith.Block == Example.LargeSharpRock)
         {
             return 2.0f;
         }
-        else if(thingBreakingWith.Block == BlockValue.Pickaxe)
+        else if(thingBreakingWith.Block == Example.Pickaxe)
         {
             return 1.5f;
         }
@@ -412,29 +412,29 @@ public class LargeRock : StaticBlock
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
-        if (thingBreakingWith.Block == BlockValue.Rock || thingBreakingWith.Block == BlockValue.SharpRock ||
-            thingBreakingWith.Block == BlockValue.LargeRock || thingBreakingWith.Block == BlockValue.LargeSharpRock ||
-            thingBreakingWith.Block == BlockValue.Pickaxe)
+        if (thingBreakingWith.Block == Example.Rock || thingBreakingWith.Block == Example.SharpRock ||
+            thingBreakingWith.Block == Example.LargeRock || thingBreakingWith.Block == Example.LargeSharpRock ||
+            thingBreakingWith.Block == Example.Pickaxe)
         {
-            CreateBlockEntity(BlockValue.LargeSharpRock, positionOfBlock);
+            CreateBlockEntity(Example.LargeSharpRock, positionOfBlock);
         }
         else
         {
-            CreateBlockEntity(BlockValue.LargeRock, positionOfBlock);
+            CreateBlockEntity(Example.LargeRock, positionOfBlock);
         }
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
-        if (thingBreakingWith.Block == BlockValue.Rock || thingBreakingWith.Block == BlockValue.SharpRock)
+        if (thingBreakingWith.Block == Example.Rock || thingBreakingWith.Block == Example.SharpRock)
         {
             return 5.0f;
         }
-        else if (thingBreakingWith.Block == BlockValue.LargeRock || thingBreakingWith.Block == BlockValue.LargeSharpRock)
+        else if (thingBreakingWith.Block == Example.LargeRock || thingBreakingWith.Block == Example.LargeSharpRock)
         {
             return 4.0f;
         }
-        else if (thingBreakingWith.Block == BlockValue.Pickaxe)
+        else if (thingBreakingWith.Block == Example.Pickaxe)
         {
             return 2.0f;
         }
@@ -455,10 +455,10 @@ public class WetBark : StaticBlock
         destroyBlock = true;
         if (Random.value < 0.8)
         {
-            CreateBlockEntity(BlockValue.String, positionOfBlock + Random.insideUnitSphere*0.1f);
+            CreateBlockEntity(Example.String, positionOfBlock + Random.insideUnitSphere*0.1f);
         }
-        CreateBlockEntity(BlockValue.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
-        CreateBlockEntity(BlockValue.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
+        CreateBlockEntity(Example.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
+        CreateBlockEntity(Example.String, positionOfBlock + Random.insideUnitSphere * 0.1f);
     }
     
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -474,19 +474,19 @@ public class LooseRocks : StaticBlock
         if (block.state1 > 0)
         {
             block.state1 -= 1;
-            CreateBlockEntity(BlockValue.Rock, posOfOpening);
+            CreateBlockEntity(Example.Rock, posOfOpening);
             destroyBlock = false;
         }
         else
         {
-            CreateBlockEntity(BlockValue.LargeRock, positionOfBlock);
+            CreateBlockEntity(Example.LargeRock, positionOfBlock);
             destroyBlock = true;
         }
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
-        if (thingBreakingWith.Block == BlockValue.Pickaxe)
+        if (thingBreakingWith.Block == Example.Pickaxe)
         {
             return 0.8f;
         }
@@ -504,13 +504,13 @@ public class Trunk : StaticBlock
     {
         if (block.state1 > 0)
         {
-            CreateBlockEntity(BlockValue.Bark, posOfOpening);
+            CreateBlockEntity(Example.Bark, posOfOpening);
             block.state1 -= 1;
             destroyBlock = false;
         }
         else
         {
-            CreateBlockEntity(BlockValue.Trunk, positionOfBlock);
+            CreateBlockEntity(Example.Trunk, positionOfBlock);
             destroyBlock = true;
         }
     }
@@ -520,7 +520,7 @@ public class Trunk : StaticBlock
         // breaking bark off off tree
         if (block.state1 > 0)
         {
-            if (thingBreakingWith.Block == BlockValue.Axe)
+            if (thingBreakingWith.Block == Example.Axe)
             {
                 return 0.5f;
             }
@@ -532,7 +532,7 @@ public class Trunk : StaticBlock
         // breaking the log itself, not bark
         else
         {
-            if (thingBreakingWith.Block == BlockValue.Axe)
+            if (thingBreakingWith.Block == Example.Axe)
             {
                 return 3.0f;
             }
@@ -586,7 +586,7 @@ public class Bark : Block
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
-        CreateBlockEntity(BlockValue.Bark, positionOfBlock);
+        CreateBlockEntity(Example.Bark, positionOfBlock);
     }
 
     public override void OnTick(BlockData block)
@@ -594,11 +594,11 @@ public class Bark : Block
         block.needsAnotherTick = true;
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
-            if (neighbor.block == BlockValue.Water || neighbor.block == BlockValue.WaterNoFlow)
+            if (neighbor.block == Example.Water || neighbor.block == Example.WaterNoFlow)
             {
                 if (Random.value < 0.05f)
                 {
-                    block.block = BlockValue.WetBark;
+                    block.block = Example.WetBark;
                     block.needsAnotherTick = false;
                     break;
                 }
@@ -622,28 +622,28 @@ public class ExamplePack : BlocksPack {
     // Use this for initialization
     // Awake because we want this to happen before World calls its Start()
     void Awake () {
-        AddCustomBlock(BlockValue.Grass, new Grass());
-        AddCustomBlock(BlockValue.Bark, new Bark());
-        AddCustomBlock(BlockValue.Trunk, new Trunk());
-        AddCustomBlock(BlockValue.Dirt, new SimpleBlock(2.0f, new Tuple<BlockValue, float>(BlockValue.Shovel, 1.0f)));
-        AddCustomBlock(BlockValue.Stone, new SimpleBlock(10.0f, new Tuple<BlockValue, float>(BlockValue.Pickaxe, 3.0f)));
-        AddCustomBlock(BlockValue.Leaf, new Leaf());
-        AddCustomBlock(BlockValue.LooseRocks, new LooseRocks());
-        AddCustomBlock(BlockValue.Rock, new Rock());
-        AddCustomBlock(BlockValue.LargeRock, new LargeRock());
-        AddCustomBlock(BlockValue.LooseRocks, new LooseRocks());
-        AddCustomBlock(BlockValue.Stick, new SimpleItem());
-        AddCustomBlock(BlockValue.Pickaxe, new SimpleItem());
-        AddCustomBlock(BlockValue.SharpRock, new SimpleItem());
-        AddCustomBlock(BlockValue.LargeSharpRock, new SimpleItem());
-        AddCustomBlock(BlockValue.Shovel, new SimpleItem());
-        AddCustomBlock(BlockValue.Axe, new SimpleItem());
-        AddCustomBlock(BlockValue.WetBark, new WetBark());
-        AddCustomBlock(BlockValue.Sand, new Sand());
-        //AddCustomBlock(BlockValue.Water, new Water());
-        //AddCustomBlock(BlockValue.WaterNoFlow, new Water());
-        AddCustomBlock(BlockValue.Water, new SimpleWater());
-        AddCustomBlock(BlockValue.WaterNoFlow, new SimpleWater());
+        AddCustomBlock(Example.Grass, new Grass());
+        AddCustomBlock(Example.Bark, new Bark());
+        AddCustomBlock(Example.Trunk, new Trunk());
+        AddCustomBlock(Example.Dirt, new SimpleBlock(2.0f, new Tuple<BlockValue, float>(Example.Shovel, 1.0f)));
+        AddCustomBlock(Example.Stone, new SimpleBlock(10.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 3.0f)));
+        AddCustomBlock(Example.Leaf, new Leaf());
+        AddCustomBlock(Example.LooseRocks, new LooseRocks());
+        AddCustomBlock(Example.Rock, new Rock());
+        AddCustomBlock(Example.LargeRock, new LargeRock());
+        AddCustomBlock(Example.LooseRocks, new LooseRocks());
+        AddCustomBlock(Example.Stick, new SimpleItem());
+        AddCustomBlock(Example.Pickaxe, new SimpleItem());
+        AddCustomBlock(Example.SharpRock, new SimpleItem());
+        AddCustomBlock(Example.LargeSharpRock, new SimpleItem());
+        AddCustomBlock(Example.Shovel, new SimpleItem());
+        AddCustomBlock(Example.Axe, new SimpleItem());
+        AddCustomBlock(Example.WetBark, new WetBark());
+        AddCustomBlock(Example.Sand, new Sand());
+        //AddCustomBlock(Example.Water, new Water());
+        //AddCustomBlock(Example.WaterNoFlow, new Water());
+        AddCustomBlock(Example.Water, new SimpleWater());
+        AddCustomBlock(Example.WaterNoFlow, new SimpleWater());
         SetCustomGeneration(new ExampleGeneration());
     }
 

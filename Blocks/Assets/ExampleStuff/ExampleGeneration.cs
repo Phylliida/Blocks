@@ -29,20 +29,20 @@ public class ExampleGeneration : GenerationClass
         if (y >= elevationL)
         {
             // air, but allow other things to go here instead
-            outBlock.block = BlockValue.Wildcard;
+            outBlock.block = Example.Wildcard;
         }
         else
         {
             long distFromSurface = elevationL - y;
             if (distFromSurface == 1)
             {
-                outBlock.block = BlockValue.Grass;
+                outBlock.block = Example.Grass;
                 // low pr of making tree
                 if (Simplex.Noise.rand(x, y, z) < 0.01f)
                 {
                     if (Simplex.Noise.rand(x*2+1, y, z) < 0.9f)
                     {
-                        SetBlock(x, y + 1, z, BlockValue.FlowerWithNectar);
+                        SetBlock(x, y + 1, z, Example.FlowerWithNectar);
                     }
                     else
                     {
@@ -52,7 +52,7 @@ public class ExampleGeneration : GenerationClass
                         {
                             if (i == 0)
                             {
-                                SetBlock(x, y + i, z, BlockValue.Trunk);
+                                SetBlock(x, y + i, z, Example.Trunk);
                                 using (BlockData trunkData = GetBlockData(x, y + i, z))
                                 {
                                     trunkData.state1 = 4;
@@ -97,14 +97,14 @@ public class ExampleGeneration : GenerationClass
                                         {
                                             addedLeaf = true;
                                         }
-                                        SetBlock(x + j, y + i, z + k, BlockValue.Leaf);
+                                        SetBlock(x + j, y + i, z + k, Example.Leaf);
                                     }
                                 }
                             }
                             if (addedLeaf)
                             {
 
-                                SetBlock(x, y + i, z, BlockValue.Trunk);
+                                SetBlock(x, y + i, z, Example.Trunk);
                                 using (BlockData trunkData = GetBlockData(x, y + i, z))
                                 {
                                     trunkData.state1 = 4;
@@ -132,7 +132,7 @@ public class ExampleGeneration : GenerationClass
                         UnityEngine.Debug.Log("making river");
                         for (int i = 0; i < 100; i++)
                         {
-                            int val = UnityEngine.Random.Range(0, xOffsets.Length);
+                            int val = Simplex.Noise.randInt(0, xOffsets.Length, curX, curY, curZ);
                             offsetX += xOffsets[val];
                             offsetZ += zOffsets[val];
                             if (Math.Abs(offsetX) > Math.Abs(offsetZ))
@@ -157,13 +157,13 @@ public class ExampleGeneration : GenerationClass
                                     {
                                         if (Math.Sqrt(j * j + k * k + l * l) <= caveWidth)
                                         {
-                                            SetBlock(curX + j, curY + k, curZ + l, BlockValue.Water);
+                                            SetBlock(curX + j, curY + k, curZ + l, Example.Water);
                                         }
                                         else if (Math.Sqrt(j * j + k * k + l * l) <= 5.0f)
                                         {
-                                            if (GetBlock(curX + j, curY + k, curZ + l) != BlockValue.Water)
+                                            if (GetBlock(curX + j, curY + k, curZ + l) != Example.Water)
                                             {
-                                                SetBlock(curX + j, curY + k, curZ + l, BlockValue.Clay);
+                                                SetBlock(curX + j, curY + k, curZ + l, Example.Clay);
                                             }
                                         }
                                     }
@@ -175,35 +175,35 @@ public class ExampleGeneration : GenerationClass
             }
             else if (distFromSurface < 3)
             {
-                outBlock.block = BlockValue.Dirt;
+                outBlock.block = Example.Dirt;
             }
             else if(distFromSurface < 5)
             {
-                outBlock.block = BlockValue.Clay;
+                outBlock.block = Example.Clay;
             }
             else
             {
                 if (Simplex.Noise.rand(x,y,z) < 0.9 && distFromSurface == 5)
                 {
-                    outBlock.block = BlockValue.LooseRocks;
+                    outBlock.block = Example.LooseRocks;
                 }
                 else if (Simplex.Noise.rand(x, y, z) < 0.5 && distFromSurface == 6)
                 {
-                    outBlock.block = BlockValue.LooseRocks;
+                    outBlock.block = Example.LooseRocks;
                 }
                 else if (Simplex.Noise.rand(x, y, z) < 0.2 && distFromSurface == 7)
                 {
-                    outBlock.block = BlockValue.LooseRocks;
+                    outBlock.block = Example.LooseRocks;
                 }
                 else if (Simplex.Noise.rand(x, y, z) < 0.04)
                 {
-                    outBlock.block = BlockValue.LooseRocks;
+                    outBlock.block = Example.LooseRocks;
                 }
                 else
                 {
-                    outBlock.block = BlockValue.Stone;
+                    outBlock.block = Example.Stone;
                 }
-                if (outBlock.block == BlockValue.LooseRocks)
+                if (outBlock.block == Example.LooseRocks)
                 {
                     outBlock.state1 = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 5.0f + 1.0f);
                 }

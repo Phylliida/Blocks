@@ -72,7 +72,7 @@ public class Inventory {
             {
                 for (int j = 0; j < blocks[i].count; j++)
                 {
-                    World.mainWorld.CreateBlockEntity((BlockValue)blocks[i].block, position + Random.insideUnitSphere * 0.5f); 
+                    World.mainWorld.CreateBlockEntity(blocks[i].block, position + Random.insideUnitSphere * 0.5f); 
                 }
                 blocks[i] = null;
             }

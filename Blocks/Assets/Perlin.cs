@@ -248,6 +248,16 @@ namespace Simplex
 
         public static float randOffsetX, randOffsetY, randOffsetZ;
 
+        public static int randInt(int minValInclusive, int maxValExclusive, float x, float y, float z)
+        {
+            float val = rand(x, y, z);
+            if (val >= 1.0f)
+            {
+                val = 0.9999f;
+            }
+            return (int)((maxValExclusive - minValInclusive) * val + minValInclusive);
+        }
+
         public static float rand(float x, float y, float z)
         {
             x += randOffsetX;

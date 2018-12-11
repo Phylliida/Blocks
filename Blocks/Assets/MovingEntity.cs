@@ -153,7 +153,7 @@ public class MovingEntity : MonoBehaviour {
     bool IsInWater(Vector3 pos)
     {
         LVector3 bPos = LVector3.FromUnityVector3(pos);
-        return bPos.BlockV == Example_pack.BlockValue.Water || bPos.BlockV == Example_pack.BlockValue.WaterNoFlow;
+        return bPos.BlockV == Example_pack.Example.Water || bPos.BlockV == Example_pack.Example.WaterNoFlow;
     }
     bool TouchingWater()
     {

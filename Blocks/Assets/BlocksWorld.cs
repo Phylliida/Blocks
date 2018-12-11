@@ -6,7 +6,6 @@ using UnityEngine;
 
 
 
-
 // fast for just a few elements (10-20)
 public class FastSmallDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
 {
@@ -358,7 +357,7 @@ public class BlockData : System.IDisposable
     public int state1 { get { if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, 1); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state1) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
     public int state2 { get { if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, 2); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != state2) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
     public int state3 { get { if (world.blockModifyState != curBlockModifyState3) { cachedState3 = world.GetState(wx, wy, wz, cx, cy, cz, 3); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != state3) { wasModified = true; cachedState3 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
-    public BlockValue block { get { if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = (BlockValue)world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
+    public BlockValue block { get { if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
     //public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 2); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
     //public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 3); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
     //public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
@@ -432,10 +431,11 @@ public class BlockDataGetter
         this.blockGetter = World.mainWorld;
     }
 
+
     public BlockValue GetBlock(long x, long y, long z)
     {
         //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
-        return (BlockValue)blockGetter[x, y, z];
+        return blockGetter[x, y, z];
     }
 
     public void SetBlock(long x, long y, long z, BlockValue value)
@@ -1699,7 +1699,7 @@ public class Structure : BlockGetter
             blockModifyState += 1;
             if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
-                if ((BlockValue)value != BlockValue.Wildcard)
+                if (value != BlockValue.Wildcard)
                 {
                     baseChunk[x, y, z] = value;
                 }
@@ -1724,7 +1724,7 @@ public class Structure : BlockGetter
                 }
                 else
                 {
-                    if ((BlockValue)value != BlockValue.Wildcard)
+                    if (value != BlockValue.Wildcard)
                     {
                         bool wasGenerating = chunk.generating;
                         chunk.generating = true;
@@ -2026,10 +2026,11 @@ public class World : BlockGetter
         return true;
     }
 
+
     public BlockValue[] items = new BlockValue[] {
-        BlockValue.Stick,
-        BlockValue.SharpRock,
-        BlockValue.LargeSharpRock
+        ////BlockValue.Stick,
+        ////BlockValue.SharpRock,
+        ////BlockValue.LargeSharpRock
     };
 
     public bool AllowedtoPlaceBlock(BlockValue block)
@@ -2072,20 +2073,20 @@ public class World : BlockGetter
 
 
         stackableSize = new Dictionary<int, int>();
-        stackableSize[(int)BlockValue.Dirt] = 16;
-        stackableSize[(int)BlockValue.Stone] = 45;
-        stackableSize[(int)BlockValue.Grass] = 64;
-        stackableSize[(int)BlockValue.Sand] = 32;
-        stackableSize[(int)BlockValue.Bedrock] = 16;
-        stackableSize[(int)BlockValue.Clay] = 64;
-        stackableSize[(int)BlockValue.Leaf] = 64;
-        stackableSize[(int)BlockValue.Stick] = 64;
-        stackableSize[(int)BlockValue.Rock] = 64;
-        stackableSize[(int)BlockValue.LargeRock] = 64;
-        stackableSize[(int)BlockValue.SharpRock] = 64;
-        stackableSize[(int)BlockValue.LargeSharpRock] = 64;
-        stackableSize[(int)BlockValue.Bark] = 64;
-        stackableSize[(int)BlockValue.String] = 64;
+        stackableSize[(int)Example.Dirt] = 16;
+        stackableSize[(int)Example.Stone] = 45;
+        stackableSize[(int)Example.Grass] = 64;
+        stackableSize[(int)Example.Sand] = 32;
+        stackableSize[(int)Example.Bedrock] = 16;
+        stackableSize[(int)Example.Clay] = 64;
+        stackableSize[(int)Example.Leaf] = 64;
+        stackableSize[(int)Example.Stick] = 64;
+        stackableSize[(int)Example.Rock] = 64;
+        stackableSize[(int)Example.LargeRock] = 64;
+        stackableSize[(int)Example.SharpRock] = 64;
+        stackableSize[(int)Example.LargeSharpRock] = 64;
+        stackableSize[(int)Example.Bark] = 64;
+        stackableSize[(int)Example.String] = 64;
 
 
         chunksPerX = new Dictionary<long, List<Chunk>>();
@@ -2102,12 +2103,12 @@ public class World : BlockGetter
         unfinishedStructures = new List<Structure>();
 
         maxCapacities = new Dictionary<int, int>();
-        maxCapacities[(int)BlockValue.Dirt] = 3;
-        maxCapacities[(int)BlockValue.Stone] = 5;
-        maxCapacities[(int)BlockValue.Grass] = 4;
-        maxCapacities[(int)BlockValue.Sand] = 0;
-        maxCapacities[(int)BlockValue.Air] = 0;
-        maxCapacities[(int)BlockValue.Bedrock] = 6;
+        maxCapacities[(int)Example.Dirt] = 3;
+        maxCapacities[(int)Example.Stone] = 5;
+        maxCapacities[(int)Example.Grass] = 4;
+        maxCapacities[(int)Example.Sand] = 0;
+        maxCapacities[(int)Example.Air] = 0;
+        maxCapacities[(int)Example.Bedrock] = 6;
         this.worldGeneration.world = this;
         this.worldGeneration.blockGetter = this;
         this.worldGeneration.OnGenerationInit();
@@ -2222,7 +2223,7 @@ public class World : BlockGetter
     }
     */
 
-
+    /*
     public bool NeedsInitialUpdate(int block)
     {
         if (block == (int)BlockValue.Grass)
@@ -2231,6 +2232,7 @@ public class World : BlockGetter
         }
         return false;
     }
+    */
 
 
     public override void SetState(long i, long j, long k, long cx, long cy, long cz, int state, int stateI)
@@ -2477,11 +2479,12 @@ public class World : BlockGetter
     
     // if a unpushed water block gets an update, flood fill back and replace all wate on top of water with pushed water
      
-
+    /*
     public bool IsWater(int block)
     {
         return block == (int)BlockValue.Water || block == (int)BlockValue.WaterNoFlow;
     }
+    */
     
     public int GetNumAirNeighbors(long wx, long wy, long wz)
     {
@@ -2512,7 +2515,7 @@ public class World : BlockGetter
 
     }
 
-
+    /*
 
     // water state 2 = air accessable by me + air accessable by newers (sum of state 2 of newers)
     public int GetNewerWaterNeighborValues(long wx, long wy, long wz, int state1)
@@ -2537,6 +2540,7 @@ public class World : BlockGetter
             ((this[wx, wy, wz + 1] == (int)BlockValue.Water && GetState(wx, wy, wz + 1, 1) > state1) ? GetState(wx, wy, wz + 1, 3) : 0) +
             ((this[wx, wy, wz - 1] == (int)BlockValue.Water && GetState(wx, wy, wz - 1, 1) > state1) ? GetState(wx, wy, wz - 1, 3) : 0);
     }
+    */
 
 
 
@@ -2552,9 +2556,11 @@ public class World : BlockGetter
     public int numBlockUpdatesThisTick = 0;
     public int numWaterUpdatesThisTick = 0;
 
+
     // water idea: determine where flow ahead of time, then trickle water through those "chosen directions" - allows for one quick "dam breaking" computation and then the water can flow down precomputing stuff
-    public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, int state3, out int resState1, out int resState2, out int resState3, out bool needsAnotherUpdate)
-    {
+    //public int UpdateBlock(long wx, long wy, long wz, int block, int state1, int state2, int state3, out int resState1, out int resState2, out int resState3, out bool needsAnotherUpdate)
+   // {
+        /*
         needsAnotherUpdate = false;
         resState1 = state1;
         resState2 = state2;
@@ -2588,7 +2594,7 @@ public class World : BlockGetter
                 SetState(wx, wy - 1, wz, 0, 3);
             }
         }
-
+        */
         /*
         if (block == WATER)
         {
@@ -2722,7 +2728,7 @@ public class World : BlockGetter
         */
 
 
-
+        /*
 
 
         // good water, slightly inefficient
@@ -3059,7 +3065,8 @@ public class World : BlockGetter
         {
             return block;
         }
-    }
+        */
+    //}
     // fixes issues with not doing floor.
     // for example,
     // 5/2 = 2.5, but is truncated towards zero to 2
@@ -3645,6 +3652,32 @@ public class Pack
 
     void MakePackTexture()
     {
+
+        string assetsPath = Application.dataPath;
+        // strip any trailing path seperators
+        while (assetsPath[assetsPath.Length - 1] == '/' || assetsPath[assetsPath.Length - 1] == '\\')
+        {
+            assetsPath = assetsPath.Substring(0, assetsPath.Length - 1);
+        }
+        // append pack textures directory
+        assetsPath = assetsPath.Replace("\\", "/") + "/PackTextures";
+
+        DirectoryInfo assetsPathInfo = new DirectoryInfo(assetsPath);
+        if (!assetsPathInfo.Exists)
+        {
+            Directory.CreateDirectory(assetsPathInfo.FullName);
+        }
+        // append directory for this pack
+        string packAssetsPath = assetsPath + "/" + packName;
+
+        DirectoryInfo packAssetsPathInfo = new DirectoryInfo(packAssetsPath);
+        if (!packAssetsPathInfo.Exists)
+        {
+            Directory.CreateDirectory(packAssetsPathInfo.FullName);
+        }
+
+
+
         packTexture = new Texture2D(16 * 2, 16 * 3 * 64, TextureFormat.ARGB32, false, true);
         Color32[] colors = new Color32[packTexture.width * packTexture.height];
         for (int j = 0; j < colors.Length; j++)
@@ -3666,6 +3699,19 @@ public class Pack
             Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
             argbTexture.SetPixels(blockTexture.GetPixels());
             argbTexture.Apply();
+
+            // write texture
+            string blockPath = packAssetsPath + "/" + block.blockName + ".png";
+            File.WriteAllBytes(blockPath, argbTexture.EncodeToPNG());
+            // delete meta file so unity will reload it
+            if (File.Exists(blockPath + ".meta"))
+            {
+                File.Delete(blockPath + ".meta");
+            }
+            
+
+
+
             Color32[] argbColors = argbTexture.GetPixels32();
             // check for transparency
             block.isTransparent = false;
@@ -3682,30 +3728,18 @@ public class Pack
                 Debug.Log("rescaling texture of block " + block.blockName + " at path " + block.blockRootDir + " with block image path " + block.blockImagePath);
                 TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
             }
+
             argbTexture.Apply();
             Color[] pixels = argbTexture.GetPixels();
             packTexture.SetPixels(0, i * 16 * 3, 16 * 2, 16 * 3, pixels);
             packTexture.Apply();
             i += 1;
         }
-        string assetsPath = Application.dataPath;
-        // strip any trailing path seperators
-        while (assetsPath[assetsPath.Length - 1] == '/' || assetsPath[assetsPath.Length - 1] == '\\')
-        {
-            assetsPath = assetsPath.Substring(0, assetsPath.Length - 1);
-        }
-        // append pack textures directory
-        assetsPath = assetsPath.Replace("\\", "/") + "/PackTextures";
-
-        DirectoryInfo assetsPathInfo = new DirectoryInfo(assetsPath);
-        if (!assetsPathInfo.Exists)
-        {
-            Directory.CreateDirectory(assetsPath);
-        }
 
         packTexture.alphaIsTransparency = true;
         string assetsPathDir = assetsPathInfo.FullName;
 
+        /*
         File.WriteAllBytes(assetsPathDir + "/" + packName + ".png", packTexture.EncodeToPNG());
 
         // delete meta file so unity will reload it
@@ -3713,14 +3747,190 @@ public class Pack
         {
             File.Delete(assetsPathDir + "/" + packName + ".png.meta");
         }
-
+        */
 
         string exampleThings =
 "namespace " + packName + @"_pack {
-    public enum BlockValue
+    public class " + packName + @" : BlockCollection
     {
-        Air = 0,
-        Wildcard = -1,
+";
+        string afterExampleThings = @"
+    }
+";
+        for (int b = 0; b < packBlocks.Count; b++)
+        {
+            int index = b + startOffset + 1;
+
+            
+            if (packBlocks[b].isTransparent)
+            {
+                exampleThings += "        public static BlockValue " + packBlocks[b].blockName + " = new BlockValue(true, '" + packBlocks[b].blockName + "', '" + packName + "');";
+            }
+            else
+            {
+                exampleThings += "        public static BlockValue " + packBlocks[b].blockName + " = new BlockValue(false, '" + packBlocks[b].blockName + "', '" + packName + "');";
+            }
+            if (b != packBlocks.Count - 1)
+            {
+                exampleThings += "\n";
+            }
+        }
+
+        exampleThings = exampleThings.Replace("'", "\"");
+
+        exampleThings += afterExampleThings + "\r\n}";
+
+        File.WriteAllText(assetsPathDir + "/" + packName + "Pack" + " .cs", exampleThings);
+
+        // delete meta file so unity will reload it
+        if (File.Exists(assetsPathDir + "/" + packName + "Pack" + " .cs.meta"))
+        {
+            File.Delete(assetsPathDir + "/" + packName + "Pack" + " .cs.meta");
+        }
+
+
+        /*
+        string exampleThings =
+"namespace " + packName + @"_pack {
+    public class BlockValue
+    {
+        
+        public static implicit operator BlockValue(int x)
+        {
+            return GetBlockValue(x);
+        }
+
+        public static implicit operator int(BlockValue x)
+        {
+            return x.id;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj == null)
+            {
+                return false;
+            }
+            if (obj is BlockValue)
+            {
+                BlockValue item = (BlockValue)obj;
+                return Equals(item);
+            }
+            else
+            {
+                return id.Equals(obj);
+            }
+        }
+
+        public bool Equals(BlockValue other)
+        {
+            return this.id == other.id;
+        }
+
+        // see https://msdn.microsoft.com/en-us/library/ms173147.aspx
+        public static bool operator ==(BlockValue a, BlockValue b)
+        {
+            // If both are null, or both are same instance, return true.
+            if (System.Object.ReferenceEquals(a, b))
+            {
+                return true;
+            }
+
+            // If one is null, but not both, return false.
+            if (((object)a == null) || ((object)b == null))
+            {
+                return false;
+            }
+
+            // Return true if the fields match:
+            return a.Equals(b);
+        }
+
+
+        public static bool operator !=(BlockValue a, BlockValue b)
+        {
+            return !(a == b);
+        }
+
+        public static bool operator ==(BlockValue a, int b)
+        {
+            if ((object)a == null)
+            {
+                return false;
+            }
+            return a.id == b;
+        }
+
+
+        public static bool operator !=(BlockValue a, int b)
+        {
+            return !(a == b);
+        }
+
+
+
+        public static bool operator ==(int a, BlockValue b)
+        {
+            if ((object)b == null)
+            {
+                return false;
+            }
+            return a == b.id;
+        }
+
+
+        public static bool operator !=(int a, BlockValue b)
+        {
+            return !(a == b);
+        }
+
+        public override int GetHashCode()
+        {
+            return id.GetHashCode();
+        }
+
+        int _id;
+        public int id { get { return _id; } private set { } }
+        BlockValue(int id)
+        {
+            if (allBlocks == null)
+            {
+                allBlocks = new BlockValue[255];
+            }
+            int uid = System.Math.Abs(id);
+            // increase number of blocks until we have enough
+            while (allBlocks.Length <= uid)
+            {
+                BlockValue[] newAllBlocks = new BlockValue[allBlocks.Length * 2];
+                for (int i = 0; i < allBlocks.Length; i++)
+                {
+                    newAllBlocks[i] = allBlocks[i];
+                }
+                allBlocks = newAllBlocks;
+            }
+            if (allBlocks[uid] == null)
+            {
+                UnityEngine.Debug.LogWarning('warning: multiple blocks have id' + uid + '(technically ' + id + ' with transparency flag)');
+            }
+            allBlocks[uid] = this;
+
+             _id = id;
+        }
+
+        public static BlockValue GetBlockValue(int id)
+        {
+            int uid = System.Math.Abs(id);
+            if (allBlocks[uid] == null)
+            {
+                throw new System.ArgumentOutOfRangeException('block value with id ' + uid + ' (technically ' + id + ' with transparency flag) ' + ' does not exist');
+            }
+            return allBlocks[uid];
+        }
+
+        public static BlockValue[] allBlocks;
+
+        public static BlockValue Air = new BlockValue(0);
+        public static BlockValue Wildcard = new BlockValue(-1);
 ";
         string afterExampleThings = @"
     }
@@ -3755,10 +3965,10 @@ public class Pack
             testFunc2 += "            if(blockName == '" + packBlocks[b].blockName + "'){ return " + index + ";}\r\n";
 
 
-            exampleThings += "        " + packBlocks[b].blockName + "=" + index;
+            exampleThings += "        public static BlockValue " + packBlocks[b].blockName + " = new BlockValue(" + index + ");";
             if (b != packBlocks.Count - 1)
             {
-                exampleThings += ",\n";
+                exampleThings += "\n";
             }
         }
         testFunc += @"
@@ -3776,6 +3986,7 @@ public class Pack
         // I used single quotes above because it was cleaner in code but double quotes are required for strings in c# so we will replace them here accordingly
         testFunc = testFunc.Replace("'", "\"");
         testFunc2 = testFunc2.Replace("'", "\"");
+        exampleThings = exampleThings.Replace("'", "\"");
 
         exampleThings += afterExampleThings + testFunc + testFunc2  + "\r\n}";
 
@@ -3786,6 +3997,7 @@ public class Pack
         {
             File.Delete(assetsPathDir + "/" + packName + "Pack" + " .cs.meta");
         }
+        */
     }
 }
 
@@ -4238,6 +4450,38 @@ public class BlocksWorld : MonoBehaviour {
         chunkBlockData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
         cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
         cullBlocksShader.SetBuffer(1, "DataIn", chunkBlockData);
+
+
+
+        triMaterial.mainTexture = BlockValue.allBlocksTexture;
+        triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+
+
+        string assetsPath = Application.dataPath;
+        // strip any trailing path seperators
+        while (assetsPath[assetsPath.Length - 1] == '/' || assetsPath[assetsPath.Length - 1] == '\\')
+        {
+            assetsPath = assetsPath.Substring(0, assetsPath.Length - 1);
+        }
+        // append pack textures directory
+        assetsPath = assetsPath.Replace("\\", "/") + "/PackTextures";
+
+        DirectoryInfo assetsPathInfo = new DirectoryInfo(assetsPath);
+        if (!assetsPathInfo.Exists)
+        {
+            Directory.CreateDirectory(assetsPath);
+        }
+
+        BlockValue.allBlocksTexture.alphaIsTransparency = true;
+        string assetsPathDir = assetsPathInfo.FullName;
+
+        File.WriteAllBytes(assetsPathDir + "/CurrentTexture.png", BlockValue.allBlocksTexture.EncodeToPNG());
+
+        // delete meta file so unity will reload it
+        if (File.Exists(assetsPathDir + "/CurrentTexture.png.meta"))
+        {
+            File.Delete(assetsPathDir + "/CurrentTexture.png.meta");
+        }
     }
 
     void LoadMaterials()

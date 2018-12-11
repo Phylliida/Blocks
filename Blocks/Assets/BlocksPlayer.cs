@@ -202,7 +202,7 @@ public class BlocksPlayer : MonoBehaviour
                     //Debug.Log("hit at pos " + hitPos);
                     if(World.mainWorld.DropBlockOnDestroy(hitResults.hitBlock.BlockV, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                     {
-                        if (hitResults.hitBlock.BlockV == BlockValue.CraftingTable && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
+                        if (hitResults.hitBlock.BlockV == Example.CraftingTable && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                         {
                             Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
                             chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
@@ -233,7 +233,7 @@ public class BlocksPlayer : MonoBehaviour
                 LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
                 LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                 LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-                if (hitResults.hitBlock.Block == (int)BlockValue.CraftingTable && showingHotbarOnly)
+                if (hitResults.hitBlock.Block == (int)Example.CraftingTable && showingHotbarOnly)
                 {
                     Inventory blockInventory;
                     if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
@@ -258,7 +258,7 @@ public class BlocksPlayer : MonoBehaviour
                 {
                     if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
                     {
-                        if (World.mainWorld.AllowedtoPlaceBlock((BlockValue)inventory.blocks[inventoryGui.selection].block))
+                        if (World.mainWorld.AllowedtoPlaceBlock(inventory.blocks[inventoryGui.selection].block))
                         {
                             World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
                             inventory.blocks[inventoryGui.selection].count -= 1;

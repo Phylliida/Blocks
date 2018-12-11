@@ -508,7 +508,7 @@ public class PhysicsUtils {
 
     public static bool IsBlockSolid(int block)
     {
-        return block != (int)BlockValue.Air && block != (int)BlockValue.Water && block != (int)BlockValue.WaterNoFlow;
+        return block != (int)BlockValue.Air && block != (int)Example.Water && block != (int)Example.WaterNoFlow;
     }
 
     public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)
@@ -567,7 +567,7 @@ public class PhysicsUtils {
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
     public static bool RayCastAlsoHitWater(Vector3 origin, Vector3 dir, float maxDist, out RaycastResults hitResults, int maxSteps = -1)
     {
-        return CustomRaycast(origin, dir, maxDist, (b, bx, by, bz, pbx, pby, pbz) => { return (BlockValue)b == BlockValue.Air; }, (b, bx, by, bz, pbx, pby, pbz) => { return (BlockValue)b != BlockValue.Air; }, out hitResults, maxSteps: maxSteps);
+        return CustomRaycast(origin, dir, maxDist, (b, bx, by, bz, pbx, pby, pbz) => { return b == BlockValue.Air; }, (b, bx, by, bz, pbx, pby, pbz) => { return b != BlockValue.Air; }, out hitResults, maxSteps: maxSteps);
     }
 
     // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)

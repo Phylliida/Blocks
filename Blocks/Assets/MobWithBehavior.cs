@@ -127,6 +127,7 @@ public class MobWithBehavior : MonoBehaviour {
     public float hungerMeterMax = 10.0f;
 
     public float wantToFindFoodThresh;
+    public float veryHungryThresh = 2.0f;
 
     public float baseStamina = 3.0f;
     public float stamina;
@@ -140,12 +141,32 @@ public class MobWithBehavior : MonoBehaviour {
         if (pathingTarget == null)
         {
             body.desiredMove = Vector3.zero;
+            return;
         }
         if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount) // offset so everyone isn't aligned on the same frame
         {
+            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
+            if (hungerMeter <= veryHungryThresh)
+            {
+                LVector3 foundThing;
+                if (Search(out foundThing))
+                {
+                    // found it, is it closer?
+                    if(LVector3.CityBlockDistance(foundThing, myPos) <LVector3.CityBlockDistance(pathingTarget, myPos))
+                    {
+                        // if so, go to it instead
+                        thingDoing = new ThingDoing(TypeOfThingDoing.Chasing, new ThingDoingTarget(foundThing));
+                    }
+                    //Debug.Log("found thing in " + steps + " steps");
+                }
+                else
+                {
+                    // did not find
+                    //Debug.Log("did not find thing in " + steps + " steps");
+                }
+            }
             frameUpdatedLast = Time.frameCount;
             //Debug.Log("updating pathing");
-            LVector3 myPos = LVector3.FromUnityVector3(transform.position);
             RaycastResults blockStandingOn;
             if (PhysicsUtils.RayCastAlsoHitWater(body.transform.position, -Vector3.up, 20.0f, out blockStandingOn))
             {
@@ -236,7 +257,7 @@ public class MobWithBehavior : MonoBehaviour {
         RaycastResults res;
         for (int i = 0; i < 10; i++)
         {
-            if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 100.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => { return (BlockValue)b == BlockValue.FlowerWithNectar; }, out res))
+            if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 100.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => { return b == Example.FlowerWithNectar; }, out res))
             {
                 found = res.hitBlock;
                 return true;
@@ -267,9 +288,20 @@ public class MobWithBehavior : MonoBehaviour {
             thingDoing = new ThingDoing(TypeOfThingDoing.Searching);
         }
 
-        if (hungerMeter >= wantToFindFoodThresh)
+        if (hungerMeter >= wantToFindFoodThresh && thingDoing.typeOfThing != TypeOfThingDoing.RunningAway)
         {
             thingDoing = new ThingDoing(TypeOfThingDoing.Standing);
+        }
+
+
+        BlocksPlayer[] players = FindObjectsOfType<BlocksPlayer>();
+
+        foreach (BlocksPlayer player in players)
+        {
+            if (Vector3.Distance(player.transform.position, transform.position) < 10.0f)
+            {
+                thingDoing = new ThingDoing(TypeOfThingDoing.RunningAway, new ThingDoingTarget(player.GetComponent<MovingEntity>()));
+            }
         }
 
         typeOfThingDoing = thingDoing.typeOfThing;
@@ -286,7 +318,7 @@ public class MobWithBehavior : MonoBehaviour {
             }
 
 
-            if (pathingTarget.BlockV != BlockValue.FlowerWithNectar)
+            if (pathingTarget.BlockV != Example.FlowerWithNectar)
             {
                 thingDoing = new ThingDoing(TypeOfThingDoing.Searching, null);
             }
@@ -297,7 +329,7 @@ public class MobWithBehavior : MonoBehaviour {
                 if (myDist < 4)
                 {
                     EatObject(pathingTarget);
-                    world[pathingTarget] = (int)BlockValue.Flower;
+                    world[pathingTarget] = (int)Example.Flower;
                     thingDoing = new ThingDoing(TypeOfThingDoing.Searching, null);
                 }
                 // still pathing to it

@@ -59,7 +59,7 @@ public class Recipe
                     bool foundMatch = false;
                     for (int j = 0; j < unorderedRecipe.Length; j++)
                     {
-                        if (matches[j] == -1 && unorderedRecipe[j] == (BlockValue)inventory.blocks[i].block)
+                        if (matches[j] == -1 && unorderedRecipe[j] == inventory.blocks[i].Block)
                         {
                             matches[j] = i;
                             foundMatch = true;
@@ -128,7 +128,7 @@ public class Recipe
                                 }
                                 else if(cur != null)
                                 {
-                                    if ((BlockValue)cur.block == recipeCur)
+                                    if (cur.block == recipeCur)
                                     {
                                         Debug.Log(x + " " + y + "same: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
                                         numMatches += 1;
