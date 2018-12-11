@@ -1325,6 +1325,26 @@ public class ChunkData
         }
     }
 
+    public void WriteToFile(string path)
+    {
+        // convert ints to bytes
+        byte[] byteData = new byte[sizeof(int) * data.Length];
+        System.Buffer.BlockCopy(data, 0, byteData, 0, byteData.Length); // size is in number of bytes
+
+        // write to file
+        File.WriteAllBytes(path, byteData);
+
+    }
+
+    public void ReadFromFile(string path)
+    {
+        // read from file
+        byte[] byteData = File.ReadAllBytes(path);
+        data = new int[byteData.Length / sizeof(int)];
+        System.Buffer.BlockCopy(byteData, 0, data, 0, data.Length * sizeof(int)); // size is in number of bytes
+        this.needToBeUpdated = true;
+    }
+
     public void CopyIntoChunk(Chunk chunk)
     {
         int[] chunkData = chunk.chunkData.data;
@@ -1923,6 +1943,85 @@ public class World : BlockGetter
     ChunkProperties chunkProperties;
     
 
+    public void Save(string rootDir)
+    {
+        DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
+        if (!rootInfo.Exists)
+        {
+            Directory.CreateDirectory(rootInfo.FullName);
+        }
+        string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
+        string chunksDir = cleanedRootDir + "/chunks";
+        DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
+        if (!chunksDirInfo.Exists)
+        {
+            Directory.CreateDirectory(chunksDirInfo.FullName);
+        }
+        foreach (Chunk chunk in allChunks)
+        {
+            string chunkName = chunk.cx + "." + chunk.cy + "." + chunk.cz + ".dat";
+            chunk.chunkData.WriteToFile(chunksDir + "/" + chunkName);
+        }
+        string configPath = cleanedRootDir + "/blocksConfig.json";
+        File.WriteAllText(configPath, BlockValue.SaveIdConfigToJsonString());
+    }
+
+    public void Load(string rootDir)
+    {
+        DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
+        if (!rootInfo.Exists)
+        {
+            throw new System.ArgumentException("in loading world, root dir " + rootDir + " does not exist");
+        }
+        string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
+        string configPath = cleanedRootDir + "/blocksConfig.json";
+
+        if (!File.Exists(configPath))
+        {
+            throw new System.ArgumentException("in loading world, config json " + configPath + " does not exist");
+        }
+
+        string configJson = File.ReadAllText(configPath);
+
+        Debug.Log("loading config json from file " + configJson);
+        BlockValue.LoadIdConfigFromJsonString(configJson);
+        Debug.Log("done loading config json from file " + configJson);
+
+        blocksWorld.triMaterial.mainTexture = BlockValue.allBlocksTexture;
+        blocksWorld.triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+        Debug.Log("loading chunks");
+        string chunksDir = cleanedRootDir + "/chunks";
+        DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
+        if (chunksDirInfo.Exists)
+        {
+            string[] chunkFiles = Directory.GetFiles(chunksDirInfo.FullName, "*.dat", SearchOption.TopDirectoryOnly);
+            foreach (string chunkFile in chunkFiles)
+            {
+                FileInfo fInfo = new FileInfo(chunkFile);
+                if (fInfo.Exists)
+                {
+                    string nameWithoutDotDat = fInfo.Name.Substring(0, fInfo.Name.Length - ".dat".Length);
+                    string[] coordinates = nameWithoutDotDat.Split('.');
+                    if (coordinates.Length != 3)
+                    {
+                        Debug.LogWarning("invalid chunk file name " + fInfo.Name + " ignoring that file");
+                    }
+                    else
+                    {
+                        int cx, cy, cz;
+                        if (int.TryParse(coordinates[0], out cx) && int.TryParse(coordinates[1], out cy) && int.TryParse(coordinates[2], out cz))
+                        {
+                            Chunk spruce = GetOrGenerateChunk(cx, cy, cz);
+                            spruce.generating = false;
+                            spruce.chunkData.ReadFromFile(fInfo.FullName);
+                            spruce.valid = false;
+                        }
+                    }
+                }
+            }
+        }
+        Debug.Log("done loading chunks");
+    }
 
     public int AddChunkProperty(ChunkProperty chunkProperty)
     {

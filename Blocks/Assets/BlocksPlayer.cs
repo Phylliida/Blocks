@@ -311,6 +311,17 @@ public class BlocksPlayer : MonoBehaviour
             desiredMove += Vector3.right;
         }
 
+        if (Input.GetKeyDown(KeyCode.B))
+        {
+            World.mainWorld.Save("C:/Users/yams/Desktop/yams/prog/unity/Blocks/repo/Blocks/Saves/coolAndGood");
+        }
+
+
+        if (Input.GetKeyDown(KeyCode.L))
+        {
+            World.mainWorld.Load("C:/Users/yams/Desktop/yams/prog/unity/Blocks/repo/Blocks/Saves/coolAndGood");
+        }
+
         body.SetRelativeDesiredMove(desiredMove);
     }
 
