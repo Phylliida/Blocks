@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Blocks;
 
 public class Sand : Block
 {
@@ -622,26 +623,67 @@ public class ExamplePack : BlocksPack {
     // Use this for initialization
     // Awake because we want this to happen before World calls its Start()
     void Awake () {
-        AddCustomBlock(Example.Grass, new Grass());
-        AddCustomBlock(Example.Bark, new Bark());
-        AddCustomBlock(Example.Trunk, new Trunk());
-        AddCustomBlock(Example.Dirt, new SimpleBlock(2.0f, new Tuple<BlockValue, float>(Example.Shovel, 1.0f)));
-        AddCustomBlock(Example.Stone, new SimpleBlock(10.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 3.0f)));
-        AddCustomBlock(Example.Leaf, new Leaf());
-        AddCustomBlock(Example.LooseRocks, new LooseRocks());
-        AddCustomBlock(Example.Rock, new Rock());
-        AddCustomBlock(Example.LargeRock, new LargeRock());
-        AddCustomBlock(Example.LooseRocks, new LooseRocks());
-        AddCustomBlock(Example.Stick, new SimpleItem());
-        AddCustomBlock(Example.Pickaxe, new SimpleItem());
-        AddCustomBlock(Example.SharpRock, new SimpleItem());
-        AddCustomBlock(Example.LargeSharpRock, new SimpleItem());
-        AddCustomBlock(Example.Shovel, new SimpleItem());
-        AddCustomBlock(Example.Axe, new SimpleItem());
-        AddCustomBlock(Example.WetBark, new WetBark());
-        AddCustomBlock(Example.Sand, new Sand());
-        AddCustomBlock(Example.Water, new Water());
-        AddCustomBlock(Example.WaterNoFlow, new Water());
+        AddCustomBlock(Example.Grass, new Grass(), 64);
+        AddCustomBlock(Example.Bark, new Bark(), 64);
+        AddCustomBlock(Example.Trunk, new Trunk(), 64);
+        AddCustomBlock(Example.Dirt, new SimpleBlock(2.0f, new Tuple<BlockValue, float>(Example.Shovel, 1.0f)), 64);
+        AddCustomBlock(Example.Clay, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
+        AddCustomBlock(Example.Stone, new SimpleBlock(10.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 3.0f)), 64);
+        AddCustomBlock(Example.Leaf, new Leaf(), 64);
+        AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
+        AddCustomBlock(Example.Rock, new Rock(), 64);
+        AddCustomBlock(Example.LargeRock, new LargeRock(), 64);
+        AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
+        AddCustomBlock(Example.Stick, new SimpleItem(), 64);
+        AddCustomBlock(Example.Pickaxe, new SimpleItem(), 64);
+        AddCustomBlock(Example.SharpRock, new SimpleItem(), 64);
+        AddCustomBlock(Example.LargeSharpRock, new SimpleItem(), 64);
+        AddCustomBlock(Example.Shovel, new SimpleItem(), 1);
+        AddCustomBlock(Example.Axe, new SimpleItem(), 1);
+        AddCustomBlock(Example.WetBark, new WetBark(), 64);
+        AddCustomBlock(Example.Sand, new Sand(), 64);
+        AddCustomBlock(Example.Water, new Water(), 64);
+        AddCustomBlock(Example.String, new SimpleItem(), 64);
+        AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
+
+
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.Rock, Example.Rock },
+            { Example.Rock, Example.Rock },
+        }, new BlockStack(Example.CraftingTable, 1)));
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.Air, Example.LargeRock,  Example.Air},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Shovel, 1)));
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.Air, Example.LargeSharpRock,  Example.Air},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Axe, 1)));
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.LargeSharpRock, Example.LargeRock,  Example.LargeSharpRock},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Pickaxe, 1)));
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.LargeSharpRock, Example.LargeSharpRock,  Example.LargeSharpRock},
+            { Example.Stick, Example.Stick, Example.Stick },
+            { Example.Dirt, Example.Dirt, Example.Dirt }
+        }, new BlockStack(Example.Sand, 1)));
+
+
+
         //AddCustomBlock(Example.Water, new SimpleWater());
         //AddCustomBlock(Example.WaterNoFlow, new SimpleWater());
         SetCustomGeneration(new ExampleGeneration());

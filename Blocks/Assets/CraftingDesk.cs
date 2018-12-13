@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Example_pack;
+using Blocks;
 
 public class CraftingDesk : InventoryListener {
 
@@ -52,14 +53,22 @@ public class CraftingDesk : InventoryListener {
     }
 
 
-    List<Recipe> recipes;
+    List<Recipe> recipes = new List<Recipe>();
+
+    public void AddRecipe(Recipe recipe)
+    {
+        if (recipes == null)
+        {
+            recipes = new List<Recipe>();
+        }
+        recipes.Add(recipe);
+    }
 
     // Use this for initialization
     void Start ()
     {
-        recipes = new List<Recipe>();
         // ordered recipe: requires this shape
-        
+        /*
         Recipe makingChest = new Recipe(new BlockValue[,]
         {
             { Example.Rock, Example.Rock },
@@ -94,7 +103,7 @@ public class CraftingDesk : InventoryListener {
         // unordered recipe: any shape is ok as long as it has these ingredients somewhere in it
         //Recipe makingSharpRock = new Recipe(new BlockValue[]
         //{BlockValue.ROCK, BlockValue.ROCK, BlockValue.ROCK}, new BlockStack(BlockValue.SharpRock, 1));
-
+        */
 
     }
 

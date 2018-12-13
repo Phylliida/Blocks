@@ -1,3 +1,6 @@
+
+using Blocks;
+
 namespace Example_pack {
     public class Example : BlockCollection
     {

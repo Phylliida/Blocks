@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System;
 using Example_pack;
+using Blocks;
 
 public class ExampleGeneration : GenerationClass
 {
