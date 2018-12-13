@@ -226,7 +226,17 @@ public class BlockValue
         Color32[] allColors = new Color32[allBlocksTexture.width * allBlocksTexture.height];
         for (int i = 0; i < allColors.Length; i++)
         {
-            allColors[i] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
+            if (i < (16*16 * 2 * 3) || (allColors.Length-i-1) < (16 * 16 * 2 * 3))
+            {
+                allColors[i] = new Color32(0, 0, 0, 255); // air and wildcard (first and last one due to offset by 1) get default black
+            }
+            else
+            {
+                allColors[i] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
+            }
+        }
+        for (int i = 0; i < allColors.Length; i++)
+        {
         }
         allBlocksTexture.SetPixels32(allColors);
         allBlocksTexture.Apply();

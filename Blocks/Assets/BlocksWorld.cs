@@ -1108,6 +1108,10 @@ public class Chunk
 
     public bool Tick()
     {
+        if (cleanedUp)
+        {
+            Debug.LogWarning("Chunk " + cx + " " + cy + " " + cz + " is already cleaned up, and yet is having Tick() ran on it, did you forget to remove the reference somewhere?");
+        }
         bool didGenerate = false;
         if (generating)
         {
@@ -1306,7 +1310,9 @@ public class ChunkData
     public HashSet<int> blocksNeedUpdating = new HashSet<int>();
     public HashSet<int> blocksNeedUpdatingNextFrame = new HashSet<int>();
     int[] data;
-    int chunkSize, chunkSize_2, chunkSize_3;
+    public int chunkSize;
+
+    int chunkSize_2, chunkSize_3;
 
     public List<Chunk> attachedChunks = new List<Chunk>();
 
@@ -1323,6 +1329,14 @@ public class ChunkData
                 data[i] = (int)BlockValue.Wildcard;
             }
         }
+    }
+
+    public ChunkData(int chunkSize, int[] data)
+    {
+        this.chunkSize = chunkSize;
+        this.chunkSize_2 = chunkSize * chunkSize;
+        this.chunkSize_3 = chunkSize * chunkSize * chunkSize;
+        this.data = data;
     }
 
     public void WriteToFile(string path)
@@ -1554,16 +1568,54 @@ public abstract class BlockGetter
     }
 }
 
+[System.Serializable]
+public class SavedStructure
+{
+    public string name;
+    public bool madeInGeneration;
+    public SavedChunk[] savedChunks;
+
+    public SavedStructure()
+    {
+
+    }
+
+    public SavedStructure(string name, bool madeInGeneration, SavedChunk[] savedChunks)
+    {
+        this.name = name;
+        this.madeInGeneration = madeInGeneration;
+        this.savedChunks = savedChunks;
+    }
+}
+[System.Serializable]
+public class SavedChunk
+{
+    public int chunkSize;
+    public int[] chunkData;
+    public long cx, cy, cz;
+
+    public SavedChunk()
+    {
+
+    }
+
+    public SavedChunk(int chunkSize, int[] chunkData, long cx, long cy, long cz)
+    {
+        this.chunkSize = chunkSize;
+        this.chunkData = chunkData;
+        this.cx = cx;
+        this.cy = cy;
+        this.cz = cz;
+    }
+}
+
 public class Structure : BlockGetter
 {
     public string name;
     public bool madeInGeneration;
     Dictionary<LVector3,ChunkData> ungeneratedChunkPositions;
 
-    public Dictionary<LVector3, int> block;
-    public Dictionary<LVector3, int> state1;
-    public Dictionary<LVector3, int> state2;
-    public Dictionary<LVector3, int> state3;
+
 
     public Chunk baseChunk;
 
@@ -1572,12 +1624,27 @@ public class Structure : BlockGetter
         this.name = name;
         this.baseChunk = baseChunk;
         this.blockDataCache = new BlockDataCache(this);
-        block = new Dictionary<LVector3, int>();
-        state1 = new Dictionary<LVector3, int>();
-        state2 = new Dictionary<LVector3, int>();
-        state3 = new Dictionary<LVector3, int>();
         ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
         this.madeInGeneration = madeInGeneration;
+    }
+
+
+    public Structure(SavedStructure savedStructure)
+    {
+        name = savedStructure.name;
+        this.baseChunk = null;
+        this.blockDataCache = new BlockDataCache(this);
+        ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
+        this.madeInGeneration = savedStructure.madeInGeneration;
+        for (int i = 0; i < savedStructure.savedChunks.Length; i++)
+        {
+            SavedChunk savedChunk = savedStructure.savedChunks[i];
+            LVector3 savedChunkPos = new LVector3(savedChunk.cx, savedChunk.cy, savedChunk.cz);
+            int[] savedChunkData = savedChunk.chunkData;
+
+            ChunkData resSavedChunkData = new ChunkData(savedChunk.chunkSize, savedChunkData);
+            ungeneratedChunkPositions[savedChunkPos] = resSavedChunkData;
+        }
     }
 
 
@@ -1585,6 +1652,20 @@ public class Structure : BlockGetter
     {
         return ungeneratedChunkPositions.Count == 0;
     }
+
+
+
+    public SavedStructure ToSavedStructure()
+    {
+        List<SavedChunk> savedChunks = new List<SavedChunk>();
+        foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositions)
+        {
+            savedChunks.Add(new SavedChunk(savedChunk.Value.chunkSize, savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
+        }
+
+        return new SavedStructure(name, madeInGeneration, savedChunks.ToArray());
+    }
+
 
     /// <summary>
     /// Returns true if filled in all of its chunks, otherwise false
@@ -1606,7 +1687,7 @@ public class Structure : BlockGetter
     public override void SetState(long x, long y, long z, long cx, long cy, long cz, int state, int stateI)
     {
         blockModifyState += 1;
-        if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+        if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
         {
             baseChunk.SetState(x, y, z, state, stateI);
             return;
@@ -1645,7 +1726,7 @@ public class Structure : BlockGetter
     }
     public override int GetState(long x, long y, long z, long cx, long cy, long cz, int stateI)
     {
-        if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+        if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
         {
             return baseChunk.GetState(x, y, z, stateI);
         }
@@ -1682,7 +1763,7 @@ public class Structure : BlockGetter
     {
         get
         {
-            if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+            if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
                 return baseChunk[x,y,z];
             }
@@ -1717,7 +1798,7 @@ public class Structure : BlockGetter
         set
         {
             blockModifyState += 1;
-            if (cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
+            if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
                 if (value != BlockValue.Wildcard)
                 {
@@ -1942,7 +2023,80 @@ public class World : BlockGetter
 
     ChunkProperties chunkProperties;
     
+    [System.Serializable]
+    public class BlockInventory
+    {
+        public long x, y, z;
+        public int[] blocks;
+        public int[] counts;
 
+        public BlockInventory()
+        {
+
+        }
+
+        public BlockInventory(LVector3 block, Inventory inventory)
+        {
+            x = block.x;
+            y = block.y;
+            z = block.z;
+
+            blocks = new int[inventory.blocks.Length];
+            counts = new int[inventory.blocks.Length];
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                if (inventory.blocks[i] != null)
+                {
+                    blocks[i] = inventory.blocks[i].block;
+                    counts[i] = inventory.blocks[i].count;
+                }
+            }
+        }
+    }
+
+    BlockInventoryCollection GetBlockInventories()
+    {
+        BlockInventory[] res = new BlockInventory[blocksWorld.blockInventories.Count];
+        int i = 0;
+        foreach (KeyValuePair<LVector3, Inventory> blockInventory in blocksWorld.blockInventories)
+        {
+            res[i] = new BlockInventory(blockInventory.Key, blockInventory.Value);
+            i += 1;
+        }
+        return new BlockInventoryCollection(res);
+    }
+
+    [System.Serializable]
+    public class BlockInventoryCollection
+    {
+        public BlockInventory[] inventories;
+
+        public BlockInventoryCollection()
+        {
+
+        }
+
+        public BlockInventoryCollection(BlockInventory[] inventories)
+        {
+            this.inventories = inventories;
+        }
+    }
+    
+    public class SavedStructureCollection
+    {
+        public SavedStructure[] savedStructures;
+
+        public SavedStructureCollection()
+        {
+            
+        }
+
+        public SavedStructureCollection(SavedStructure[] savedStructures)
+        {
+            this.savedStructures = savedStructures;
+        }
+
+    }
     public void Save(string rootDir)
     {
         DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
@@ -1964,6 +2118,24 @@ public class World : BlockGetter
         }
         string configPath = cleanedRootDir + "/blocksConfig.json";
         File.WriteAllText(configPath, BlockValue.SaveIdConfigToJsonString());
+
+        string inventoriesPath = cleanedRootDir + "/blockInventories.json";
+        File.WriteAllText(inventoriesPath, Newtonsoft.Json.JsonConvert.SerializeObject(GetBlockInventories()));
+
+
+        string structurePath = cleanedRootDir + "/generatingStructures.json";
+
+        List<SavedStructure> savedStructures = new List<SavedStructure>();
+        foreach (Structure structure in unfinishedStructures)
+        {
+            savedStructures.Add(structure.ToSavedStructure());
+        }
+
+        SavedStructureCollection savedStructuresCollection = new SavedStructureCollection(savedStructures.ToArray());
+
+        File.WriteAllText(structurePath, Newtonsoft.Json.JsonConvert.SerializeObject(savedStructuresCollection)); 
+
+
     }
 
     public void Load(string rootDir)
@@ -1974,24 +2146,85 @@ public class World : BlockGetter
             throw new System.ArgumentException("in loading world, root dir " + rootDir + " does not exist");
         }
         string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
-        string configPath = cleanedRootDir + "/blocksConfig.json";
 
+
+        // it is important we do this before reloading inventories 
+        string configPath = cleanedRootDir + "/blocksConfig.json";
         if (!File.Exists(configPath))
         {
             throw new System.ArgumentException("in loading world, config json " + configPath + " does not exist");
         }
-
         string configJson = File.ReadAllText(configPath);
-
         Debug.Log("loading config json from file " + configJson);
         BlockValue.LoadIdConfigFromJsonString(configJson);
         Debug.Log("done loading config json from file " + configJson);
 
+
+
+
+
+
+
         blocksWorld.triMaterial.mainTexture = BlockValue.allBlocksTexture;
         blocksWorld.triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+        blocksWorld.blockEntityMaterial.mainTexture = BlockValue.allBlocksTexture;
+        blocksWorld.blockIconMaterial.mainTexture = BlockValue.allBlocksTexture;
         Debug.Log("loading chunks");
         string chunksDir = cleanedRootDir + "/chunks";
         DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
+
+        // clear structures
+        unfinishedStructures.Clear();
+
+        Dictionary<BlockValue, BlockOrItem> newCustomBlocks = new Dictionary<BlockValue, BlockOrItem>();
+        foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
+        {
+            newCustomBlocks[block.Key.id] = block.Value;
+            Debug.Log("old custom block " + block.Key.id + " is id for block " + block.Key.name);
+        }
+        customBlocks.Clear();
+        customBlocks = newCustomBlocks;
+        foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
+        {
+            Debug.Log("new custom block " + block.Key.id + " is id for block " + block.Key.name);
+        }
+
+        Debug.Log(customBlocks[Example.Water] + " is the thing for water");
+        Debug.Log(customBlocks[Example.WaterNoFlow] + " is the thing for water no flow");
+
+        // delete current chunks
+        foreach (KeyValuePair<long, List<Chunk>> chunkList in chunksPer[0])
+        {
+            foreach (Chunk chunk in chunkList.Value)
+            {
+                chunk.Dispose();
+            }
+        }
+        for (int i = 0; i < chunksPer.Length; i++)
+        {
+            chunksPer[i].Clear();
+        }
+
+        allChunks.Clear();
+        chunkCache.Clear();
+        ungeneratedChunkBiomeDatas.Clear();
+        lastChunk = null;
+        string generatingStructuresPath = cleanedRootDir + "/generatingStructures.json";
+        if (!File.Exists(generatingStructuresPath))
+        {
+            Debug.LogWarning("in loading world, generating structures json " + generatingStructuresPath + " does not exist, assuming there are no structures that have not finished generating yet");
+        }
+        else
+        {
+            SavedStructureCollection savedStructures = Newtonsoft.Json.JsonConvert.DeserializeObject<SavedStructureCollection>(File.ReadAllText(generatingStructuresPath));
+            foreach (SavedStructure structure in savedStructures.savedStructures)
+            {
+                Structure savedStructure = new Structure(structure);
+                unfinishedStructures.Add(savedStructure);
+            }
+        }
+
+        // load new chunks
         if (chunksDirInfo.Exists)
         {
             string[] chunkFiles = Directory.GetFiles(chunksDirInfo.FullName, "*.dat", SearchOption.TopDirectoryOnly);
@@ -2014,12 +2247,46 @@ public class World : BlockGetter
                             Chunk spruce = GetOrGenerateChunk(cx, cy, cz);
                             spruce.generating = false;
                             spruce.chunkData.ReadFromFile(fInfo.FullName);
-                            spruce.valid = false;
                         }
                     }
                 }
             }
         }
+
+
+        // it is important we load config  before loading inventories since inventories are stored by block id and block id mapping to blocks can vary so the config sets up the proper mapping for block ids to blocks
+        // loading the chunks is also probably important so the inventories are assigned to the right kinds of blocks
+        string inventoriesPath = cleanedRootDir + "/blockInventories.json";
+        if (!File.Exists(inventoriesPath))
+        {
+            Debug.LogWarning("in loading world, inventory json " + inventoriesPath + " does not exist, assuming there are no block inventories/chests");
+        }
+        else
+        {
+            blocksWorld.blockInventories.Clear();
+            BlockInventoryCollection blockInventories = Newtonsoft.Json.JsonConvert.DeserializeObject<BlockInventoryCollection>(File.ReadAllText(inventoriesPath));
+            for (int i = 0; i < blockInventories.inventories.Length; i++)
+            {
+                BlockInventory inventory = blockInventories.inventories[i];
+                LVector3 blockPos = new LVector3(inventory.x, inventory.y, inventory.z);
+                Inventory blockInventory = new Inventory(inventory.blocks.Length);
+                for (int j = 0; j < inventory.blocks.Length; j++)
+                {
+                    if (inventory.counts[j] != 0 && inventory.blocks[j] != 0)
+                    {
+                        blockInventory.blocks[j] = new BlockStack(inventory.blocks[j], inventory.counts[j]);
+                    }
+                }
+                blocksWorld.blockInventories[blockPos] = blockInventory;
+                if (this[blockPos] == Example.CraftingTable)
+                {
+                    blockInventory.resultBlocks = new BlockStack[1];
+                }
+            }
+        }
+
+
+
         Debug.Log("done loading chunks");
     }
 
@@ -2134,6 +2401,10 @@ public class World : BlockGetter
 
     public bool AllowedtoPlaceBlock(BlockValue block)
     {
+        if (customBlocks.ContainsKey(block))
+        {
+            return customBlocks[block].CanBePlaced();
+        }
         foreach (BlockValue item in items)
         {
             if (item == block)
@@ -3678,7 +3949,6 @@ public class World : BlockGetter
                 }
 
                 unfinishedStructures = leftoverStructures;
-                break;
             }
         }
     }
@@ -4161,6 +4431,8 @@ public class BlocksWorld : MonoBehaviour {
     ComputeBuffer breakingUVOffsets;
     ComputeBuffer linesOffsets;
     Material outlineMaterial;
+    public Material blockEntityMaterial;
+    public Material blockIconMaterial;
     public Material triMaterial;
     public Material triMaterialWithTransparency;
     public Material breakingMaterial;
@@ -4554,6 +4826,8 @@ public class BlocksWorld : MonoBehaviour {
 
         triMaterial.mainTexture = BlockValue.allBlocksTexture;
         triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+        blockEntityMaterial.mainTexture = BlockValue.allBlocksTexture;
+        blockIconMaterial.mainTexture = BlockValue.allBlocksTexture;
 
 
         string assetsPath = Application.dataPath;

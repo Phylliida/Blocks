@@ -413,4 +413,67 @@ antelopes: walk is similar to crocodogs
 	run is all legs at once boing boing boing thing like gazelles do
 	
 	
-
+	
+	
+	
+	
+Jungle: rocks are mostly hard to find because buried by roots and biomass, and trees/roots move slightly so they could burrow you
+	mud might flow to get clay but you'd need to dry it out
+	Lots of food and plants
+	
+Template crafting table: put materials there for what it is supposed to craft, then it'll bring it (worker or machinery) and as soon as template is filled out it'll craft it
+	also we could put stuff that doesn't have crafting result, then they need that many things to move to next step
+	
+	
+	
+initially queen moves around same as champion
+	after first mult, then you get menus and she sits down and you can manage new workers and stuff that way
+		you can tab between being champion and being queen
+		
+		
+starting out:
+	option: modes, one you start out with a colony, easier modes
+	or for whatever reason you don't have a colony (maybe they had a disease so they had to send you away to protect you)
+		then you will just be the champion and the mother
+		you will also have crysylises that take a little while to hatch into workers (you don't have very much control over their genomes and they are fairly default)
+		you also have lots of larval ones in statis so they aren't growing and don't need food but once you wake them up then they'll start growing
+		you don't manage their genome directly: but you can control in two stages:
+			- before they are born (getting their genes shuffled right)
+			- before/just as they go into their crysylis: then you can activate and deactivate some genes to make them X type of worker or Y type of worker or etc.
+		eventually you can aquire some males that you can start birthing to control geneomes as well
+		you can control how long it takes to hatch from crysylis (roughtly) so you can postpone them if you don't have enough food
+		you can wait for waking up larva because larva needs lots of food, but the longer you wait to wake up larva the more likely they might be to die when you wake them up
+			actually instead, some larva slowly die in statis (think of this as "you know if they can wake up or not") so the player can see them dying off in stasis over time
+			
+			The mother has a larva manager and a crysylis manager
+			the larva can go under statis in stressful abnormal circumstances but normally it isn't what they do
+	how do you get males?
+		the number of males in the area depends on how highly populated of your species is in the area, if crowded then lots of males, if not crowded then fewer males to chose from (males are more likely if your population is high)
+			gender is determined when they are born: not something you can control directly, but there is a gene that can change it from like 1/8 to 1/16 or something but you don't have strict control over how many are males, you can just increase the pr
+	
+	
+	there will be some of your species in most given areas, just to ensure you can get some males (since males will wander out of hives in search for finding a queen), then you can decide based on smell when you find one the jist of what genes they've got (do they have some attributes you want, a possibility of some genes you dont' want then you might not accept them, etc.)
+	you can also have additional info about this later: because genes of males around depends on the other colonies, so once you have done some of the diplomacy stuff around so you know what they other colonies are around then you might be able to determine more from the smell
+	
+	
+	
+	
+	queens can live for quite a while, but eventually they will die of old age.
+		but this is very long way down the road in terms of time of the game
+		so if you want to birth a new queen and "move into it's body" then that'll be your new queen which gives you some control over your genome
+	
+	
+	initially you can toggle between controlling one champion and one queen at a time, but a higher tech thing (a "improve mental powers") could let you have a combined interface to work with multiple colonies at a time
+	
+	
+	
+	
+	if you are in a spicy place with not very many males, you could steal a male from another colony but that might make them mad at you
+		alternatively with diplomacy with other colonies you can trade males with thems (arranged marriages things)
+		this lets you influence other colonies gene pools slightly by sending them males
+			you might have slightly less control over males than female workers
+			you control queen directly, workers while slightly indirectly, they still do what you want them to
+			males have a little more of a mind of their own, so life if the conditions aren't very good at your colony (you aren't treating the males very well) then they might try to run away
+			
+			
+	males should generally be smaller than female workers but more colorful because its a "hey look at me please let me in so I don't die out here in the wildnerness"

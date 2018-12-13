@@ -99,7 +99,7 @@ public class SimpleWater : Block2
 
 public class Water : Block2
 {
-    static int maxUpdates = 10;
+    static int maxUpdates = 100;
     static int numUpdatesThisTick = 0;
     public override void OnTickStart()
     {
@@ -640,10 +640,10 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Axe, new SimpleItem());
         AddCustomBlock(Example.WetBark, new WetBark());
         AddCustomBlock(Example.Sand, new Sand());
-        //AddCustomBlock(Example.Water, new Water());
-        //AddCustomBlock(Example.WaterNoFlow, new Water());
-        AddCustomBlock(Example.Water, new SimpleWater());
-        AddCustomBlock(Example.WaterNoFlow, new SimpleWater());
+        AddCustomBlock(Example.Water, new Water());
+        AddCustomBlock(Example.WaterNoFlow, new Water());
+        //AddCustomBlock(Example.Water, new SimpleWater());
+        //AddCustomBlock(Example.WaterNoFlow, new SimpleWater());
         SetCustomGeneration(new ExampleGeneration());
     }
 
