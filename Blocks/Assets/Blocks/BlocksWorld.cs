@@ -202,14 +202,21 @@ namespace Blocks
         public long cx, cy, cz;
 
         public float[] chunkProperties;
+        public ChunkProperties chunkPropertiesObj;
 
 
         public ChunkBiomeData(ChunkProperties chunkProperties, long cx, long cy, long cz)
         {
+            this.chunkPropertiesObj = chunkProperties;
             this.chunkProperties = chunkProperties.GenerateChunkPropertiesArr(cx, cy, cz);
             this.cx = cx;
             this.cy = cy;
             this.cz = cz;
+        }
+
+        public void RunChunkPropertyEventsOnGeneration()
+        {
+            chunkPropertiesObj.RunEvents(cx, cy, cz);
         }
 
         ChunkBiomeData x0y0z0,
@@ -747,6 +754,64 @@ namespace Blocks
         }
     }
 
+    public class ChunkPropertyEvent
+    {
+        float lambda;
+
+        public delegate void ChunkPropertyEventCallback(long x, long y, long z, BlockData blockData);
+
+        ChunkPropertyEventCallback eventCallback;
+
+        public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback)
+        {
+            // pretend on 1d line cause that should be good enough
+            lambda = World.mainWorld.chunkSize / avgNumBlocksBetween;
+            this.eventCallback = eventCallback;
+        }
+
+        public void Run(long cx, long cy, long cz)
+        {
+            LVector3[] points = GeneratePoints(cx, cy, cz);
+            foreach (LVector3 point in points)
+            {
+                using (BlockData blockData = World.mainWorld.GetBlockData(point.x, point.y, point.z))
+                {
+                    eventCallback(point.x, point.y, point.z, blockData);
+                }
+            }
+        }
+
+        // see https://en.wikipedia.org/wiki/Poisson_distribution#Probability_of_events_for_a_Poisson_distribution
+        public LVector3[] GeneratePoints(long cx, long cy, long cz)
+        {
+            float val = Simplex.Noise.Generate(cx, cy, cz);
+            int chunkSize = World.mainWorld.chunkSize;
+            float totalPr = 0.0f;
+            int factorial = 1;
+            int numPoints = chunkSize;
+            for (int i = 0; i < chunkSize; i++)
+            {
+                float prOfThat = (float)(System.Math.Pow(lambda, i) * System.Math.Exp(-lambda) / factorial);
+                if (i > 1)
+                {
+                    factorial *= i;
+                }
+                totalPr += prOfThat;
+                if (val < totalPr)
+                {
+                    numPoints = i;
+                    break;
+                }
+            }
+
+            LVector3[] resPoints = new LVector3[numPoints];
+            for (int i = 0; i < resPoints.Length; i++)
+            {
+                resPoints[i] = new LVector3(Random.Range(0, chunkSize) + cx*chunkSize, Random.Range(0, chunkSize) + cy * chunkSize, Random.Range(0, chunkSize) + cz * chunkSize);
+            }
+            return resPoints;
+        }
+    }
 
     public class ChunkProperty
     {
@@ -756,6 +821,8 @@ namespace Blocks
         public float maxVal;
         public bool usesY;
         public float scale;
+        public bool makeThatManyPoints;
+
         public ChunkProperty(string name, float minVal, float maxVal, float scale = 10.0f, bool usesY = true)
         {
             this.name = name;
@@ -781,11 +848,25 @@ namespace Blocks
     public class ChunkProperties
     {
         public List<ChunkProperty> chunkProperties = new List<ChunkProperty>();
+        public List<ChunkPropertyEvent> chunkPropertyEvents = new List<ChunkPropertyEvent>();
         public int AddChunkProperty(ChunkProperty chunkProperty)
         {
             chunkProperties.Add(chunkProperty);
             chunkProperty.index = chunkProperties.Count - 1;
             return chunkProperties.Count - 1;
+        }
+
+        public void AddChunkPropertyEvent(ChunkPropertyEvent chunkPropertyEvent)
+        {
+            chunkPropertyEvents.Add(chunkPropertyEvent);
+        }
+
+        public void RunEvents(long cx, long cy, long cz)
+        {
+            foreach (ChunkPropertyEvent chunkEvent in chunkPropertyEvents)
+            {
+                chunkEvent.Run(cx, cy,cz);
+            }
         }
 
         public float[] GenerateChunkPropertiesArr(long cx, long cy, long cz)
@@ -927,6 +1008,8 @@ namespace Blocks
                         }
                     }
                 }
+
+                chunkBiomeData.RunChunkPropertyEventsOnGeneration();
             }
             catch (System.Exception e)
             {
@@ -2304,6 +2387,12 @@ namespace Blocks
         public int AddChunkProperty(ChunkProperty chunkProperty)
         {
             return chunkProperties.AddChunkProperty(chunkProperty);
+        }
+
+
+        public void AddChunkPropertyEvent(ChunkPropertyEvent chunkPropertyEvent)
+        {
+            chunkProperties.AddChunkPropertyEvent(chunkPropertyEvent);
         }
 
         public static string BlockToString(int block)

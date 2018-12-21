@@ -5,9 +5,109 @@ using UnityEngine;
 
 namespace Blocks
 {
+
+
+    public class BaseGenome
+    {
+        public Dictionary<string, Tuple<float, float>> keys = new Dictionary<string, Tuple<float, float>>();
+
+        public BaseGenome()
+        {
+
+        }
+
+        public void AddKey(string key, float minVal, float maxVal)
+        {
+            keys[key] = new Tuple<float, float>(minVal, maxVal);
+        }
+    }
+
+    public class Genome
+    {
+        public FastSmallDictionary<string, float> keys;
+        BaseGenome baseGenome;
+        public Genome(BaseGenome baseGenome)
+        {
+            this.baseGenome = baseGenome;
+            keys = new FastSmallDictionary<string, float>(baseGenome.keys.Count);
+            foreach (KeyValuePair<string, Tuple<float, float>> key in baseGenome.keys)
+            {
+                keys[key.Key] = Random.Range(key.Value.a, key.Value.b);
+            }
+        }
+
+        public Genome Clone()
+        {
+            Genome res = new Genome(baseGenome);
+            foreach (KeyValuePair<string, Tuple<float, float>> key in baseGenome.keys)
+            {
+                res[key.Key] = this[key.Key];
+            }
+            return res;
+        }
+
+        /// <summary>
+        /// Makes a new genome will all values offset by a random value in [-rate*valueRange,rate*valueRange] clamped to min and max valid values
+        /// </summary>
+        /// <param name="rate"></param>
+        /// <returns></returns>
+        public Genome Mutate(float rate)
+        {
+            Genome res = new Genome(baseGenome);
+            foreach (KeyValuePair<string, Tuple<float, float>> key in baseGenome.keys)
+            {
+                float minVal = key.Value.a;
+                float maxVal = key.Value.b;
+
+                float myVal01 = (this[key.Key] - minVal) / (maxVal - minVal);
+                if (maxVal == minVal)
+                {
+                    myVal01 = 1.0f;
+                }
+                float randNeg11 = Random.value * 2 - 1; // in [-1,1]
+                myVal01 = Mathf.Clamp01(myVal01 + randNeg11 * rate);
+                float resVal = myVal01 * (maxVal - minVal) + minVal;
+                res.keys[key.Key] = resVal;
+            }
+            return res;
+        }
+
+        public Genome Breed(Genome other, float mutationRate)
+        {
+            Genome res = new Genome(baseGenome);
+            foreach (KeyValuePair<string, Tuple<float, float>> key in baseGenome.keys)
+            {
+                float rVal = Random.value;
+                // randomly weighted average from their value and ours
+                res[key.Key] = this[key.Key] * rVal + other[key.Key] * (1 - rVal);
+            }
+            return res.Mutate(mutationRate);
+        }
+
+        public float this[string key]
+        {
+            get
+            {
+                return keys[key];
+            }
+            private set
+            {
+
+            }
+        }
+    }
+
+
     [RequireComponent(typeof(MovingEntity))]
     public abstract class MobWithBehavior : MonoBehaviour
     {
+
+
+        public float[] actionWeights = new float[(int)TypeOfThingDoing.MaxValue];
+        public float[] actionBaseWeights = new float[(int)TypeOfThingDoing.MaxValue];
+        public bool[] isImportant = new bool[(int)TypeOfThingDoing.MaxValue];
+        public float[] importantMaxValues = new float[(int)TypeOfThingDoing.MaxValue];
+
 
         public class ThingDoingTarget
         {
@@ -32,13 +132,12 @@ namespace Blocks
 
         public enum TypeOfThingDoing
         {
-            Standing,
-            Wandering,
-            Sitting,
-            Chasing,
-            Searching,
-            RunningAway,
-            Socializing
+            Standing=0,
+            Wandering=1,
+            GettingFood=2,
+            RunningAway=3,
+            Socializing=4,
+            MaxValue=5
         }
 
         public class ThingDoing
@@ -53,7 +152,7 @@ namespace Blocks
         }
 
 
-        ThingDoing thingDoing;
+        public ThingDoing thingDoing;
 
         public ThingDoing action
         {
@@ -100,15 +199,49 @@ namespace Blocks
             return isCurrentlyValid && world[x, y - blocksHeight, z] != (int)BlockValue.Air;
         }
 
+        /// <summary>
+        /// Required values:
+        /// baseFood
+        /// maxFood
+        /// baseStamina
+        /// maxStamina
+        /// </summary>
+        /// <returns></returns>
+        public abstract BaseGenome GetBaseGenome();
+
+        public Genome genome;
+
         public void Start()
         {
             if (world == null)
             {
                 world = World.mainWorld;
             }
-            hungerMeter = baseHunger;
-            stamina = baseStamina;
-            wantToFindFoodThresh = hungerMeterMax / 2.0f;
+
+            thingDoing = new ThingDoing(TypeOfThingDoing.Standing, null);
+            genome = new Genome(GetBaseGenome());
+
+            food = genome["baseHunger"];
+            stamina = genome["baseStamina"];
+            maxStamina = genome["maxStamina"];
+            maxFood = genome["maxFood"];
+
+
+            for (int i = 0; i < actionWeights.Length; i++)
+            {
+                TypeOfThingDoing typeOfThing = (TypeOfThingDoing)i;
+                float maxValue = 10.0f;
+                if (IsImportant(typeOfThing, ref maxValue))
+                {
+                    isImportant[i] = true;
+                    importantMaxValues[i] = maxValue;
+                }
+                else
+                {
+                    isImportant[i] = false;
+                }
+                actionBaseWeights[i] = GetBaseWeight(typeOfThing);
+            }
         }
 
 
@@ -125,15 +258,15 @@ namespace Blocks
         /// <summary>
         /// Lower is more hungry, 0 is starving, hungerMeterMax is full
         /// </summary>
-        public float hungerMeter;
-        public float hungerMeterMax = 10.0f;
+        public float food;
+        public float maxFood = 10.0f;
 
         public float wantToFindFoodThresh;
         public float veryHungryThresh = 2.0f;
 
         public float baseStamina = 3.0f;
         public float stamina;
-        public float staminaMax;
+        public float maxStamina;
 
 
         public static int frameUpdatedLast = 0;
@@ -143,34 +276,31 @@ namespace Blocks
             if (pathingTarget == null)
             {
                 body.desiredMove = Vector3.zero;
-                return;
             }
             if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount) // offset so everyone isn't aligned on the same frame
             {
                 LVector3 myPos = LVector3.FromUnityVector3(transform.position);
-                if (hungerMeter <= veryHungryThresh)
+                LVector3 foundThing;
+                if (Search(out foundThing))
                 {
-                    LVector3 foundThing;
-                    if (Search(out foundThing))
+                    // found it, is it closer?
+                    if (pathingTarget == null || LVector3.CityBlockDistance(foundThing, myPos) < LVector3.CityBlockDistance(pathingTarget, myPos))
                     {
-                        // found it, is it closer?
-                        if (LVector3.CityBlockDistance(foundThing, myPos) < LVector3.CityBlockDistance(pathingTarget, myPos))
-                        {
-                            // if so, go to it instead
-                            thingDoing = new ThingDoing(TypeOfThingDoing.Chasing, new ThingDoingTarget(foundThing));
-                        }
-                        //Debug.Log("found thing in " + steps + " steps");
+                        // if so, go to it instead
+                        thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, new ThingDoingTarget(foundThing));
+                        pathingTarget = foundThing;
                     }
-                    else
-                    {
-                        // did not find
-                        //Debug.Log("did not find thing in " + steps + " steps");
-                    }
+                    //Debug.Log("found thing in " + steps + " steps");
+                }
+                else
+                {
+                    // did not find
+                    //Debug.Log("did not find thing in " + steps + " steps");
                 }
                 frameUpdatedLast = Time.frameCount;
                 //Debug.Log("updating pathing");
                 RaycastResults blockStandingOn;
-                if (PhysicsUtils.RayCastAlsoHitWater(body.transform.position, -Vector3.up, 20.0f, out blockStandingOn))
+                if (pathingTarget != null && PhysicsUtils.RayCastAlsoHitWater(body.transform.position, -Vector3.up, 20.0f, out blockStandingOn))
                 {
                     // if we are using shift and standing over an empty block, but our feet are on a neighboring block, use that neighboring block for pathfinding instead
                     if (blockStandingOn != null)
@@ -246,6 +376,30 @@ namespace Blocks
                 }
                 targetPos = targetBlock.BlockCentertoUnityVector3();
                 body.SetAbsoluteDesiredMove((targetPos - transform.position).normalized);
+
+
+                if (pathingTarget.BlockV != Example.FlowerWithNectar)
+                {
+                    this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
+                }
+                else
+                {
+                    float myDist = LVector3.CityBlockDistance(LVector3.FromUnityVector3(transform.position), pathingTarget);
+                    // found it, eat it
+                    if (myDist < 2)
+                    {
+                        OnReachFoodBlock(pathingTarget);
+                        /*
+                        DidEatObject(pathingTarget, 1.0f);
+                        world[pathingTarget] = (int)Example.Flower;
+                        */
+                        this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
+                    }
+                    // still pathing to it
+                    else
+                    {
+                    }
+                }
             }
         }
 
@@ -257,18 +411,21 @@ namespace Blocks
             this.pathingTarget = pathingTarget;
         }
 
-        public abstract void UpdateBehavior(ref ThingDoing curDoing);
+        public abstract ThingDoing UpdateBehavior(TypeOfThingDoing newTypeOfThingDoing);
 
         public bool Search(out LVector3 found)
         {
             found = new LVector3();
-            RaycastResults res;
-            for (int i = 0; i < 10; i++)
+            if (lookingForBlock)
             {
-                if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 100.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => { return b == Example.FlowerWithNectar; }, out res))
+                RaycastResults res;
+                for (int i = 0; i < 10; i++)
                 {
-                    found = res.hitBlock;
-                    return true;
+                    if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 100.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => { return b == blockLookingFor; }, out res))
+                    {
+                        found = res.hitBlock;
+                        return true;
+                    }
                 }
             }
             return false;
@@ -276,18 +433,133 @@ namespace Blocks
 
         public void DidEatObject(LVector3 block, float hungerGain)
         {
-            hungerMeter = Mathf.Min(hungerMeterMax, hungerMeter + hungerGain);
+            food = Mathf.Min(maxFood, food + hungerGain);
+        }
+
+
+        public abstract float GetBaseWeight(TypeOfThingDoing thingDoing);
+        public abstract float GetWeight(TypeOfThingDoing thingDoing);
+        public abstract bool IsImportant(TypeOfThingDoing thingDoing, ref float maxValue);
+        public abstract void OnSearchForFood(out bool lookForBlock, out BlockValue lookForBlockValue);
+        public abstract void OnReachFoodBlock(LVector3 foodBlock);
+
+        public IEnumerable<TypeOfThingDoing> TypesOfThingsToDo()
+        {
+            for (int i = 0; i < (int)TypeOfThingDoing.MaxValue; i++)
+            {
+                yield return (TypeOfThingDoing)i;
+            }
+        }
+
+
+        public TypeOfThingDoing typeOfThingDoing;
+        bool lookingForBlock = false;
+        BlockValue blockLookingFor;
+
+
+        public float zeroOneThing(float x, float a)
+        {
+            // handling bad input cases
+            if (a <= 0)
+            {
+                return a;
+            }
+
+            // regular cases:
+
+            // we want something that has
+            // f(0) = 0
+            // f(1) = maxVal
+            // smoothly between, but not linear
+            // concave up
+            // I like
+            // f(x) = 1/(-x+c) + b
+            // so if you solve c and b s.t. f(0) = 0 and f(1) = maxVal
+            // you get 
+
+            float c = (Mathf.Sqrt(a + 4) + Mathf.Sqrt(a)) / (2 * Mathf.Sqrt(a));
+            float b = -1.0f / c;
+
+            return 1.0f / (-x + c) + b;
         }
 
         public void Update()
         {
+            this.typeOfThingDoing = this.thingDoing.typeOfThing;
             if (world == null)
             {
                 world = World.mainWorld;
+
+                if (world == null) // not initialized yet, wait
+                {
+                    return;
+                }
             }
-            if (world != null)
+
+            float totalWeight = 0.0f;
+            for (int i = 0; i < (int)TypeOfThingDoing.MaxValue; i++)
             {
-                UpdateBehavior(ref this.thingDoing);
+                actionWeights[i] = actionBaseWeights[i] + GetWeight((TypeOfThingDoing)i);
+                if (isImportant[i])
+                {
+                    actionWeights[i] = zeroOneThing(actionWeights[i], importantMaxValues[i]);
+                }
+                totalWeight += actionWeights[i];
+            }
+            if (totalWeight <= 0.0f)
+            {
+                totalWeight = 1.0f;
+            }
+
+            // randomly sample proportional to weights
+            float randVal = Random.value;
+            float cumulSum = 0.0f;
+            int chosenThing = 0;
+            for (int i = 0; i < (int)TypeOfThingDoing.MaxValue; i++)
+            {
+                cumulSum += actionWeights[i] / totalWeight;
+                if (randVal <= cumulSum)
+                {
+                    chosenThing = i;
+                    break;
+                }
+            }
+
+            int curAct = (int)thingDoing.typeOfThing;
+            float curWeight = actionWeights[curAct];
+            float chosenWeight = actionWeights[chosenThing];
+
+            float diff = curWeight - chosenWeight;
+            // if current is much more likely, don't change
+            if (diff > 1.0f)
+            {
+
+            }
+            // otherwise, change with diff pr (if diff < 0 this means always change)
+            else/* if (diff < 0)
+            {
+                TypeOfThingDoing chosenThingDoing = (TypeOfThingDoing)chosenThing;
+                thingDoing = UpdateBehavior(chosenThingDoing);
+                if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood)
+                {
+                    OnSearchForFood(out lookingForBlock, out blockLookingFor);
+                }
+            }
+            else if (Random.value < diff)*/
+            {
+                TypeOfThingDoing chosenThingDoing = (TypeOfThingDoing)chosenThing;
+                thingDoing = UpdateBehavior(chosenThingDoing);
+                if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood)
+                {
+                    OnSearchForFood(out lookingForBlock, out blockLookingFor);
+                }
+            }
+
+
+
+            if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood || thingDoing.typeOfThing == TypeOfThingDoing.RunningAway)
+            {
+                UpdatePathing();
             }
 
         }

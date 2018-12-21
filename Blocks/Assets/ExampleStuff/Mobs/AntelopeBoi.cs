@@ -6,19 +6,75 @@ using Blocks;
 
 public class AntelopeBoi : MobWithBehavior
 {
+    public override BaseGenome GetBaseGenome()
+    {
+        BaseGenome res = new BaseGenome();
+        // required ones
+        res.AddKey("baseHunger", 2.0f, 2.0f);
+        res.AddKey("baseStamina", 2.0f, 2.0f);
+        res.AddKey("maxStamina", 5.0f, 10.0f);
+        res.AddKey("maxFood", 5.0f, 10.0f);
+
+        // for weighting behaviors
+        res.AddKey("easilySpooked", 0.5f, 0.9f);
+        res.AddKey("curiosity", 0.2f, 0.4f);
+        res.AddKey("extrovertednes", 0.3f, 0.7f);
+        return res;
+    }
+
+    public override float GetBaseWeight(TypeOfThingDoing thingDoing)
+    {
+        if (thingDoing == TypeOfThingDoing.GettingFood) return 0.0f;
+        else if(thingDoing == TypeOfThingDoing.RunningAway) return genome["easilySpooked"];
+        else if(thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
+        else if (thingDoing == TypeOfThingDoing.Socializing) return genome["extrovertednes"];
+        else if(thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
+        return 0.0f;
+    }
+
+    public override float GetWeight(TypeOfThingDoing thingDoing)
+    {
+        if (thingDoing == TypeOfThingDoing.GettingFood) return 1.0f - food / maxFood;
+        //else if (thingDoing == TypeOfThingDoing.RunningAway) return genome["easilySpooked"];
+        //else if (thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
+        //else if (thingDoing == TypeOfThingDoing.Socializing) return genome["extrovertednes"];
+        //else if (thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
+        return 0.0f;
+    }
+
+    public override bool IsImportant(TypeOfThingDoing thingDoing, ref float maxValue)
+    {
+        if (thingDoing == TypeOfThingDoing.GettingFood)
+        {
+            maxValue = 10.0f;
+            return true;
+        }
+        else if (thingDoing == TypeOfThingDoing.RunningAway)
+        {
+            maxValue = 10.0f;
+            return true;
+        }
+        //else if (thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
+        //else if (thingDoing == TypeOfThingDoing.Socializing) return genome["extrovertednes"];
+        //else if (thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
+        return false;
+    }
+
+    /*
     public override void UpdateBehavior(ref ThingDoing curDoing)
     {
+        
         if (curDoing == null)
         {
             curDoing = new ThingDoing(TypeOfThingDoing.Searching, null);
         }
 
-        if (hungerMeter < wantToFindFoodThresh && curDoing.typeOfThing != TypeOfThingDoing.Chasing && curDoing.typeOfThing != TypeOfThingDoing.Searching)
+        if (food < wantToFindFoodThresh && curDoing.typeOfThing != TypeOfThingDoing.Chasing && curDoing.typeOfThing != TypeOfThingDoing.Searching)
         {
             curDoing = new ThingDoing(TypeOfThingDoing.Searching);
         }
 
-        if (hungerMeter >= wantToFindFoodThresh && curDoing.typeOfThing != TypeOfThingDoing.RunningAway)
+        if (food >= wantToFindFoodThresh && curDoing.typeOfThing != TypeOfThingDoing.RunningAway)
         {
             curDoing = new ThingDoing(TypeOfThingDoing.Standing);
         }
@@ -82,22 +138,6 @@ public class AntelopeBoi : MobWithBehavior
         }
         else if (curDoing.typeOfThing == TypeOfThingDoing.Searching)
         {
-            if (PhysicsUtils.millis() - lastSearchTime > millisBetweenSearch)
-            {
-                LVector3 foundThing;
-                if (Search(out foundThing))
-                {
-                    // found it
-                    curDoing = new ThingDoing(TypeOfThingDoing.Chasing, new ThingDoingTarget(foundThing));
-                    //Debug.Log("found thing in " + steps + " steps");
-                }
-                else
-                {
-                    // did not find
-                    //Debug.Log("did not find thing in " + steps + " steps");
-                }
-                lastSearchTime = PhysicsUtils.millis();
-            }
         }
         else if (curDoing.typeOfThing == TypeOfThingDoing.Sitting)
         {
@@ -116,5 +156,32 @@ public class AntelopeBoi : MobWithBehavior
         {
 
         }
+    }
+
+    */
+
+    public override ThingDoing UpdateBehavior(TypeOfThingDoing newTypeOfThingDoing)
+    {
+        if (newTypeOfThingDoing == TypeOfThingDoing.RunningAway)
+        {
+            newTypeOfThingDoing = TypeOfThingDoing.GettingFood;
+        }
+        return new ThingDoing(newTypeOfThingDoing, null);
+    }
+
+    public override void OnReachFoodBlock(LVector3 foodBlock)
+    {
+        if (foodBlock.Block == Example.FlowerWithNectar)
+        {
+            this.food = Mathf.Min(this.food + 1.0f, maxFood);
+            foodBlock.Block = Example.Flower;
+        }
+    }
+
+
+    public override void OnSearchForFood(out bool lookForBlock, out BlockValue lookForBlockValue)
+    {
+        lookForBlock = true;
+        lookForBlockValue = Example.FlowerWithNectar;
     }
 }

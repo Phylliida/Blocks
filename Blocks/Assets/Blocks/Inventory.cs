@@ -9,6 +9,7 @@ namespace Blocks
     {
         public int block;
         public int count;
+        
 
         public BlockValue Block
         {

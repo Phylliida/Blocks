@@ -642,10 +642,11 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Axe, new SimpleItem(), 1);
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
         AddCustomBlock(Example.Sand, new Sand(), 64);
-        AddCustomBlock(Example.Water, new Water(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
-        AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
-
+        //AddCustomBlock(Example.Water, new Water(), 64);
+        //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
+        AddCustomBlock(Example.Water, new SimpleWater(), 64);
+        AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
 
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
@@ -684,8 +685,6 @@ public class ExamplePack : BlocksPack {
 
 
 
-        //AddCustomBlock(Example.Water, new SimpleWater());
-        //AddCustomBlock(Example.WaterNoFlow, new SimpleWater());
         SetCustomGeneration(new ExampleGeneration());
     }
 

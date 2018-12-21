@@ -477,3 +477,35 @@ starting out:
 			
 			
 	males should generally be smaller than female workers but more colorful because its a "hey look at me please let me in so I don't die out here in the wildnerness"
+	
+	
+	everything is a tradeoff on some level but as you progress and find better genes that might result in better tradeoffs in some ways and you have some options so that you can specialize better in some ways
+	
+	
+	
+	
+	Intelligence for workers:
+		1: (in the works): there are more options for what you can have that worker be doing, better automation of the processes of your colony by having more things that the workers can do
+		2: has a cost in terms of energy (larger brain takes more energy/food)
+		3: morale number: the range of values that it can take depends on their intelligence [-intelligence*constant, intelligence*constant]
+		
+		
+	Morale:
+		Happy workers might give bonuses
+		Sad workers might have harms
+		
+		
+		Basic things:
+			enough food?
+			enough space?
+			(other quality of living things?)
+			higher intelligence: how much they like their job - so if you have them assigned to the jobs they like they'll have higher morale or ones they don't like they'll have lower morale
+		
+		for males: morale matters for if they are likely to try and run away - you can prevent that by boxing them in or whatever but then they can't do as much to help if they are boxed in
+		
+		
+		if morale is low, higher probabilty of squabbles between the workers/they aren't as good as working with each other
+			or they might just forget about what you told them to do, or take longer (do something else first, or just be slow about it because they are sad)
+			
+		
+		
