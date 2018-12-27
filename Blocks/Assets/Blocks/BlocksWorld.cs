@@ -419,7 +419,8 @@ namespace Blocks
             this.wy = y;
             this.wz = z;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
-
+            //cachedBlock = world[wx, wy, wz, cx, cy, cz];
+            //this.curBlockModifyStateBlock = world.blockModifyState;
         }
     }
     public class BlockDataGetter
@@ -1450,15 +1451,18 @@ namespace Blocks
             int totalLen = System.Math.Min(data.Length, chunkData.Length);
             for (int i = 0; i < totalLen; i++)
             {
+                // if we are on a block, check if wildcard
                 if (i % 4 == 0)
                 {
+                    // if not, assign it and also assign the chunk internal states 
                     if (data[i] != (int)BlockValue.Wildcard)
                     {
                         chunkData[i] = data[i];
                     }
+                    // otherwise this is wildcard, skip to next block (only 3 instead of 4 because i++ is default in loop)
                     else
                     {
-                        i += 4;
+                        i += 3;
                     }
                 }
                 else
@@ -4060,6 +4064,11 @@ namespace Blocks
                     }
 
                     unfinishedStructures = leftoverStructures;
+
+                    if (frameId > 5)
+                    {
+                        //break;
+                    }
                 }
             }
         }
@@ -4184,10 +4193,10 @@ namespace Blocks
                 string blockPath = packAssetsPath + "/" + block.blockName + ".png";
                 File.WriteAllBytes(blockPath, argbTexture.EncodeToPNG());
                 // delete meta file so unity will reload it
-                if (File.Exists(blockPath + ".meta"))
-                {
-                    File.Delete(blockPath + ".meta");
-                }
+                //if (File.Exists(blockPath + ".meta"))
+                //{
+                //    File.Delete(blockPath + ".meta");
+                //}
 
 
 
@@ -4960,13 +4969,13 @@ namespace Blocks
             BlockValue.allBlocksTexture.alphaIsTransparency = true;
             string assetsPathDir = assetsPathInfo.FullName;
 
-            File.WriteAllBytes(assetsPathDir + "/CurrentTexture.png", BlockValue.allBlocksTexture.EncodeToPNG());
+            //File.WriteAllBytes(assetsPathDir + "/CurrentTexture.png", BlockValue.allBlocksTexture.EncodeToPNG());
 
             // delete meta file so unity will reload it
-            if (File.Exists(assetsPathDir + "/CurrentTexture.png.meta"))
-            {
-                File.Delete(assetsPathDir + "/CurrentTexture.png.meta");
-            }
+            //if (File.Exists(assetsPathDir + "/CurrentTexture.png.meta"))
+            //{
+            //    File.Delete(assetsPathDir + "/CurrentTexture.png.meta");
+            //}
         }
 
         void LoadMaterials()

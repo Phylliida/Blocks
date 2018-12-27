@@ -18,10 +18,10 @@ public class ExampleGeneration : GenerationClass
         elevationProp = new ChunkProperty("elevation", minVal, maxVal, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         treeEvent = new ChunkPropertyEvent(10.0f, OnTree);
-        riverEvent = new ChunkPropertyEvent(1000.0f, OnRiver);
+        riverEvent = new ChunkPropertyEvent(400.0f, OnRiver);
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(riverProp);
-        world.AddChunkPropertyEvent(riverEvent);
+        world.AddChunkPropertyEvent(treeEvent);
         world.AddChunkPropertyEvent(riverEvent);
     }
 
@@ -165,11 +165,7 @@ public class ExampleGeneration : GenerationClass
         //    outBlock.block = BlockValue.STONE;
         //}
         long elevationL = (long)Math.Round(elevation);
-        long elevationAbove = 0;
-        using (BlockData blockAbove = GetBlockData(x, y + 1, z))
-        {
-            elevationAbove = (long)Math.Round(blockAbove.GetChunkProperty(elevationProp));
-        }
+        long elevationAbove = (long)Math.Round(GetChunkProperty(x, y + 1, z, elevationProp));
         if (y >= elevationL)
         {
             // air, but allow other things to go here instead
@@ -178,8 +174,8 @@ public class ExampleGeneration : GenerationClass
         else
         {
             long distFromSurface = elevationL - y;
-            long aboveDistFromSurface = elevationAbove - y;
-            bool topInAir = (y+1 >= aboveDistFromSurface);
+            long aboveDistFromSurface = elevationAbove - (y+1);
+            bool topInAir = aboveDistFromSurface <= 0;
 
             if (topInAir)
             {
@@ -233,7 +229,7 @@ public class ExampleGeneration : GenerationClass
                 }
                 if (outBlock.block == Example.LooseRocks)
                 {
-                    outBlock.state1 = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 5.0f + 1.0f);
+                    outBlock.state1 = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 2.0f + 1.0f);
                 }
             }
         }

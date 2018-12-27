@@ -25,10 +25,10 @@ public class AntelopeBoi : MobWithBehavior
     public override float GetBaseWeight(TypeOfThingDoing thingDoing)
     {
         if (thingDoing == TypeOfThingDoing.GettingFood) return 0.0f;
-        else if(thingDoing == TypeOfThingDoing.RunningAway) return genome["easilySpooked"];
-        else if(thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
+        else if (thingDoing == TypeOfThingDoing.RunningAway) return 0.0f;
+        else if (thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
         else if (thingDoing == TypeOfThingDoing.Socializing) return genome["extrovertednes"];
-        else if(thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
+        else if (thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
         return 0.0f;
     }
 
@@ -46,12 +46,12 @@ public class AntelopeBoi : MobWithBehavior
     {
         if (thingDoing == TypeOfThingDoing.GettingFood)
         {
-            maxValue = 10.0f;
+            maxValue = 30.0f;
             return true;
         }
         else if (thingDoing == TypeOfThingDoing.RunningAway)
         {
-            maxValue = 10.0f;
+            maxValue = 30.0f;
             return true;
         }
         //else if (thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];

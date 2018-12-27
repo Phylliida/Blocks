@@ -306,7 +306,7 @@ public class Grass : Block2
         long state1 = block.state1;
         long state2 = block.state2;
         long state3 = block.state3;
-        bool doesntNeedTick = true;
+        block.needsAnotherTick = false;
         if (GetBlock(block.x, block.y+1, block.z) != Example.Air)
         {
             block.block = Example.Dirt;
@@ -317,7 +317,7 @@ public class Grass : Block2
             // if neighbor is dirt and it has air above it, try growing into it
             if (neighbor.block == Example.Dirt && GetBlock(neighbor.x, neighbor.y + 1, neighbor.z) == Example.Air)
             {
-                if (rand() < 2.0f)
+                if (rand() < 0.5f)
                 {
                     // grow
                     neighbor.block = Example.Grass;
@@ -326,13 +326,8 @@ public class Grass : Block2
                 {
                     // we failed to grow but still need to, try again next tick
                     block.needsAnotherTick = true;
-                    doesntNeedTick = false;
                 }
             }
-        }
-        if (block.needsAnotherTick && doesntNeedTick)
-        {
-            Debug.Log("what u doin");
         }
     }
 

@@ -86,6 +86,10 @@ namespace Blocks
 
     public struct LVector3
     {
+
+
+        public static LVector3 Invalid = new LVector3(-10000000000L, -10000000000L, -10000000000L);
+
         public long x, y, z;
         public LVector3(long x, long y, long z)
         {
@@ -201,6 +205,46 @@ namespace Blocks
         public bool Equals(LVector3 other)
         {
             return (other.x == x) && (other.y == y) && (other.z == z);
+        }
+
+        public static bool operator ==(object a, LVector3 b)
+        {
+            return b == a;
+        }
+
+        public static bool operator !=(object a, LVector3 b)
+        {
+            return !(a == b);
+        }
+
+        public static bool operator ==(LVector3 a, object b)
+        {
+            if (((object)a) == null && b == null)
+            {
+                return true;
+            }
+
+            if (b == null)
+            {
+                return false;
+            }
+
+            if (b is LVector3)
+            {
+                LVector3 item = (LVector3)b;
+                return (a.x == item.x) && (a.y == item.y) && (a.z == item.z);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+
+
+        public static bool operator !=(LVector3 a, object b)
+        {
+            return !(a == b);
         }
 
         // see https://msdn.microsoft.com/en-us/library/ms173147.aspx
