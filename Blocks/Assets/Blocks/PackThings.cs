@@ -220,24 +220,26 @@ namespace Blocks
             AddNewBlock(id, name, packName);
         }
 
+        public const int animFrames = 32;
         void SetupTexture()
         {
-            allBlocksTexture = new Texture2D(16 * 2, 16 * 3 * allBlocks.Length, TextureFormat.ARGB32, false, true);
+            allBlocksTexture = new Texture2D(16 * 2* animFrames, 16 * 3 * allBlocks.Length, TextureFormat.ARGB32, false, true);
             allBlocksTexture.filterMode = FilterMode.Point;
             Color32[] allColors = new Color32[allBlocksTexture.width * allBlocksTexture.height];
-            for (int i = 0; i < allColors.Length; i++)
+            for (int i = 0; i < allBlocksTexture.height; i++)
             {
-                if (i < (16 * 16 * 2 * 3) || (allColors.Length - i - 1) < (16 * 16 * 2 * 3))
+                for (int j = 0; j < allBlocksTexture.width; j++)
                 {
-                    allColors[i] = new Color32(0, 0, 0, 255); // air and wildcard (first and last one due to offset by 1) get default black
+                    int ind = i * allBlocksTexture.width + j;
+                    if (i == 0 || i == allBlocksTexture.height-1)
+                    {
+                        allColors[ind] = new Color32(0, 0, 0, 255); // air and wildcard (first and last one due to offset by 1) get default black
+                    }
+                    else
+                    {
+                        allColors[ind] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
+                    }
                 }
-                else
-                {
-                    allColors[i] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
-                }
-            }
-            for (int i = 0; i < allColors.Length; i++)
-            {
             }
             allBlocksTexture.SetPixels32(allColors);
             allBlocksTexture.Apply();
@@ -348,6 +350,70 @@ namespace Blocks
                 }
                 else
                 {
+                    bool animated = false;
+                    // test if animated
+                    for (int i = 0; i < 32; i++)
+                    {
+                        string frameITexture = texturePath.Substring(0, texturePath.Length - ".png".Length) + i + ".png";
+                        if (File.Exists(frameITexture))
+                        {
+                            animated = true;
+
+                            byte[] imageData = File.ReadAllBytes(frameITexture);
+                            Texture2D blockTexture = new Texture2D(2, 2);
+                            blockTexture.LoadImage(imageData); // (will automatically resize as needed)
+                            blockTexture.Apply();
+
+                            // convert to argb32
+                            Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
+                            argbTexture.SetPixels(blockTexture.GetPixels());
+                            argbTexture.Apply();
+                            Color32[] argbColors = argbTexture.GetPixels32();
+
+                            // check for transparency
+                            bool isTransparent = false;
+                            for (int j = 0; j < argbColors.Length; j++)
+                            {
+                                if (argbColors[j].a < 240) // if it is only 240/255 or higher it isn't noticable enough to actually use the transparency
+                                {
+                                    isTransparent = true;
+                                    break;
+                                }
+                            }
+
+
+                            // sign of id should match transparency, fix if not
+                            if (isTransparent)
+                            {
+                                if (id > 0)
+                                {
+                                    _id = -uid;
+                                    Debug.LogWarning("warning: detected transparent texture for block " + name + " with updated id " + id + " and texture path " + texturePath + " but we were told it is not transparent, set it to transparent anyway");
+                                }
+                            }
+                            else
+                            {
+                                if (id < 0)
+                                {
+                                    _id = uid;
+                                    Debug.LogWarning("warning: detected not transparent texture for block " + name + " with updated id " + id + " and texture path " + texturePath + " but we were told it is transparent, set it to not transparent anyway");
+                                }
+                            }
+
+
+
+                            if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+                            {
+                                Debug.Log("rescaling texture of block " + name + " with id " + id + " and texture path " + texturePath);
+                                TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+                            }
+                            argbTexture.Apply();
+                            Color[] pixels = argbTexture.GetPixels();
+                            // offset x by frame count
+                            allBlocksTexture.SetPixels(i*16*2, (uid - 1) * 16 * 3, 16 * 2, 16 * 3, pixels);
+                            allBlocksTexture.Apply();
+                        }
+                    }
                     Debug.LogWarning("warning: texture " + texturePath + " for block " + name + " with id " + id + " does not exist");
                 }
             }

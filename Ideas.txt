@@ -508,4 +508,166 @@ starting out:
 			or they might just forget about what you told them to do, or take longer (do something else first, or just be slow about it because they are sad)
 			
 		
-		
+        
+        
+        
+        
+        
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+What the interace/play is like:
+
+
+game starts when the player character emerges from their crysylis into their adult form (0th adult molt - when you go through a molt that lets you adjust abilities somewhat, it's like leveling up)
+    at this stage the mother and champion are still mostly the same
+    some button to toggle between their two povs
+    same walking speed
+    champion has faster sprint and much more stamina
+    in addition to breaking blocks and crafting and stuff, mother self has:
+        - Speed up and/or slow down cacoons in processes
+            - Start with 4 cacoons, all of which are a couple of days out, varying amounts of progress along
+                - Takes time to cast the spell to speed them up or slow them down
+            - Have an action queue in the programming; being able to say to whatever: do this, then do this, then do this, etc., maybe being able to add a thing of high priority, etc.
+            - For example, you could get mother self safe, get out 4 crysylises for 4 workers, hasten hasten hasten hasten, then mother self would do the time to cast on 1, 2, 3, 4 automatically
+            - Mother self has menu with different tabs:
+                can queue things there, categories for variants and workers and soldiours and stuff later on to access quickly
+        - Restore: increase target's health and stamina regenation at a time at the cost of your own (reduces your own generation to basically none, but then can as much as double someone else)
+            - potential targets are champion or workers
+            - initially needs touch, but lasts a while (similar to starcraft boost thing]), upgrades can make it last longer and stuff
+        - Summon any adult sisters:
+            - Whatever they are doing they will stop and come back to the mother
+            - If they can't get to the mother, they might ping and say ("I'm having trouble getting to you or I'm hurt" or something like that)
+            - Maybe a later ability is to tell what direction are they in
+            - Maybe later you could even switch and look from their pov but that would be more mid game
+            - Or even minimap essentially, later on
+        - Ancestral memory: access gameplay tips and tutorial stuff
+            - gives you little strategy notes that'll tell you things and give you vauge hints about strategic things
+            - tutorial: tech tree of ingredients, how to get them, once you get them the things you an craft, etc.
+            
+    champion doesn't have any major abilities, just is better at doing stuff
+        - 
+            
+        
+
+
+
+
+
+sisters, 4 basic options:
+    - stay with the mother/be at home
+        - eat food if hungry
+        - sociaize with other sisters/mother/champion 
+            - sitting next to each other and particle effects for being happier because they are socializing
+            - if you are nearby they might come up to you and make little particle effects because they are happy to interact with you, etc.
+            - morale is impacted: if they don't have very much time to socialize with other sisters or the player that can hurt their morale
+        - sleep if they are tired
+        - wander around where they consider base a little bit doing their thing
+        
+        - wherever the mother is they'll think of as home base
+        - if any risk to the mother they'll hurry to defend
+        - if the mother is hungry they'll bring them food from the food pile
+    - stay with the champion (try to help out with whatever, if you get attacked they'll help attack, if you are foraging they'll also forage, etc.)
+        - if they are staying with the champion they might also give the champion food
+    - go foraging
+        - right click the button for slight variations (stay close and come back often vs make sure you find stuff vs include hunting small animals vs just gather plants and change settings and then do command),
+        - they will act on whatever the settings are when you give the command
+        - either give them specific items they are looking for or "find useful stuff" (ai might not be that great but they'd try)
+        - if they find themselves in danger?
+            - they would probably evaluate how spicy: if they feel like they can handle it (weapon can help quite a bit with that) then they might just fight back
+                - might also call for help
+                - if they can't handle it or if their health fell too low then they'd just retreat and go home
+                - personality variations here - when you are doing adaptions later in genes you can adjust these like that
+        - they have their own small inventory and can also have a pile of stuff at home base
+        - or even like forage into this chest (or designate chest as: items in the food category
+            - few general categories you can mark chests and/or storage things as:
+                - if multiple chests of the same category, they'll put stuff in the chest with stacks already existing of that item (if relevant)
+        - they'll come back during the night and sleep (or there is a setting to keep watch during the night so they wouldn't just go to sleep)
+            - they'll also nap during the day if they were staying at home
+            
+                
+    - keep watch ("sit")
+        - stay wherever they are, on the lookout for spookers, if they see something of hazardous or of interest then they'll say "hey I saw something interesting" and give you a ping about it
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+plowing a patch of dirt can be done with a stick, fairly slow and energy intensive, only works on a subset of dirt (dirt vs corse dirt kind of thing, only works on the nicer dirt, some chance that the stick breaks by hitting a rock. If that happens you get a rock but the stick is gone)
+
+
+plow:
+    - 1 large sharp stone
+    - 4 sticks
+    - faster, doesn't cost as much energy, can do even as not as nice soils, will not break nearly as easily as the stick will
+    
+ X 
+|S| 
+| |
+
+| - stick
+X - large sharp stone
+S - string
+        
+        
+        
+        
+harnass:
+    - if you have a tamed animal you can put this on it
+    - you can attach an animal to the plow with a harnass and then it'll take less energy/the animals energy
+        - marking where to plow: (todo?)
+
+        
+        
+- walking on plowed dirt has some chance of turning it back into regular dirt, isn't the case if you are sneaking
+- one adaptation for the sisters or you is an adaption that lets them walk (or potentially even sprint at a later piont) at normal speed without damaging it
+- weeds can potentially overwhelm crops so you need to do weeding, some sturdier crops you wouldn't need to worry about that
+   - normally you'd have the sisters do this
+   - the hoe is used for weeding faster instead of plowing
+
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+options to choose for sisters when emergeing from their young to adult form:
+    - one of these two, one of these three, etc. so you could customize categories but you couldn't have someone that is good at everythig
+    - one good early differentiations: you can pick 1 of these three:
+        - (digger/build nest) something that is bonus to digging blocks away (even without tools, but also this is a bonus with tools)
+        - (warrior) bonus to fighting without weapons and bonus while fighting with weapons 
+        - (foragers) significantlty bigger inventory space

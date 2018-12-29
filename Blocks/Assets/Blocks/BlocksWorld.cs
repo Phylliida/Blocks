@@ -155,8 +155,8 @@ namespace Blocks
             this.chunk = chunk;
             this.chunkSize = chunkSize;
 
-            drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
-            drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
+            drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 8, ComputeBufferType.Append);
+            drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 8, ComputeBufferType.Append);
         }
 
         public void Tick()
@@ -1256,7 +1256,7 @@ namespace Blocks
                                     (x != 0 && x != chunkSize - 1) &&
                                     (y != 0 && y != chunkSize - 1) &&
                                     (z != 0 && z != chunkSize - 1);
-
+                                chunkData.needToBeUpdated = true;
                                 // don't call lots of chunk lookups if we don't need to
                                 if (!neighborsInsideThisChunk)
                                 {
@@ -1545,7 +1545,7 @@ namespace Blocks
             {
                 //needToBeUpdated = true;
             }
-            if (forceBlockUpdate || (data[ind * 4 + stateI] != state && stateI != 3))
+            if (forceBlockUpdate || (data[ind * 4 + stateI] != state && stateI != 2))
             {
                 addedBlockUpdate = true;
                 //blocksNeedUpdatingNextFrame.Add((int)ind);
@@ -2110,7 +2110,7 @@ namespace Blocks
     public class World : BlockGetter
     {
         public static World mainWorld;
-
+        public const int maxAnimFrames = 32;
         public const int numBlocks = 64;
         public const int numBreakingFrames = 10;
 
@@ -4181,47 +4181,72 @@ namespace Blocks
             int i = startOffset; // start offset since 0 is empty and -1 is wildcard
             foreach (PackBlock block in packBlocks)
             {
-                byte[] imageData = File.ReadAllBytes(block.blockImagePath);
-                Texture2D blockTexture = new Texture2D(2, 2);
-                blockTexture.LoadImage(imageData); // (will automatically resize as needed)
-                blockTexture.Apply();
-                Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
-                argbTexture.SetPixels(blockTexture.GetPixels());
-                argbTexture.Apply();
-
-                // write texture
-                string blockPath = packAssetsPath + "/" + block.blockName + ".png";
-                File.WriteAllBytes(blockPath, argbTexture.EncodeToPNG());
-                // delete meta file so unity will reload it
-                //if (File.Exists(blockPath + ".meta"))
-                //{
-                //    File.Delete(blockPath + ".meta");
-                //}
-
-
-
-
-                Color32[] argbColors = argbTexture.GetPixels32();
-                // check for transparency
-                block.isTransparent = false;
-                for (int j = 0; j < argbColors.Length; j++)
+                if (block.isAnimated)
                 {
-                    if (argbColors[j].a < 240) // if it is only 240/255 or higher it isn't noticable enough to actually use the transparency
+                    for (int k = 0; k < block.blockAnimationImagePaths.Length; k++)
                     {
-                        block.isTransparent = true;
-                        break;
+                        string curAnimationImagePath = block.blockAnimationImagePaths[k];
+                        if (curAnimationImagePath != "")
+                        {
+                            byte[] imageData = File.ReadAllBytes(curAnimationImagePath);
+                            Texture2D blockTexture = new Texture2D(2, 2);
+                            blockTexture.LoadImage(imageData); // (will automatically resize as needed)
+                            blockTexture.Apply();
+                            Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
+                            argbTexture.SetPixels(blockTexture.GetPixels());
+                            argbTexture.Apply();
+
+                            // write texture
+                            string blockPath = packAssetsPath + "/" + block.blockName + "" + k + ".png";
+                            File.WriteAllBytes(blockPath, argbTexture.EncodeToPNG());
+                        }
                     }
                 }
-                if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+                else
                 {
-                    Debug.Log("rescaling texture of block " + block.blockName + " at path " + block.blockRootDir + " with block image path " + block.blockImagePath);
-                    TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+
+                    byte[] imageData = File.ReadAllBytes(block.blockImagePath);
+                    Texture2D blockTexture = new Texture2D(2, 2);
+                    blockTexture.LoadImage(imageData); // (will automatically resize as needed)
+                    blockTexture.Apply();
+                    Texture2D argbTexture = new Texture2D(blockTexture.width, blockTexture.height, TextureFormat.ARGB32, false, true);
+                    argbTexture.SetPixels(blockTexture.GetPixels());
+                    argbTexture.Apply();
+
+                    // write texture
+                    string blockPath = packAssetsPath + "/" + block.blockName + ".png";
+                    File.WriteAllBytes(blockPath, argbTexture.EncodeToPNG());
+                    // delete meta file so unity will reload it
+                    //if (File.Exists(blockPath + ".meta"))
+                    //{
+                    //    File.Delete(blockPath + ".meta");
+                    //}
+
+
+                    Color32[] argbColors = argbTexture.GetPixels32();
+                    // check for transparency
+                    block.isTransparent = false;
+                    for (int j = 0; j < argbColors.Length; j++)
+                    {
+                        if (argbColors[j].a < 240) // if it is only 240/255 or higher it isn't noticable enough to actually use the transparency
+                        {
+                            block.isTransparent = true;
+                            break;
+                        }
+                    }
+                    if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+                    {
+                        Debug.Log("rescaling texture of block " + block.blockName + " at path " + block.blockRootDir + " with block image path " + block.blockImagePath);
+                        TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+                    }
+
+                    argbTexture.Apply();
+                    Color[] pixels = argbTexture.GetPixels();
+                    packTexture.SetPixels(0, i * 16 * 3, 16 * 2, 16 * 3, pixels);
+                    packTexture.Apply();
                 }
 
-                argbTexture.Apply();
-                Color[] pixels = argbTexture.GetPixels();
-                packTexture.SetPixels(0, i * 16 * 3, 16 * 2, 16 * 3, pixels);
-                packTexture.Apply();
+
                 i += 1;
             }
 
@@ -4498,9 +4523,13 @@ namespace Blocks
         public string blockImagePath;
         public bool isValid;
         public bool isTransparent;
+        public string[] blockAnimationImagePaths;
+        public bool isAnimated;
         public PackBlock(string blockDirectory)
         {
             isValid = false;
+            isAnimated = false;
+            blockAnimationImagePaths = null;
             DirectoryInfo info = new DirectoryInfo(blockDirectory);
             if (info.Exists)
             {
@@ -4532,7 +4561,68 @@ namespace Blocks
                 }
                 if (!isValid)
                 {
-                    Debug.LogError("could not find any images for block " + blockName + " at path " + blockRootDir + " so we are ignoring this block");
+                    // see if an animated block
+                    Dictionary<int, string> frames = new Dictionary<int, string>();
+                    int maxFrame = int.MinValue;
+                    int minFrame = int.MaxValue;
+                    foreach (string blockFile in filesInBlock)
+                    {
+                        FileInfo fInfo = new FileInfo(blockFile);
+                        if (fInfo.Exists)
+                        {
+                            if (fInfo.Extension.ToLower() == ".png" || fInfo.Extension.ToLower() == ".jpg")
+                            {
+                                Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                                if (fInfo.Name.Substring(0, blockName.Length) == blockName) // does the first piece match the block name?
+                                {
+                                    string leftoverPieces = fInfo.Name.Substring(blockName.Length); // get stuff after blockName
+                                    leftoverPieces = leftoverPieces.Substring(0, leftoverPieces.Length - fInfo.Extension.Length); // remove extension
+                                    Debug.Log("is potential frame with key " + leftoverPieces + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+
+                                    int frameNum;
+                                    if (int.TryParse(leftoverPieces, out frameNum))
+                                    {
+                                        Debug.Log("is actual frame with index " + frameNum + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                                        frames[frameNum] = fInfo.FullName;
+                                        maxFrame = System.Math.Max(maxFrame, frameNum);
+                                        minFrame = System.Math.Min(minFrame, frameNum);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Debug.Log("got non-image for block " + blockName + " with path " + fInfo.FullName + " and name " + fInfo.Name + " and extension " + fInfo.Extension);
+                            }
+                        }
+                    }
+                    int maxFrames = 32;
+
+                    if (minFrame < 0)
+                    {
+                        Debug.LogError("got animation, but a frame is less than zero (" + minFrame + ") this is invalid");
+                    }
+                    else if(maxFrame > maxFrames)
+                    {
+                        Debug.LogError("got animation but a frame has index " + maxFrame + " which is greater than " + (maxFrames-1) + ", only " + maxFrames + " frames total are allowed, first animation frame should be indexed by 0, then 1, 2, ..., " + (maxFrames-1) + "");
+                    }
+                    else if (frames.Count == 0)
+                    {
+                        Debug.LogError("could not find any images for block " + blockName + " at path " + blockRootDir + " so we are ignoring this block");
+                    }
+                    else
+                    {
+                        Debug.Log("got animated block " + blockName + " with " + (maxFrame+1) + " frames");
+                        // frames not filled in will have the default texture assigned and here will just have a empty string for their path by default
+                        blockAnimationImagePaths = new string[maxFrame+1];
+                        foreach (KeyValuePair<int, string> animFrame in frames)
+                        {
+                            int index = animFrame.Key;
+                            string imagePath = animFrame.Value;
+                            blockAnimationImagePaths[index] = imagePath;
+                        }
+                        isAnimated = true;
+                        isValid = true;
+                    }
                 }
             }
             else

@@ -103,12 +103,12 @@ namespace Blocks
                 }
                 if (transform.GetComponent<UnityEngine.UI.Image>() != null)
                 {
-                    transform.GetComponent<UnityEngine.UI.Image>().material.mainTextureScale = new Vector2(0.5f, 1.0f / (World.numBlocks * 3.0f));
+                    transform.GetComponent<UnityEngine.UI.Image>().material.mainTextureScale = new Vector2(0.5f/World.maxAnimFrames, 1.0f / (World.numBlocks * 3.0f));
                     transform.GetComponent<UnityEngine.UI.Image>().material.mainTextureOffset = new Vector2(0.0f, (System.Math.Abs(displayedBlockId) - 1.0f) * 3.0f / (World.numBlocks * 3.0f));
                 }
                 else
                 {
-                    transform.GetComponent<Renderer>().material.mainTextureScale = new Vector2(1.0f, 1.0f / 3.0f);
+                    transform.GetComponent<Renderer>().material.mainTextureScale = new Vector2(1.0f / World.maxAnimFrames, 1.0f / 3.0f);
                     transform.GetComponent<Renderer>().material.mainTextureOffset = new Vector2(0.0f, (System.Math.Abs(displayedBlockId) - 1.0f) * 3.0f / (World.numBlocks * 3.0f));
                 }
             }

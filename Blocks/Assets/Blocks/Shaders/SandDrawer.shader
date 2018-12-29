@@ -56,16 +56,25 @@ Shader "Blocks/SandDrawer" {
 	sampler2D _MainTex;
 	float4 _MainTex_TexelSize;
 	float4 _MainTex_ST;
-	StructuredBuffer<int4> DrawingThings;
+
+
+	struct DrawingData {
+		int4 data1;
+		int4 data2;
+	};
+
+	StructuredBuffer<DrawingData> DrawingThings;
+
 	//StructuredBuffer<float4> PixelData;
 	float4x4 localToWorld;
 	v2f vertex_shader(uint ida : SV_VertexID)
 	{
 		uint id = ida / 36;
 		uint idQ = ida % 36;
-		int idI = abs(DrawingThings[id].w);
+		int idI = abs(DrawingThings[id].data1.w);
 		//uint idI = 1;
-		int3 idPt = DrawingThings[id].xyz;
+		int3 idPt = DrawingThings[id].data1.xyz;
+		int animFrame = DrawingThings[id].data2.w;
 		//float4 col = PixelData[idI];
 		//float4 col = float4(0.5, 0.5, 0.9, 1);
 		float3 offset = cubeOffsets[idQ].xyz;
@@ -74,6 +83,8 @@ Shader "Blocks/SandDrawer" {
 		//_MainTex_TexelSize.z //contains width
 		//_MainTex_TexelSize.w //contains height
 		int numBlocks = 64;
+		uvOffset.x += animFrame;
+		uvOffset.x /= 32.0f;
 		uvOffset.y /= 3.0f;
 		uvOffset.y += (idI - 1) / (float)numBlocks;
 		//float3 pos = (idPt + offset*0.98 + 0.01) * ptCloudScale;

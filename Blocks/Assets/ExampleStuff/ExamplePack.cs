@@ -37,6 +37,56 @@ public class Sand : Block
 }
 
 
+public class BallTrack : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.BallTrack, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        int onEnterNextOne = 16;
+        block.needsAnotherTick = true;
+        int state3 = block.state3;
+        if (state3 == onEnterNextOne)
+        {
+            using (BlockData blockBelow = GetBlockData(block.x, block.y - 1, block.z))
+            {
+                if (blockBelow.block == Example.BallTrackEmpty)
+                {
+                    blockBelow.block = Example.BallTrack;
+                    blockBelow.state3 = 1;
+                }
+                else
+                {
+                    block.needsAnotherTick = true;
+                    return;
+                }
+            }
+        }
+        if (state3 >= 23)
+        {
+            block.needsAnotherTick = false;
+            block.block = Example.BallTrackEmpty;
+            block.state3 = 0;
+        }
+        else
+        {
+            block.state3 = (block.state3 + 1) % 24;
+        }
+
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
+
+
 public class SimpleWater : Block2
 {
     static int maxUpdates = 100;
@@ -167,7 +217,7 @@ public class Water : Block2
                 }
             ))
             {
-                block.state3 = 0;
+                block.state2 = 0;
                 block.block = Example.Air;
                 return;
             }
@@ -185,7 +235,7 @@ public class Water : Block2
             if (GetBlock(block.x, block.y-1, block.z) == Example.Air)
             {
                 SetBlock(block.x, block.y-1, block.z, Example.Water);
-                block.state3 = 0;
+                block.state2 = 0;
                 SetState(block.x, block.y - 1, block.z, GetNumAirNeighbors(block.x, block.y - 1, block.z), 3); // +1 because we are now air instead of water
                 block.block = Example.Air;
                 return;
@@ -202,7 +252,7 @@ public class Water : Block2
                         {
                             SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
                             SetState(neighbor.x, neighbor.y - 1, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y-1, neighbor.z), 3);
-                            block.state3 = 0;
+                            block.state2 = 0;
                             block.block = Example.Air;
                             return;
                         }
@@ -210,19 +260,19 @@ public class Water : Block2
                         {
                             SetBlock(pos2.x, pos2.y - 1, pos2.z, Example.Water);
                             SetState(pos2.x, pos2.y - 1, pos2.z, GetNumAirNeighbors(pos2.x, pos2.y - 1, pos2.z), 3);
-                            block.state3 = 0;
+                            block.state2 = 0;
                             block.block = Example.Air;
                             return;
                         }
                     }
                 }
             }
-            int prevNumAirNeighbors = block.state3;
+            int prevNumAirNeighbors = block.state2;
             int curNumAirNeighbors = GetNumAirNeighbors(block.x, block.y, block.z);
             // if we have a more air neighbors, flood fill back and set valid blocks that have WATER_NOFLOW back to WATER so they can try again
             if (curNumAirNeighbors != prevNumAirNeighbors)
             {
-                block.state3 = curNumAirNeighbors;
+                block.state2 = curNumAirNeighbors;
                 if (curNumAirNeighbors > 0)
                 {
                     LVector3 airNeighbor = new LVector3(block.x, block.y, block.z);
@@ -257,7 +307,7 @@ public class Water : Block2
 
                         SetBlock(airNeighbor.x, airNeighbor.y, airNeighbor.z, Example.Water);
                         SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), 3);
-                        block.state3 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
+                        block.state2 = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
                         block.needsAnotherTick = true;
                         return;
                     }
@@ -642,6 +692,8 @@ public class ExamplePack : BlocksPack {
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
         AddCustomBlock(Example.Water, new SimpleWater(), 64);
         AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
+        AddCustomBlock(Example.BallTrack, new BallTrack(), 64);
+        AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 
         AddCustomRecipe(new Recipe(new BlockValue[,]

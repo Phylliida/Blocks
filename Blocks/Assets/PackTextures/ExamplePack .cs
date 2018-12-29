@@ -1,10 +1,11 @@
-
 using Blocks;
 
 namespace Example_pack {
     public class Example : BlockCollection
     {
         public static BlockValue Axe = new BlockValue(true, "Axe", "Example");
+        public static BlockValue BallTrack = new BlockValue(false, "BallTrack", "Example");
+        public static BlockValue BallTrackEmpty = new BlockValue(false, "BallTrackEmpty", "Example");
         public static BlockValue Bark = new BlockValue(false, "Bark", "Example");
         public static BlockValue Bedrock = new BlockValue(false, "Bedrock", "Example");
         public static BlockValue Clay = new BlockValue(false, "Clay", "Example");

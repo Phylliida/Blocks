@@ -5,7 +5,15 @@
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWStructuredBuffer<int4> DataIn;
-AppendStructuredBuffer<int4> DrawingThings;
+
+
+
+struct DrawingData {
+	int4 data1;
+	int4 data2;
+};
+
+AppendStructuredBuffer<DrawingData> DrawingThings;
 
 
 #define CHUNK_SIZE 32
@@ -19,7 +27,8 @@ int T3(uint3 id)
 [numthreads(8,8,8)]
 void CSMainNoTransparent(uint3 id : SV_DispatchThreadID)
 {
-	int blockVal = DataIn[T3(id)].x;
+	int4 blockVals = DataIn[T3(id)];
+	int blockVal = blockVals.x;
 	// 0 is air
 
 	int3 ids = id;
@@ -32,14 +41,18 @@ void CSMainNoTransparent(uint3 id : SV_DispatchThreadID)
 
 	if (blockVal > 0 && (edge || hasAirNeighbors))
 	{
-		DrawingThings.Append(int4(id.x, id.y, id.z, blockVal));
+		DrawingData res;
+		res.data1 = int4(id.x, id.y, id.z, blockVal);
+		res.data2 = blockVals;
+		DrawingThings.Append(res);
 	}
 }
 
 [numthreads(8, 8, 8)]
 void CSMainOnlyTransparent(uint3 id : SV_DispatchThreadID)
 {
-	int blockVal = DataIn[T3(id)].x;
+	int4 blockVals = DataIn[T3(id)];
+	int blockVal = blockVals.x;
 	// 0 is air
 
 	int3 ids = id;
@@ -52,6 +65,9 @@ void CSMainOnlyTransparent(uint3 id : SV_DispatchThreadID)
 
 	if (blockVal < 0 && (edge || hasAirNeighbors))
 	{
-		DrawingThings.Append(int4(id.x, id.y, id.z, blockVal));
+		DrawingData res;
+		res.data1 = int4(id.x, id.y, id.z, blockVal);
+		res.data2 = blockVals;
+		DrawingThings.Append(res);
 	}
 }
