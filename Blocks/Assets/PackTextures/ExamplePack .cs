@@ -15,6 +15,7 @@ namespace Example_pack {
         public static BlockValue FlowerBlue = new BlockValue(false, "FlowerBlue", "Example");
         public static BlockValue FlowerWithNectar = new BlockValue(false, "FlowerWithNectar", "Example");
         public static BlockValue Grass = new BlockValue(false, "Grass", "Example");
+        public static BlockValue IronOre = new BlockValue(false, "IronOre", "Example");
         public static BlockValue LargeRock = new BlockValue(true, "LargeRock", "Example");
         public static BlockValue LargeSharpRock = new BlockValue(true, "LargeSharpRock", "Example");
         public static BlockValue Leaf = new BlockValue(false, "Leaf", "Example");

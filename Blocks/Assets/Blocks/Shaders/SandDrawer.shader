@@ -44,8 +44,8 @@ Shader "Blocks/SandDrawer" {
 	struct v2f {
 		float4 pos : SV_POSITION;
 		float2 uv : TEXCOORD0;
-		float4 normal : TEXCOORD1;
-		float4 lightColor : TEXCOORD2;
+		//float4 normal : TEXCOORD1;
+		float2 lightLevel : TEXCOORD1;
 		//float fog : TEXCOORD1;
 	};
 
@@ -64,6 +64,7 @@ Shader "Blocks/SandDrawer" {
 	};
 
 	StructuredBuffer<DrawingData> DrawingThings;
+	float globalLightLevel;
 
 	//StructuredBuffer<float4> PixelData;
 	float4x4 localToWorld;
@@ -75,6 +76,11 @@ Shader "Blocks/SandDrawer" {
 		//uint idI = 1;
 		int3 idPt = DrawingThings[id].data1.xyz;
 		int animFrame = DrawingThings[id].data2.w;
+		float lightLevel = DrawingThings[id].data2.z / 255.0;
+
+		animFrame = 0;
+		lightLevel = 1.0f;
+		//lightLevel = globalLightLevel;
 		//float4 col = PixelData[idI];
 		//float4 col = float4(0.5, 0.5, 0.9, 1);
 		float3 offset = cubeOffsets[idQ].xyz;
@@ -97,16 +103,20 @@ Shader "Blocks/SandDrawer" {
 		//float fogz = mul(UNITY_MATRIX_MV, curPos).z;
 		//o.fog = clamp((fogz + _FogStart) / (_FogStart - _FogEnd), 0.0, 1.0);
 		o.uv = uvOffset;
-		o.normal = cubeNormals[idQ];
+		//o.normal = cubeNormals[idQ];
+		// I made this 2d so v2f would be a total of 8 values in size (7 is poorly aligned so it might hurt performance? idk)
+		o.lightLevel = float2(lightLevel, lightLevel);
 		//o.lightColor.rgba = float4(1.0, 1.0, 1.0, 1.0) * 1 / distance(worldLightPos.xyz, curPos.xyz);
 		return o;
 	}
 
 
-	fixed4 fragment_shader(v2f i) : SV_Target
+	float4 fragment_shader(v2f i) : SV_Target
 	{	
-
+		float lightLevel = i.lightLevel.x;
 		 float4 tex = tex2D(_MainTex, i.uv);
+		 float4 eyeScalings = float4(1.0 - 0.299, 1.0-0.587, 1.0 - 0.144, 1.0);
+		 tex = lerp(tex * eyeScalings*lightLevel, tex*lightLevel, lightLevel);
 		 return tex;
 		 //return float4(tex.xyz+i.lightColor.rgb, 1.0);
 		 /*

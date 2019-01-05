@@ -231,13 +231,13 @@ namespace Blocks
                 for (int j = 0; j < allBlocksTexture.width; j++)
                 {
                     int ind = i * allBlocksTexture.width + j;
-                    if (i == 0 || i == allBlocksTexture.height-1)
+                    if (i <= 1 || i >= allBlocksTexture.height-2)
                     {
                         allColors[ind] = new Color32(0, 0, 0, 255); // air and wildcard (first and last one due to offset by 1) get default black
                     }
                     else
                     {
-                        allColors[ind] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
+                        allColors[ind] = new Color32(0, 0, 0, 255); // default gross pink/purple color if block not found
                     }
                 }
             }

@@ -671,3 +671,29 @@ options to choose for sisters when emergeing from their young to adult form:
         - (digger/build nest) something that is bonus to digging blocks away (even without tools, but also this is a bonus with tools)
         - (warrior) bonus to fighting without weapons and bonus while fighting with weapons 
         - (foragers) significantlty bigger inventory space
+        
+        
+        
+        
+oak grass:
+    - if too wet of a biome this might start to have mold problems, but as long as things aren't super wet and aren't too extreme, these can grow (grows in lots of places)
+    - has tannins so you have to soak it to get tannins out which you can use for tanning hide to make leather
+    - once you soak it you can grind it up into flour
+    - because it has tannins you can store it for large amounts of time (similar to acorns irl)
+ 
+    domesticated very early on
+    
+    
+
+some largeish grass eating thing (mammal with beak) with usable wool and edible eggs would probably be domesticated early on
+crocodogs would probably be domesticated fairly early on
+giant aphids: same branch of tree of life of player species: size of rabbit, drills into bark of tree to drink tree sap, then secrets out honeydew like aphids do which then people can collect and be usable like honey
+    ants domesticated aphids irl (for example)
+    tree sap is crazy rich in sugar so if aphids can get the sugar then they need to secrete it so it doesn't completely overwhelm their sugar to water balance
+    has specialized mouth stuff to work through tree bark
+        [or maybe an arthiropod would make more sense, to be determined]
+    player species can protect them, bring them to new trees, enemy colonies might try to raid and steal these
+ 
+ 
+ 
+

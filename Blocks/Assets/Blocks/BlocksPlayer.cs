@@ -59,7 +59,7 @@ namespace Blocks
             if (curChunkPos != chunkPos)
             {
                 chunkPos = curChunkPos;
-                int viewDist = 3;
+                int viewDist = 2;
 
 
                 for (int i = -viewDist; i <= viewDist; i++)
@@ -68,7 +68,7 @@ namespace Blocks
                     {
                         for (int k = -viewDist; k <= viewDist; k++)
                         {
-                            //World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
+                            World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
                         }
                     }
                 }

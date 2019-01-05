@@ -766,7 +766,7 @@ namespace Blocks
         public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback)
         {
             // pretend on 1d line cause that should be good enough
-            lambda = World.mainWorld.chunkSize / avgNumBlocksBetween;
+            lambda = World.mainWorld.chunkSize* World.mainWorld.chunkSize / avgNumBlocksBetween;
             this.eventCallback = eventCallback;
         }
 
@@ -789,8 +789,8 @@ namespace Blocks
             int chunkSize = World.mainWorld.chunkSize;
             float totalPr = 0.0f;
             int factorial = 1;
-            int numPoints = chunkSize;
-            for (int i = 0; i < chunkSize; i++)
+            int numPoints = chunkSize*chunkSize;
+            for (int i = 0; i < chunkSize*chunkSize; i++)
             {
                 float prOfThat = (float)(System.Math.Pow(lambda, i) * System.Math.Exp(-lambda) / factorial);
                 if (i > 1)
@@ -805,10 +805,13 @@ namespace Blocks
                 }
             }
 
+            System.Random gen = new System.Random((int)(Simplex.Noise.Generate(cx, cy, cz) * 1000.0f));
+            //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSize= " + chunkSize);
+
             LVector3[] resPoints = new LVector3[numPoints];
             for (int i = 0; i < resPoints.Length; i++)
             {
-                resPoints[i] = new LVector3(Random.Range(0, chunkSize) + cx*chunkSize, Random.Range(0, chunkSize) + cy * chunkSize, Random.Range(0, chunkSize) + cz * chunkSize);
+                resPoints[i] = new LVector3(gen.Next(0, chunkSize) + cx*chunkSize, gen.Next(0, chunkSize) + cy * chunkSize, gen.Next(0, chunkSize) + cz * chunkSize);
             }
             return resPoints;
         }
@@ -941,6 +944,26 @@ namespace Blocks
         public World world;
 
 
+        public bool TryGetHighestSolidBlockY(long x, long z, out long highestBlockY)
+        {
+            highestBlockY = long.MinValue;
+            long relativeX = x - cx * chunkSize;
+            long relativeZ = z - cz * chunkSize;
+            for (int y = chunkSize-1; y >= 0; y--)
+            {
+                if (chunkData[relativeX, y, relativeZ] != BlockValue.Air)
+                {
+                    highestBlockY = y+cy*chunkSize;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        public void UpdateLighting()
+        {
+        }
 
         public void AddBlockUpdate(long i, long j, long k)
         {
@@ -953,7 +976,7 @@ namespace Blocks
         public void CreateStuff()
         {
             this.chunkRenderer = new ChunkRenderer(this, chunkSize);
-            chunkData = new ChunkData(chunkSize);
+            chunkData = new ChunkData(chunkSize, fillWithWildcard: false);
             chunkData.attachedChunks.Add(this);
         }
 
@@ -982,13 +1005,16 @@ namespace Blocks
 
         }
 
+
+        public const int TOUCHING_SKY_MASK = 255;
+
         public void Generate()
         {
             generating = true;
             long baseX = cx * chunkSize;
             long baseY = cy * chunkSize;
             long baseZ = cz * chunkSize;
-            Structure myStructure = new Structure(cx + " " + cy + " " + cz, true, this);
+            Structure myStructure = new Structure(cx + " " + cy + " " + cz, true, this, priority:0);
             long start = PhysicsUtils.millis();
             //Debug.Log("generating chunk " + cx + " " + cy + " " + cz + " ");
             try
@@ -998,19 +1024,49 @@ namespace Blocks
                 {
                     for (long z = baseZ; z < baseZ + this.chunkSize; z++)
                     {
+                        long curHighestBlockY = long.MinValue;
+                        world.worldGeneration.blockGetter = world;
+                        bool wasAPreviousHighest = world.TryGetHighestSolidBlockY(x, z, out curHighestBlockY);
+                        world.worldGeneration.blockGetter = myStructure;
                         //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
-                        for (long y = baseY; y < baseY + this.chunkSize; y++)
+                        // going from top to bottom lets us update the "highest block touching the sky" easily
+                        for (long y = baseY + this.chunkSize-1; y >= baseY; y--)
                         {
                             //long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, "altitude"));
                             using (BlockData block = myStructure.GetBlockData(x, y, z))
                             {
                                 world.worldGeneration.OnGenerateBlock(x, y, z, block);
+                                block.state3 = 0;
+                                block.state2 = 0;
+                                // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
+                                if (block.block != BlockValue.Air && block.block != BlockValue.Wildcard && y > curHighestBlockY)
+                                {
+                                    // tell the previously highest one that it is no longer the highest one
+                                    if (wasAPreviousHighest)
+                                    {
+                                        world.worldGeneration.blockGetter = world;
+                                        world.SetState(x, curHighestBlockY, z, world.GetState(x, curHighestBlockY, z, 2) & (~TOUCHING_SKY_MASK), 2);
+                                        world.worldGeneration.blockGetter = myStructure;
+                                        curHighestBlockY = y;
+                                    }
+
+                                    // set us to be touching the sky now
+                                    block.state2 = (block.state2 | TOUCHING_SKY_MASK);
+                                }
                             }
                         }
                     }
                 }
 
+                Structure myStructure2 = new Structure(cx + " " + cy + " " + cz, true, this, priority: 1);
+                world.worldGeneration.blockGetter = myStructure2;
                 chunkBiomeData.RunChunkPropertyEventsOnGeneration();
+
+                if (!myStructure2.HasAllChunksGenerated())
+                {
+                    world.AddUnfinishedStructure(myStructure2);
+                }
+
             }
             catch (System.Exception e)
             {
@@ -1192,7 +1248,7 @@ namespace Blocks
         }
 
 
-        public bool Tick()
+        public bool Tick(bool allowGenerate)
         {
             if (cleanedUp)
             {
@@ -1201,7 +1257,15 @@ namespace Blocks
             bool didGenerate = false;
             if (generating)
             {
-                Generate();
+                if (allowGenerate)
+                {
+
+                    Generate();
+                }
+                else
+                {
+                    return false;
+                }
                 didGenerate = true;
 
                 generating = false;
@@ -1445,7 +1509,7 @@ namespace Blocks
             this.needToBeUpdated = true;
         }
 
-        public void CopyIntoChunk(Chunk chunk)
+        public void CopyIntoChunk(Chunk chunk, int priority=0)
         {
             int[] chunkData = chunk.chunkData.data;
             int totalLen = System.Math.Min(data.Length, chunkData.Length);
@@ -1454,13 +1518,23 @@ namespace Blocks
                 // if we are on a block, check if wildcard
                 if (i % 4 == 0)
                 {
-                    // if not, assign it and also assign the chunk internal states 
-                    if (data[i] != (int)BlockValue.Wildcard)
+                    bool skipAhead = false;
+                    // if base generation and something else has already filled this in, skip ahead
+                    if (priority == 0 && chunkData[i] != BlockValue.Wildcard)
+                    {
+                        skipAhead = true;
+                    }
+                    // if we are not a whildcard, assign us and also assign the chunk internal states 
+                    else if (data[i] != (int)BlockValue.Wildcard)
                     {
                         chunkData[i] = data[i];
                     }
                     // otherwise this is wildcard, skip to next block (only 3 instead of 4 because i++ is default in loop)
                     else
+                    {
+                        skipAhead = true;
+                    }
+                    if (skipAhead)
                     {
                         i += 3;
                     }
@@ -1661,6 +1735,7 @@ namespace Blocks
     public class SavedStructure
     {
         public string name;
+        public int priority=0;
         public bool madeInGeneration;
         public SavedChunk[] savedChunks;
 
@@ -1669,11 +1744,12 @@ namespace Blocks
 
         }
 
-        public SavedStructure(string name, bool madeInGeneration, SavedChunk[] savedChunks)
+        public SavedStructure(string name, bool madeInGeneration, SavedChunk[] savedChunks, int priority)
         {
             this.name = name;
             this.madeInGeneration = madeInGeneration;
             this.savedChunks = savedChunks;
+            this.priority = priority;
         }
     }
     [System.Serializable]
@@ -1705,11 +1781,12 @@ namespace Blocks
         Dictionary<LVector3, ChunkData> ungeneratedChunkPositions;
 
 
-
+        public int priority;
         public Chunk baseChunk;
 
-        public Structure(string name, bool madeInGeneration, Chunk baseChunk)
+        public Structure(string name, bool madeInGeneration, Chunk baseChunk, int priority=0)
         {
+            this.priority = priority;
             this.name = name;
             this.baseChunk = baseChunk;
             this.blockDataCache = new BlockDataCache(this);
@@ -1721,6 +1798,7 @@ namespace Blocks
         public Structure(SavedStructure savedStructure)
         {
             name = savedStructure.name;
+            priority = savedStructure.priority;
             this.baseChunk = null;
             this.blockDataCache = new BlockDataCache(this);
             ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
@@ -1752,7 +1830,7 @@ namespace Blocks
                 savedChunks.Add(new SavedChunk(savedChunk.Value.chunkSize, savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
             }
 
-            return new SavedStructure(name, madeInGeneration, savedChunks.ToArray());
+            return new SavedStructure(name, madeInGeneration, savedChunks.ToArray(), priority);
         }
 
 
@@ -1767,7 +1845,7 @@ namespace Blocks
             if (ungeneratedChunkPositions.ContainsKey(chunkPos))
             {
                 ChunkData chunkData = ungeneratedChunkPositions[chunkPos];
-                chunkData.CopyIntoChunk(chunk);
+                chunkData.CopyIntoChunk(chunk, priority);
                 ungeneratedChunkPositions.Remove(chunkPos);
             }
             return ungeneratedChunkPositions.Count == 0;
@@ -2109,6 +2187,7 @@ namespace Blocks
 
     public class World : BlockGetter
     {
+        public static bool creativeMode = false;
         public static World mainWorld;
         public const int maxAnimFrames = 32;
         public const int numBlocks = 64;
@@ -2475,6 +2554,10 @@ namespace Blocks
 
         public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
         {
+            if (World.creativeMode)
+            {
+                return true;
+            }
             //CreateBlockEntity(block, positionOfBlock);
             //return true;
             if (thingHolding == null)
@@ -2731,6 +2814,55 @@ namespace Blocks
             Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
             return chunk.GetState(i, j, k, stateI);
         }
+
+
+        public bool TryGetHighestSolidBlockY(long x,long z, out long highestBlockY)
+        {
+            long cx = divWithFloorForChunkSize(x);
+            long cz = divWithFloorForChunkSize(z);
+            int numAtX = 0;
+            if (chunksPerX.ContainsKey(cx))
+            {
+                numAtX = chunksPerX[cx].Count;
+            }
+
+            int numAtZ = 0;
+            if (chunksPerZ.ContainsKey(cz))
+            {
+                numAtZ = chunksPerZ[cz].Count;
+            }
+            highestBlockY = long.MinValue;
+
+            if (numAtX == 0 && numAtZ == 0)
+            {
+                return false;
+            }
+            List<Chunk> chunksToLookThrough;
+            if (numAtX > numAtZ)
+            {
+                chunksToLookThrough = chunksPerZ[cz];
+            }
+            else
+            {
+                chunksToLookThrough = chunksPerX[cx];
+            }
+            bool found = false;
+            for (int i = 0; i < chunksToLookThrough.Count; i++)
+            {
+                Chunk cur = chunksToLookThrough[i];
+                if (cur.cx == cx && cur.cz == cz)
+                {
+                    long curHighestY;
+                    if(cur.TryGetHighestSolidBlockY(x, z, out curHighestY))
+                    {
+                        highestBlockY = System.Math.Max(highestBlockY, curHighestY);
+                        found = true;
+                    }
+                }
+            }
+            return found;
+        }
+
 
 
         public int TrickleSupportPowerUp(int blockFrom, int powerFrom, int blockTo)
@@ -4050,10 +4182,18 @@ namespace Blocks
                 chunk.TickStart(frameId);
             }
 
+            int numGenerated = 0;
+            int maxGenerating = 10;
+            bool allowGenerate = true;
             foreach (Chunk chunk in allChunksHere)
             {
-                if (chunk.Tick())
+                if (chunk.Tick(allowGenerate))
                 {
+                    numGenerated += 1;
+                    if (numGenerated > maxGenerating)
+                    {
+                        allowGenerate = false;
+                    }
                     List<Structure> leftoverStructures = new List<Structure>();
                     foreach (Structure structure in unfinishedStructures)
                     {
@@ -4634,7 +4774,7 @@ namespace Blocks
 
     public class BlocksWorld : MonoBehaviour
     {
-
+        public float skyLightLevel = 1.0f;
         public ComputeShader cullBlocksShader;
         ComputeBuffer cubeNormals;
         ComputeBuffer cubeOffsets;
@@ -4670,7 +4810,7 @@ namespace Blocks
 
         int[] worldData;
 
-        public const int chunkSize = 32;
+        public const int chunkSize = 16;
 
         public World world;
 
@@ -5144,7 +5284,8 @@ namespace Blocks
         // Update is called once per frame
         void Update()
         {
-
+            triMaterial.SetFloat("globalLightLevel", skyLightLevel);
+            triMaterialWithTransparency.SetFloat("globalLightLevel", skyLightLevel);
             numChunksTotal = world.allChunks.Count;
             for (int i = 0; i < 20; i++)
             {
@@ -5219,6 +5360,10 @@ namespace Blocks
 
         public float TimeNeededToBreak(LVector3 blockPos, BlockValue block, BlockStack itemHittingWith)
         {
+            if (World.creativeMode)
+            {
+                return 0.1f;
+            }
             if (itemHittingWith == null)
             {
                 itemHittingWith = new BlockStack(BlockValue.Air, 1);

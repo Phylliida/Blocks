@@ -28,6 +28,7 @@ Shader "Unlit/SandDrawerWithTransparency" {
 		float4 pos : SV_POSITION;
 		//float4 col : COLOR0;
 		float2 uv : TEXCOORD0;
+		float2 lightLevel : TEXCOORD1;
 	};
 
 
@@ -44,7 +45,9 @@ Shader "Unlit/SandDrawerWithTransparency" {
 
 	StructuredBuffer<DrawingData> DrawingThings;
 	//StructuredBuffer<float4> PixelData;
-	float4x4 localToWorld;
+	float4x4 localToWorld;	
+	float globalLightLevel;
+
 	v2f vertex_shader(uint ida : SV_VertexID)
 	{
 		uint id = ida / 36;
@@ -53,10 +56,14 @@ Shader "Unlit/SandDrawerWithTransparency" {
 		//uint idI = 1;
 		int3 idPt = DrawingThings[id].data1.xyz;
 		int animFrame = DrawingThings[id].data2.w;
+		animFrame = 0;
 		//float4 col = PixelData[idI];
 		//float4 col = float4(0.5, 0.5, 0.9, 1);
 		float3 offset = cubeOffsets[idQ].xyz;
 		float2 uvOffset = uvOffsets[idQ].xy;
+		float lightLevel = DrawingThings[id].data2.z / 255.0;
+		lightLevel = 1.0f;
+		//lightLevel = globalLightLevel;
 		// from https://answers.unity.com/questions/678193/is-it-possible-to-access-the-dimensions-of-a-textu.html
 		//_MainTex_TexelSize.z //contains width
 		//_MainTex_TexelSize.w //contains height
@@ -69,6 +76,8 @@ Shader "Unlit/SandDrawerWithTransparency" {
 		float3 pos = (idPt + offset) * ptCloudScale;
 		v2f o;
 		//o.col = col;
+		// I made this 2d so v2f would be a total of 8 values in size (7 is poorly aligned so it might hurt performance? idk)
+		o.lightLevel = float2(lightLevel, lightLevel);
 		o.pos = UnityObjectToClipPos(mul(localToWorld, float4(pos + ptCloudOffset.xyz, 1)));
 		o.uv = uvOffset;
 		return o;
@@ -77,8 +86,11 @@ Shader "Unlit/SandDrawerWithTransparency" {
 
 	float4 fragment_shader(v2f i) : SV_Target
 	{
-		fixed4 col = tex2D(_MainTex, i.uv);
-		return col;
+		float lightLevel = i.lightLevel.x;
+		 float4 tex = tex2D(_MainTex, i.uv);
+		 float4 eyeScalings = float4(1.0 - 0.299, 1.0 - 0.587, 1.0 - 0.144, 1.0);
+		 tex = lerp(tex * eyeScalings*lightLevel, tex*lightLevel, lightLevel);
+		 return tex;
 	}
 
 

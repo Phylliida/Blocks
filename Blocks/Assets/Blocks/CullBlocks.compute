@@ -16,7 +16,7 @@ struct DrawingData {
 AppendStructuredBuffer<DrawingData> DrawingThings;
 
 
-#define CHUNK_SIZE 32
+#define CHUNK_SIZE 16
 
 int T3(uint3 id)
 {
