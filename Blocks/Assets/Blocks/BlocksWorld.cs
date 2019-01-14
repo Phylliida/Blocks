@@ -196,6 +196,281 @@ namespace Blocks
         }
     }
 
+
+
+    public class BlocksTouchingSky
+    {
+        public class BlockTouchingSkyChunk
+        {
+            public long cx, cz;
+            public int chunkSize;
+            public long[,] highestBlocks;
+            public BlockTouchingSkyChunk(long cx, long cz, int chunkSize)
+            {
+                this.chunkSize = chunkSize;
+                this.cx = cx;
+                this.cz = cz;
+                highestBlocks = new long[chunkSize, chunkSize];
+                for (int i = 0; i < chunkSize; i++)
+                {
+                    for (int j = 0; j < chunkSize; j++)
+                    {
+                        highestBlocks[i, j] = long.MinValue;
+                    }
+                }
+            }
+        }
+
+        Dictionary<long, List<BlockTouchingSkyChunk>> xLookup;
+        Dictionary<long, List<BlockTouchingSkyChunk>> zLookup;
+
+        World world;
+        public BlocksTouchingSky(World world)
+        {
+            this.world = world;
+            xLookup = new Dictionary<long, List<BlockTouchingSkyChunk>>();
+            zLookup = new Dictionary<long, List<BlockTouchingSkyChunk>>();
+        }
+
+
+        BlockTouchingSkyChunk GetOrCreateSkyChunkAtPosition(long x, long z)
+        {
+            long cx = world.divWithFloorForChunkSize(x);
+            long cz = world.divWithFloorForChunkSize(z);
+            return GetOrCreateSkyChunk(cx, cz);
+        }
+
+
+        public BlockTouchingSkyChunk GetOrCreateSkyChunk(long cx, long cz)
+        {
+            BlockTouchingSkyChunk skyChunk = GetSkyChunk(cx, cz);
+            if (skyChunk == null)
+            {
+                skyChunk = new BlockTouchingSkyChunk(cx, cz, world.chunkSize);
+                if (!xLookup.ContainsKey(cx))
+                {
+                    xLookup[cx] = new List<BlockTouchingSkyChunk>();
+                }
+                if (!zLookup.ContainsKey(cz))
+                {
+                    zLookup[cz] = new List<BlockTouchingSkyChunk>();
+                }
+                xLookup[cx].Add(skyChunk);
+                zLookup[cz].Add(skyChunk);
+            }
+            return skyChunk;
+        }
+
+        BlockTouchingSkyChunk GetSkyChunk(long cx, long cz)
+        {
+            List<BlockTouchingSkyChunk> xChunks = null;
+            if (xLookup.ContainsKey(cx))
+            {
+                xChunks = xLookup[cx];
+            }
+            List<BlockTouchingSkyChunk> zChunks = null;
+            if (zLookup.ContainsKey(cz))
+            {
+                zChunks = zLookup[cz];
+            }
+
+            if (xChunks == null && zChunks == null)
+            {
+                return null;
+            }
+
+            List<BlockTouchingSkyChunk> chunksLookingThrough = null;
+
+            if (xChunks != null && zChunks != null)
+            {
+                if (xChunks.Count < zChunks.Count)
+                {
+                    chunksLookingThrough = xChunks;
+                }
+                else
+                {
+                    chunksLookingThrough = zChunks;
+                }
+            }
+            else if(xChunks != null)
+            {
+                chunksLookingThrough = xChunks;
+            }
+            else
+            {
+                chunksLookingThrough = zChunks;
+            }
+
+
+            foreach (BlockTouchingSkyChunk chunk in chunksLookingThrough)
+            {
+                if (chunk.cx == cx && chunk.cz == cz)
+                {
+                    return chunk;
+                }
+            }
+            return null;
+        }
+
+
+        // 0 is air, negative is transparent, positive is solid
+        bool IsSolid(int blockId)
+        {
+            return blockId > 0;
+        }
+
+        public void SetNotTouchingSky(long x, long y, long z)
+        {
+            int prevLightingState = world.GetState(x, y, z, BlockState.Lighting);
+            world.SetState(x, y, z, prevLightingState & (~Chunk.TOUCHING_SKY_BIT), BlockState.Lighting);
+        }
+
+        public void SetTouchingSky(long x, long y, long z)
+        {
+            int prevLightingState = world.GetState(x, y, z, BlockState.Lighting);
+            world.SetState(x, y, z, prevLightingState | Chunk.TOUCHING_SKY_BIT, BlockState.Lighting);
+        }
+
+        /// <summary>
+        /// Assumes you update the BlockTouchingSkyChunk data elsewhere, this just updates the block lighting states
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="z"></param>
+        /// <param name="prevY"></param>
+        public void AddedHigherBlockTouchingSky(long x, long z, long prevHighestY, long newHighestY)
+        {
+            // we didn't have one before, don't update the previous one
+            if (prevHighestY == long.MinValue)
+            {
+
+            }
+            // we did have one before, tell it it isn't touching sky anymore
+            else
+            {
+                SetNotTouchingSky(x, prevHighestY, z);
+                world.AddBlockUpdateToNeighbors(x, prevHighestY, z);
+            }
+            // tell the chunk that that block is touching sky
+            SetTouchingSky(x, newHighestY, z);
+            world.AddBlockUpdateToNeighbors(x, newHighestY, z);
+        }
+
+        public void RemovedSolidBlockTouchingSky(long x, long y, long z)
+        {
+            SetNotTouchingSky(x, y, z);
+            long cx = world.divWithFloorForChunkSize(x);
+            long cz = world.divWithFloorForChunkSize(z);
+            long relativeX = x - cx * world.chunkSize;
+            long relativeZ = z - cz * world.chunkSize;
+            BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
+            long curY = y;
+            long cy = world.divWithFloorForChunkSize(y);
+            while(true)
+            {
+                curY -= 1;
+                long curCy = world.divWithFloorForChunkSize(curY);
+                // went to next chunk down
+                if (curCy != cy)
+                {
+                    bool hoppedDown = false;
+                    // chunk isn't generated yet, skip to next chunk below until we find a generated one
+                    while (world.GetChunkAtPos(x,curY,z) == null)
+                    {
+                        curCy -= 1;
+                        hoppedDown = true;
+                        // lower than any chunk so there aren't any, bail
+                        if (curCy < world.GetLowestCy())
+                        {
+                            // don't have any, set back to default "unknown" value
+                            skyChunk.highestBlocks[relativeX, relativeZ] = long.MinValue;
+                            return;
+                        }
+                    }
+                    // if we hopped down a chunk or more (due to the chunk inbetween not being generated), start searching at the ceiling of that chunk
+                    if (hoppedDown)
+                    {
+                        curY = curCy * world.chunkSize + world.chunkSize - 1;
+                    }
+                    cy = curCy;
+                }
+
+                // found something solid that the sky is now touching
+                if (IsSolid(world[x, curY, z]))
+                {
+                    skyChunk.highestBlocks[relativeX, relativeZ] = curY;
+                    SetTouchingSky(x, curY, z);
+                    return;
+                }
+            }
+
+            // look for lower things that will now be touching the sky
+            
+        }
+
+        public void AddedSolidBlock(long x, long y, long z)
+        {
+            long cx = world.divWithFloorForChunkSize(x);
+            long cz = world.divWithFloorForChunkSize(z);
+            long relativeX = x - cx * world.chunkSize;
+            long relativeZ = z - cz * world.chunkSize;
+            BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
+            long curHighestY = skyChunk.highestBlocks[relativeX, relativeZ];
+            if (y > curHighestY)
+            {
+                AddedHigherBlockTouchingSky(x, z, curHighestY, y);
+                skyChunk.highestBlocks[relativeX, relativeZ] = y;
+            }
+        }
+
+
+
+
+        public void GeneratedChunk(Chunk chunk)
+        {
+            BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(chunk.cx, chunk.cz);
+            long chunkX = chunk.cx * world.chunkSize;
+            long chunkY = chunk.cy * world.chunkSize;
+            long chunkZ = chunk.cz * world.chunkSize;
+            for (long x = 0; x < world.chunkSize; x++)
+            {
+                for (long z = 0; z < world.chunkSize; z++)
+                {
+                    long curHighestY = skyChunk.highestBlocks[x, z];
+                    long highestYInNewChunk = chunk.cy * world.chunkSize + world.chunkSize - 1;
+                    // we already have something higher than the top of this chunk, ignore this position
+                    if (highestYInNewChunk < curHighestY)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        // there might be something higher, check the column of blocks starting at the roof of the chunk
+                        for (long y = world.chunkSize-1; y >= 0; y--)
+                        {
+                            long curY = chunkY + y;
+                            // we are now below the known highest, we are done
+                            if (curY < curHighestY)
+                            {
+                                break;
+                            }
+
+                            // found one that is higher, update
+                            if (IsSolid(chunk.chunkData[x,y,z]))
+                            {
+
+                                AddedHigherBlockTouchingSky(x+ chunkX, z+chunkZ, curHighestY, chunkY+y);
+                                curHighestY = chunkY + y;
+                                break;
+                            }
+                        }
+                    }
+                    skyChunk.highestBlocks[x, z] = curHighestY;
+                }
+            }
+        }
+    }
+
     public class ChunkBiomeData
     {
         public float altitude;
@@ -362,10 +637,10 @@ namespace Blocks
         int cachedState3 = 0;
         BlockValue cachedBlock = BlockValue.Air;
 
-        public int state1 { get { if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, 1); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state1) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 1); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
-        public int state2 { get { if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, 2); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != state2) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
-        public int state3 { get { if (world.blockModifyState != curBlockModifyState3) { cachedState3 = world.GetState(wx, wy, wz, cx, cy, cz, 3); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != state3) { wasModified = true; cachedState3 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
-        public BlockValue block { get { if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
+        public int state { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.State); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.State); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
+        public int lightingState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != lightingState) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
+        public int animationState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState) { wasModified = true; cachedState3 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+        public BlockValue block { get { if (!isGenerated) { return BlockValue.Wildcard; } if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
         //public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 2); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
         //public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 3); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
         //public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
@@ -389,8 +664,18 @@ namespace Blocks
             this.wy = y;
             this.wz = z;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            if (World.mainWorld.GetChunk(cx, cy, cz) == null)
+            {
+                isGenerated = false;
+            }
+            else
+            {
+                isGenerated = true;
+            }
             needsAnotherTick = false;
         }
+
+        public bool isGenerated = false;
 
         public float GetChunkProperty(ChunkProperty chunkProperty)
         {
@@ -453,16 +738,16 @@ namespace Blocks
             blockGetter[x, y, z] = (int)value;
         }
 
-        public int GetState(long x, long y, long z, int stateI)
+        public int GetState(long x, long y, long z, BlockState stateType)
         {
             //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
-            return blockGetter.GetState(x, y, z, stateI);
+            return blockGetter.GetState(x, y, z, stateType);
         }
 
-        public void SetState(long x, long y, long z, int state, int stateI)
+        public void SetState(long x, long y, long z, int state, BlockState stateType)
         {
             //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
-            blockGetter.SetState(x, y, z, state, stateI);
+            blockGetter.SetState(x, y, z, state, stateType);
         }
 
         public BlockData GetBlockData(long x, long y, long z)
@@ -933,6 +1218,7 @@ namespace Blocks
         public ChunkData chunkData;
         public ChunkRenderer chunkRenderer;
         public ChunkBiomeData chunkBiomeData;
+        public BlocksTouchingSky.BlockTouchingSkyChunk touchingSkyChunk;
 
         public Chunk[] posChunks;
         public Chunk xPosChunk { get { return posChunks[0]; } set { posChunks[0] = value; } }
@@ -976,6 +1262,7 @@ namespace Blocks
             chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
         }
 
+
         public void CreateStuff()
         {
             this.chunkRenderer = new ChunkRenderer(this, chunkSize);
@@ -988,6 +1275,7 @@ namespace Blocks
         {
             this.world = world;
             this.chunkSize = chunkSize;
+            this.touchingSkyChunk = world.blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
             this.cx = chunkX;
             this.cy = chunkY;
             this.cz = chunkZ;
@@ -1007,7 +1295,6 @@ namespace Blocks
 
 
         public const int TOUCHING_SKY_MASK = 255;
-
         public void Generate()
         {
             generating = true;
@@ -1024,10 +1311,10 @@ namespace Blocks
                 {
                     for (long z = baseZ; z < baseZ + this.chunkSize; z++)
                     {
-                        long curHighestBlockY = long.MinValue;
-                        world.worldGeneration.blockGetter = world;
-                        bool wasAPreviousHighest = world.TryGetHighestSolidBlockY(x, z, out curHighestBlockY);
-                        world.worldGeneration.blockGetter = myStructure;
+                        //long curHighestBlockY = long.MinValue;
+                        //world.worldGeneration.blockGetter = world;
+                        //bool wasAPreviousHighest = world.TryGetHighestSolidBlockY(x, z, out curHighestBlockY);
+                        //world.worldGeneration.blockGetter = myStructure;
                         //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
                         // going from top to bottom lets us update the "highest block touching the sky" easily
                         for (long y = baseY + this.chunkSize-1; y >= baseY; y--)
@@ -1036,8 +1323,13 @@ namespace Blocks
                             using (BlockData block = myStructure.GetBlockData(x, y, z))
                             {
                                 world.worldGeneration.OnGenerateBlock(x, y, z, block);
-                                block.state3 = 0;
-                                block.state2 = 0;
+                                block.animationState = 0;
+                                block.lightingState = 0;
+                                if (block.block != BlockValue.Wildcard && block.block != BlockValue.Air)
+                                {
+                                    //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSize, y - cy * chunkSize, z - cz * chunkSize));
+                                }
+                                /*
                                 // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
                                 if (block.block != BlockValue.Air && block.block != BlockValue.Wildcard && y > curHighestBlockY)
                                 {
@@ -1053,6 +1345,7 @@ namespace Blocks
                                     // set us to be touching the sky now
                                     block.state2 = (block.state2 | TOUCHING_SKY_MASK);
                                 }
+                                */
                             }
                         }
                     }
@@ -1103,6 +1396,7 @@ namespace Blocks
             chunkData.blocksNeedUpdatingNextFrame.Clear();
             generating = false;
 
+            world.blocksTouchingSky.GeneratedChunk(this);
 
             /*
 
@@ -1258,6 +1552,49 @@ namespace Blocks
         }
 
 
+
+        public const int TOUCHING_SKY_BIT = 1 << 8;
+        public const int SKY_LIGHTING_MASK = 0xF0;
+        public const int BLOCK_LIGHTING_MASK = 0xF;
+
+
+        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky)
+        {
+            int res = 0;
+            if (touchingSky)
+            {
+                res = res | TOUCHING_SKY_BIT;
+                skyLighting = 15;
+            }
+            res = res | (skyLighting << 4) | blockLighting;
+            return res;
+        }
+
+        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky)
+        {
+            if ((lightingState & TOUCHING_SKY_BIT) != 0)
+            {
+                touchingSky = true;
+            }
+            else
+            {
+                touchingSky = false;
+            }
+
+            if (touchingSky)
+            {
+                skyLighting = 15;
+            }
+            else
+            {
+                // sky lighting is bits 4-7
+                skyLighting = (lightingState & SKY_LIGHTING_MASK) >> 4;
+            }
+
+            // block lighting is bits 0-3
+            blockLighting = (lightingState & BLOCK_LIGHTING_MASK);
+        }
+
         public bool Tick(bool allowGenerate)
         {
             if (cleanedUp)
@@ -1289,21 +1626,24 @@ namespace Blocks
                 return false;
             }
 
+            int numLightUpdated = 0;
             if (chunkData.blocksNeedUpdating.Count != 0)
             {
-                /*
+                
                 int[] oldBlocksNeedUpdating = new int[chunkData.blocksNeedUpdating.Count];
-                int i = 0;
+                int j = 0;
                 foreach (int ind in chunkData.blocksNeedUpdating)
                 {
-                    oldBlocksNeedUpdating[i] = ind;
-                    i += 1;
+                    oldBlocksNeedUpdating[j] = ind;
+                    j += 1;
                 }
                 chunkData.blocksNeedUpdating.Clear();
-                */
+
+
+
                 //bool relevantChunk = true;
                 //int k = 0;
-                foreach (int i in chunkData.blocksNeedUpdating)
+                foreach (int i in oldBlocksNeedUpdating)
                 {
                     long ind = (long)(i);
                     long x, y, z;
@@ -1316,41 +1656,103 @@ namespace Blocks
                     using (BlockData block = world.GetBlockData(wx, wy, wz))
                     {
                         BlockValue blockValue = block.block;
+                        int skyLighting;
+                        int blockLighting;
+                        bool touchingSky;
+                        GetLightingValues(block.lightingState, out skyLighting, out blockLighting, out touchingSky);
+                        int highestSkyLighting = 0;
+                        int highestBlockLighting = 0;
+                        bool hasAnOpenNeighbor = false;
+                        // check neighbors to see if we need to trickle their light values
+                        foreach (LVector3 neighbor in world.AllNeighborsRelative(new LVector3(wx, wy, wz)))
+                        {
+                            if (world.GetChunkAtPos(neighbor.x, neighbor.y, neighbor.z) != null)
+                            {
+                                if (neighbor.Block <= 0)
+                                {
+                                    hasAnOpenNeighbor = true;
+                                }
+                                int neighborSkyLighting;
+                                int neighborBlockLighting;
+                                bool neighborTouchingSky;
+                                GetLightingValues(neighbor.LightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky);
+                                highestSkyLighting = System.Math.Max(neighborSkyLighting, highestSkyLighting);
+                                highestBlockLighting = System.Math.Max(neighborBlockLighting, highestBlockLighting);
+                            }
+                        }
+                        bool lightModified = false;
+
+                        // neighbors light has changed so we need to trickle their values
+                        if ((skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1))
+                        {
+                            skyLighting = System.Math.Max(skyLighting, highestSkyLighting - 1);
+                            blockLighting = System.Math.Max(blockLighting, highestBlockLighting - 1);
+                            lightModified = true;
+                        }
+
+                        if (!touchingSky)
+                        {
+                            // we produce the light
+                            if (highestSkyLighting <= skyLighting && skyLighting > 0)
+                            {
+                                skyLighting = System.Math.Max(0, highestSkyLighting - 1);
+                                lightModified = true;
+                            }
+                        }
+                        
+                        // we produce the light
+                        if (highestBlockLighting <= blockLighting && blockLighting > 0)
+                        {
+                            if (block.block != Example.Sand)
+                            {
+                                blockLighting = System.Math.Max(highestBlockLighting - 1, 0);
+                                lightModified = true;
+                            }
+                        }
+                        
+
+                        if (lightModified)
+                        {
+                            block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky);
+                            numLightUpdated += 1;
+                        }
+
                         if (world.customBlocks.ContainsKey(blockValue))
                         {
                             BlockOrItem customBlock = world.customBlocks[blockValue];
                             customBlock.OnTick(block);
-                            if (block.needsAnotherTick)
+                        }
+
+                        if (block.needsAnotherTick)
+                        {
+                            chunkData.blocksNeedUpdating.Add((int)ind);
+                        }
+
+                        if (block.WasModified)
+                        {
+                            bool neighborsInsideThisChunk =
+                                (x != 0 && x != chunkSize - 1) &&
+                                (y != 0 && y != chunkSize - 1) &&
+                                (z != 0 && z != chunkSize - 1);
+                            chunkData.needToBeUpdated = true;
+                            // don't call lots of chunk lookups if we don't need to
+                            if (!neighborsInsideThisChunk)
                             {
-                                chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
+                                world.AddBlockUpdateToNeighbors(wx, wy, wz);
                             }
-                            if (block.WasModified)
+                            else
                             {
-                                bool neighborsInsideThisChunk =
-                                    (x != 0 && x != chunkSize - 1) &&
-                                    (y != 0 && y != chunkSize - 1) &&
-                                    (z != 0 && z != chunkSize - 1);
-                                chunkData.needToBeUpdated = true;
-                                // don't call lots of chunk lookups if we don't need to
-                                if (!neighborsInsideThisChunk)
-                                {
-                                    world.AddBlockUpdateToNeighbors(wx, wy, wz);
-                                }
-                                else
-                                {
-                                    chunkData.AddBlockUpdate(x - 1, y, z);
-                                    chunkData.AddBlockUpdate(x + 1, y, z);
-                                    chunkData.AddBlockUpdate(x, y - 1, z);
-                                    chunkData.AddBlockUpdate(x, y + 1, z);
-                                    chunkData.AddBlockUpdate(x, y, z - 1);
-                                    chunkData.AddBlockUpdate(x, y, z + 1);
-                                }
-                                if (block.block == BlockValue.Air)
-                                {
-                                    block.state1 = 0;
-                                    block.state2 = 0;
-                                    block.state3 = 0;
-                                }
+                                chunkData.AddBlockUpdate(x - 1, y, z);
+                                chunkData.AddBlockUpdate(x + 1, y, z);
+                                chunkData.AddBlockUpdate(x, y - 1, z);
+                                chunkData.AddBlockUpdate(x, y + 1, z);
+                                chunkData.AddBlockUpdate(x, y, z - 1);
+                                chunkData.AddBlockUpdate(x, y, z + 1);
+                            }
+                            if (block.block == BlockValue.Air)
+                            {
+                                block.state = 0;
+                                block.animationState = 0;
                             }
                         }
                     }
@@ -1393,9 +1795,13 @@ namespace Blocks
                     }
                     */
                 }
+
+
+                //Debug.Log("updated " + chunkData.blocksNeedUpdating.Count + " blocks with " + numLightUpdated + " lighting updates " + cx + " " + cy + " " + cz);
             }
 
-            chunkData.blocksNeedUpdating.Clear();
+
+            //chunkData.blocksNeedUpdating.Clear();
 
             return didGenerate;
         }
@@ -1404,13 +1810,13 @@ namespace Blocks
         public bool generating = true;
 
 
-        public void SetState(long x, long y, long z, int state, int stateI)
+        public void SetState(long x, long y, long z, int state, BlockState stateType)
         {
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
             bool addedUpdate;
-            chunkData.SetState(relativeX, relativeY, relativeZ, state, stateI, out addedUpdate);
+            chunkData.SetState(relativeX, relativeY, relativeZ, state, stateType, out addedUpdate);
             // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
             if (!generating && addedUpdate)
             {
@@ -1418,12 +1824,12 @@ namespace Blocks
                 chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
             }
         }
-        public int GetState(long x, long y, long z, int stateI)
+        public int GetState(long x, long y, long z, BlockState stateType)
         {
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
-            return chunkData.GetState(relativeX, relativeY, relativeZ, stateI);
+            return chunkData.GetState(relativeX, relativeY, relativeZ, stateType);
         }
 
         public int this[long x, long y, long z]
@@ -1441,6 +1847,34 @@ namespace Blocks
                 long relativeY = y - cy * chunkSize;
                 long relativeZ = z - cz * chunkSize;
                 bool addedUpdate;
+
+
+                // if we are already generated, do lighting updates on modification
+                if (!generating)
+                {
+                    int prev = chunkData[relativeX, relativeY, relativeZ];
+                    // turning solid into non-solid (less than 0 is transparent, greater than 0 is solid, 0 is empty)
+                    if (prev > 0 && value <= 0)
+                    {
+                        int prevLighting = chunkData.GetState(relativeX, relativeY, relativeZ, BlockState.Lighting);
+                        // is touching sky?
+                        if ((prevLighting & Chunk.TOUCHING_SKY_BIT) != 0)
+                        {
+                            // notify lighting so it can find a new block below us that is now touching sky 
+                            world.blocksTouchingSky.RemovedSolidBlockTouchingSky(x, y, z);
+                        }
+                    }
+                    // turning non-solid into solid, check lighting
+                    if (prev <= 0 && value > 0)
+                    {
+                        long highestY = touchingSkyChunk.highestBlocks[relativeX, relativeZ];
+                        if (y > highestY)
+                        {
+                            world.blocksTouchingSky.AddedHigherBlockTouchingSky(x, z, highestY, y);
+                            touchingSkyChunk.highestBlocks[relativeX, relativeZ] = y;
+                        }
+                    }
+                }
                 chunkData.SetBlock(relativeX, relativeY, relativeZ, value, out addedUpdate);
                 // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
                 if (!generating && addedUpdate)
@@ -1549,7 +1983,7 @@ namespace Blocks
                         i += 3;
                     }
                 }
-                else
+                else if (i % 4 == 1)
                 {
                     chunkData[i] = data[i];
                 }
@@ -1607,35 +2041,30 @@ namespace Blocks
             return x + y * chunkSize + z * chunkSize_2;
         }
 
-        public int GetState(long i, long j, long k, int stateI)
+        public int GetState(long i, long j, long k, BlockState stateType)
         {
-            if (stateI <= 0 || stateI >= 4)
-            {
-                throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
-            }
             long ind = to1D(i, j, k);
-            return data[ind * 4 + stateI];
+            return data[ind * 4 + (int)stateType];
         }
 
-        public void SetState(long i, long j, long k, int state, int stateI, out bool addedBlockUpdate, bool forceBlockUpdate = false)
+        public void SetState(long i, long j, long k, int state, BlockState stateType, out bool addedBlockUpdate, bool forceBlockUpdate = false)
         {
             addedBlockUpdate = false;
             long ind = to1D(i, j, k);
-            if (stateI <= 0 || stateI >= 4)
-            {
-                throw new System.ArgumentOutOfRangeException("stateI can only be 1 or 2, was " + stateI + " instead");
-            }
-            if (data[ind * 4 + stateI] != state)
+            if (data[ind * 4 + (int)stateType] != state)
             {
                 //needToBeUpdated = true;
             }
-            if (forceBlockUpdate || (data[ind * 4 + stateI] != state && stateI != 2))
-            {
-                addedBlockUpdate = true;
-                //blocksNeedUpdatingNextFrame.Add((int)ind);
-            }
-
-            data[ind * 4 + stateI] = state;
+            //if (forceBlockUpdate || data[ind*4+(int)stateType] != state)
+            //{
+            //    addedBlockUpdate = true;
+            //}
+            //if (forceBlockUpdate || (data[ind * 4 + (int)stateType] != state && stateI != 2))
+            //{
+            //     addedBlockUpdate = true;
+            //blocksNeedUpdatingNextFrame.Add((int)ind);
+            //}
+            data[ind * 4 + (int)stateType] = state;
         }
 
 
@@ -1656,13 +2085,14 @@ namespace Blocks
             long ind = to1D(i, j, k);
             if (data[ind * 4] != block)
             {
+                addedBlockUpdate = true;
                 needToBeUpdated = true;
             }
-            if (forceBlockUpdate || data[ind * 4] != block)
-            {
-                addedBlockUpdate = true;
-                //blocksNeedUpdatingNextFrame.Add((int)ind);
-            }
+            //if (forceBlockUpdate || data[ind * 4] != block)
+            //{
+            //    addedBlockUpdate = true;
+            //    //blocksNeedUpdatingNextFrame.Add((int)ind);
+            //}
 
             data[ind * 4] = block;
         }
@@ -1705,21 +2135,22 @@ namespace Blocks
             blockDataCache.DoneWithBlockData(blockData);
         }
 
-        public void SetState(long x, long y, long z, int state, int stateI)
+
+        public void SetState(long x, long y, long z, int state, BlockState stateType)
         {
             long cx, cy, cz;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
-            SetState(x, y, z, cx, cy, cz, state, stateI);
+            SetState(x, y, z, cx, cy, cz, state, stateType);
         }
-        public int GetState(long x, long y, long z, int stateI)
+        public int GetState(long x, long y, long z, BlockState stateType)
         {
             long cx, cy, cz;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
-            return GetState(x, y, z, cx, cy, cz, stateI);
+            return GetState(x, y, z, cx, cy, cz, stateType);
         }
 
-        public abstract void SetState(long x, long y, long z, long cx, long cy, long cz, int state, int stateI);
-        public abstract int GetState(long x, long y, long z, long cx, long cy, long cz, int stateI);
+        public abstract void SetState(long x, long y, long z, long cx, long cy, long cz, int state, BlockState stateType);
+        public abstract int GetState(long x, long y, long z, long cx, long cy, long cz, BlockState stateType);
         public int this[long x, long y, long z]
         {
             get
@@ -1864,15 +2295,16 @@ namespace Blocks
                 chunkData.CopyIntoChunk(chunk, priority);
                 ungeneratedChunkPositions.Remove(chunkPos);
             }
+            World.mainWorld.blocksTouchingSky.GeneratedChunk(chunk);
             return ungeneratedChunkPositions.Count == 0;
         }
 
-        public override void SetState(long x, long y, long z, long cx, long cy, long cz, int state, int stateI)
+        public override void SetState(long x, long y, long z, long cx, long cy, long cz, int state, BlockState stateType)
         {
             blockModifyState += 1;
             if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
-                baseChunk.SetState(x, y, z, state, stateI);
+                baseChunk.SetState(x, y, z, state, stateType);
                 return;
             }
 
@@ -1892,26 +2324,26 @@ namespace Blocks
                     long localPosY = y - chunkPos.y * chunkSize;
                     long localPosZ = z - chunkPos.z * chunkSize;
                     bool addedBlockUpdate;
-                    ungeneratedChunkPositions[chunkPos].SetState(localPosX, localPosY, localPosZ, state, stateI, out addedBlockUpdate);
+                    ungeneratedChunkPositions[chunkPos].SetState(localPosX, localPosY, localPosZ, state, stateType, out addedBlockUpdate);
                 }
                 else
                 {
                     bool wasGenerating = chunk.generating;
                     chunk.generating = true;
-                    chunk.SetState(x, y, z, state, stateI);
+                    chunk.SetState(x, y, z, state, stateType);
                     chunk.generating = wasGenerating;
                 }
             }
             else
             {
-                World.mainWorld.SetState(x, y, z, state, stateI);
+                World.mainWorld.SetState(x, y, z, state, stateType);
             }
         }
-        public override int GetState(long x, long y, long z, long cx, long cy, long cz, int stateI)
+        public override int GetState(long x, long y, long z, long cx, long cy, long cz, BlockState stateType)
         {
             if (baseChunk != null && cx == baseChunk.cx && cy == baseChunk.cy && cz == baseChunk.cz)
             {
-                return baseChunk.GetState(x, y, z, stateI);
+                return baseChunk.GetState(x, y, z, stateType);
             }
             if (madeInGeneration)
             {
@@ -1929,16 +2361,16 @@ namespace Blocks
                     long localPosX = x - chunkPos.x * chunkSize;
                     long localPosY = y - chunkPos.y * chunkSize;
                     long localPosZ = z - chunkPos.z * chunkSize;
-                    return ungeneratedChunkPositions[chunkPos].GetState(localPosX, localPosY, localPosZ, stateI);
+                    return ungeneratedChunkPositions[chunkPos].GetState(localPosX, localPosY, localPosZ, stateType);
                 }
                 else
                 {
-                    return chunk.GetState(x, y, z, stateI);
+                    return chunk.GetState(x, y, z, stateType);
                 }
             }
             else
             {
-                return World.mainWorld.GetState(x, y, z, stateI);
+                return World.mainWorld.GetState(x, y, z, stateType);
             }
         }
 
@@ -2201,6 +2633,13 @@ namespace Blocks
         }
     }
 
+    public enum BlockState
+    {
+        State = 1,
+        Lighting = 2,
+        Animation = 3
+    }
+
     public class World : BlockGetter
     {
         public static bool creativeMode = false;
@@ -2208,6 +2647,8 @@ namespace Blocks
         public const int maxAnimFrames = 64;
         public const int numBlocks = 64;
         public const int numBreakingFrames = 10;
+
+
 
 
         public BlocksWorld blocksWorld;
@@ -2505,6 +2946,7 @@ namespace Blocks
             return BlockToString((BlockValue)block);
         }
 
+
         public static string BlockToString(BlockValue block)
         {
             try
@@ -2562,6 +3004,12 @@ namespace Blocks
         Dictionary<long, List<Chunk>> chunksPerZ;
         Dictionary<long, List<Chunk>>[] chunksPer;
         public const int DIM = 3;
+        long lowestCy = long.MaxValue;
+
+        public long GetLowestCy()
+        {
+            return lowestCy;
+        }
 
         public ComputeBuffer argBuffer;
 
@@ -2643,11 +3091,14 @@ namespace Blocks
 
         public Dictionary<BlockValue, BlockOrItem> customBlocks;
         public GenerationClass worldGeneration;
+        public BlocksTouchingSky blocksTouchingSky;
 
         public World(BlocksWorld blocksWorld, int chunkSize, BlocksPack blocksPack)
         {
+            this.chunkSize = chunkSize;
             this.worldGeneration = blocksPack.customGeneration;
             this.customBlocks = blocksPack.customBlocks;
+            this.blocksTouchingSky = new BlocksTouchingSky(this);
             stackableSize = new Dictionary<int, int>();
             foreach (KeyValuePair<BlockValue, BlockOrItem> customBlock in customBlocks)
             {
@@ -2668,7 +3119,6 @@ namespace Blocks
             chunkProperties = new ChunkProperties();
             World.mainWorld = this;
             this.blocksWorld = blocksWorld;
-            this.chunkSize = chunkSize;
 
             /*
 
@@ -2834,16 +3284,16 @@ namespace Blocks
         */
 
 
-        public override void SetState(long i, long j, long k, long cx, long cy, long cz, int state, int stateI)
+        public override void SetState(long i, long j, long k, long cx, long cy, long cz, int state, BlockState stateType)
         {
             blockModifyState += 1;
             Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
-            chunk.SetState(i, j, k, state, stateI);
+            chunk.SetState(i, j, k, state, stateType);
         }
-        public override int GetState(long i, long j, long k, long cx, long cy, long cz, int stateI)
+        public override int GetState(long i, long j, long k, long cx, long cy, long cz, BlockState stateType)
         {
             Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
-            return chunk.GetState(i, j, k, stateI);
+            return chunk.GetState(i, j, k, stateType);
         }
 
 
@@ -3733,7 +4183,7 @@ namespace Blocks
         // I didn't want to convert to a float or double and floor because that can lead to precision issues
         // here we assume b is never less than 0
 
-        long divWithFloorForChunkSize(long a)
+        public long divWithFloorForChunkSize(long a)
         {
             return a / chunkSize - ((a < 0 && a % chunkSize != 0) ? 1 : 0);
         }
@@ -3933,6 +4383,9 @@ namespace Blocks
         int off = 0;
         void AddChunkToDataStructures(Chunk chunk)
         {
+
+            lowestCy = System.Math.Min(chunk.cy, lowestCy);
+
             //Debug.Log("adding chunk " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " " + Time.frameCount);
             long[] curPos = new long[] { chunk.cx, chunk.cy, chunk.cz };
 
@@ -4117,11 +4570,19 @@ namespace Blocks
 
         public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors = true)
         {
-            GetOrGenerateChunk(divWithFloorForChunkSize(i), divWithFloorForChunkSize(j), divWithFloorForChunkSize(k)).AddBlockUpdate(i, j, k);
-            if (alsoToNeighbors)
+            long chunkX = divWithFloorForChunkSize(i);
+            long chunkY = divWithFloorForChunkSize(j);
+            long chunkZ = divWithFloorForChunkSize(k);
+            Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
+            if (chunk != null)
             {
-                AddBlockUpdateToNeighbors(i, j, k);
+                chunk.AddBlockUpdate(i, j, k);
             }
+            //GetOrGenerateChunk(divWithFloorForChunkSize(i), divWithFloorForChunkSize(j), divWithFloorForChunkSize(k)).AddBlockUpdate(i, j, k);
+            //if (alsoToNeighbors)
+            //{
+            //    AddBlockUpdateToNeighbors(i, j, k);
+            //}
         }
 
 
@@ -4216,7 +4677,7 @@ namespace Blocks
             }
 
             int numGenerated = 0;
-            int maxGenerating = 10;
+            int maxGenerating = 3;
             bool allowGenerate = true;
             foreach (Chunk chunk in allChunksHere)
             {
@@ -4249,7 +4710,9 @@ namespace Blocks
                         }
                     }
 
+
                     unfinishedStructures = leftoverStructures;
+
                 }
             }
         }
@@ -4817,6 +5280,7 @@ namespace Blocks
     {
         public float skyLightLevel = 1.0f;
         public ComputeShader cullBlocksShader;
+        public bool creativeMode = false;
         ComputeBuffer cubeNormals;
         ComputeBuffer cubeOffsets;
         ComputeBuffer uvOffsets;
@@ -5359,6 +5823,7 @@ namespace Blocks
         // Update is called once per frame
         void Update()
         {
+            World.creativeMode = creativeMode;
             triMaterial.SetFloat("globalLightLevel", skyLightLevel);
             triMaterialWithTransparency.SetFloat("globalLightLevel", skyLightLevel);
             numChunksTotal = world.allChunks.Count;

@@ -127,25 +127,25 @@ namespace Blocks
         {
             get
             {
-                return World.mainWorld.GetState(x, y, z, 1);
+                return World.mainWorld.GetState(x, y, z, BlockState.State);
             }
             set
             {
-                World.mainWorld.SetState(x, y, z, value, 1);
+                World.mainWorld.SetState(x, y, z, value, BlockState.State);
             }
         }
 
 
 
-        public int State2
+        public int LightingState
         {
             get
             {
-                return World.mainWorld.GetState(x, y, z, 2);
+                return World.mainWorld.GetState(x, y, z, BlockState.Lighting);
             }
             set
             {
-                World.mainWorld.SetState(x, y, z, value, 2);
+                World.mainWorld.SetState(x, y, z, value, BlockState.Lighting);
             }
         }
 

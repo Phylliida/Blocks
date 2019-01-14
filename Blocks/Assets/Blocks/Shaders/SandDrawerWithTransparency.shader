@@ -61,7 +61,7 @@ Shader "Unlit/SandDrawerWithTransparency" {
 		//float4 col = float4(0.5, 0.5, 0.9, 1);
 		float3 offset = cubeOffsets[idQ].xyz;
 		float2 uvOffset = uvOffsets[idQ].xy;
-		float lightLevel = DrawingThings[id].data2.z / 255.0;
+		float lightLevel = DrawingThings[id].data2.z / 256.0f;
 		lightLevel = 1.0f;
 		//lightLevel = globalLightLevel;
 		// from https://answers.unity.com/questions/678193/is-it-possible-to-access-the-dimensions-of-a-textu.html

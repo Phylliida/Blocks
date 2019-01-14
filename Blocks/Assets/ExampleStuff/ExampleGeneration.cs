@@ -21,8 +21,8 @@ public class ExampleGeneration : GenerationClass
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(riverProp);
         world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnRiver, 1));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(4000.0f, OnCave, 2));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(300000.0f, OnRiver, 1));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(400.0f, OnCave, 2));
         world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
     }
 
@@ -132,26 +132,21 @@ public class ExampleGeneration : GenerationClass
         int[] xOffsets = new int[] { 1, -1, 0, 0, 0,0 };
         int[] yOffsets = new int[] { 1, -1, 0, 0, 1, -1 };
         int[] zOffsets = new int[] { 0, 0, 1, -1, 0, 0 };
+        UnityEngine.Vector3 velocity = new UnityEngine.Vector3(0, 0, 0);
 
         for (int i = 0; i < 200; i++)
         {
-            int val = Simplex.Noise.randInt(0, xOffsets.Length, curX, curY, curZ);
-            offsetX += xOffsets[val];
-            offsetY += yOffsets[val];
-            offsetZ += zOffsets[val];
-            // cap magnitude
-            offsetX = System.Math.Min(System.Math.Abs(offsetX), 2) * System.Math.Sign(offsetX);
-            offsetY = System.Math.Min(System.Math.Abs(offsetY), 1) * System.Math.Sign(offsetY);
-            offsetZ = System.Math.Min(System.Math.Abs(offsetZ), 2) * System.Math.Sign(offsetZ);
-            if (Math.Abs(offsetX) > Math.Abs(offsetZ))
-            {
-                curX += Math.Sign(offsetX) * 2;
-            }
-            else
-            {
-                curZ += Math.Sign(offsetX) * 2;
-            }
-            curY += Math.Sign(offsetY) * 1;
+            // from negative one to one instead of 0 to 1
+            float valX = Simplex.Noise.rand(curX, curY, curZ)*2-1;
+            float valY = Simplex.Noise.rand(curX+3, curY, curZ)*2-1;
+            float valZ = Simplex.Noise.rand(curX, curY+3, curZ+2)*2-1;
+
+            float scaleChange = 0.4f;
+            velocity += new UnityEngine.Vector3(valX* scaleChange, valY* scaleChange, valZ* scaleChange);
+            velocity = velocity.normalized;
+            curX = (long)(curX + velocity.x * 4.0f);
+            curY = (long)(curY + velocity.y * 4.0f);
+            curZ = (long)(curZ + velocity.z * 4.0f);
 
             //curY = (long)Math.Round(GetChunkProperty(curX, 0, curZ, elevationProp));
             float caveWidth = 4.0f;
@@ -189,9 +184,9 @@ public class ExampleGeneration : GenerationClass
                     SetBlock(x, y + i, z, Example.Trunk);
                     using (BlockData trunkData = GetBlockData(x, y + i, z))
                     {
-                        trunkData.state1 = 4;
-                        trunkData.state2 = 0;
-                        trunkData.state3 = 0;
+                        trunkData.state = 4;
+                        trunkData.lightingState = 0;
+                        trunkData.animationState = 0;
                     }
                     continue;
                 }
@@ -234,7 +229,6 @@ public class ExampleGeneration : GenerationClass
                                 addedLeaf = true;
                             }
                             SetBlock(x + j, y + i, z + k, Example.Leaf);
-                            SetState(x + j, y + i, z + k, 0, 3);
                         }
                     }
                 }
@@ -244,9 +238,9 @@ public class ExampleGeneration : GenerationClass
                     SetBlock(x, y + i, z, Example.Trunk);
                     using (BlockData trunkData = GetBlockData(x, y + i, z))
                     {
-                        trunkData.state1 = 4;
-                        trunkData.state2 = 0;
-                        trunkData.state3 = 0;
+                        trunkData.state = 4;
+                        trunkData.lightingState = 0;
+                        trunkData.animationState = 0;
                     }
                 }
 
@@ -360,13 +354,13 @@ public class ExampleGeneration : GenerationClass
                 }
                 if (outBlock.block == Example.LooseRocks)
                 {
-                    outBlock.state1 = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 2.0f + 1.0f);
+                    outBlock.state = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 2.0f + 1.0f);
                 }
                 else if(outBlock.block == Example.Stone)
                 {
                     int numRocks = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 5, z * 6) * 2.0f + 1.0f);
                     int numLargeRocks = (int)System.Math.Round(Simplex.Noise.rand(x * 3, y * 2, z * 3) * 2.0f + 1.0f);
-                    outBlock.state1 = numRocks + numLargeRocks * 6;
+                    outBlock.state = numRocks + numLargeRocks * 6;
                 }
             }
         }
