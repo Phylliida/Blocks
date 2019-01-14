@@ -220,11 +220,13 @@ namespace Blocks
             AddNewBlock(id, name, packName);
         }
 
-        public const int animFrames = 32;
+        public const int animFrames = 64;
         void SetupTexture()
         {
             allBlocksTexture = new Texture2D(16 * 2* animFrames, 16 * 3 * allBlocks.Length, TextureFormat.ARGB32, false, true);
             allBlocksTexture.filterMode = FilterMode.Point;
+            allBlocksTexture.wrapMode = TextureWrapMode.Clamp;
+            allBlocksTexture.anisoLevel = 0;
             Color32[] allColors = new Color32[allBlocksTexture.width * allBlocksTexture.height];
             for (int i = 0; i < allBlocksTexture.height; i++)
             {
@@ -237,7 +239,7 @@ namespace Blocks
                     }
                     else
                     {
-                        allColors[ind] = new Color32(0, 0, 0, 255); // default gross pink/purple color if block not found
+                        allColors[ind] = new Color32(255, 0, 255, 255); // default gross pink/purple color if block not found
                     }
                 }
             }
@@ -344,20 +346,23 @@ namespace Blocks
                     }
                     argbTexture.Apply();
                     Color[] pixels = argbTexture.GetPixels();
-                    allBlocksTexture.SetPixels(0, (uid - 1) * 16 * 3, 16 * 2, 16 * 3, pixels);
+                    for (int k = 0; k < animFrames; k++)
+                    {
+                        allBlocksTexture.SetPixels(k*32, (uid - 1) * 16 * 3, 16 * 2, 16 * 3, pixels);
+                    }
                     allBlocksTexture.Apply();
-
+                    File.WriteAllBytes("res.png", allBlocksTexture.EncodeToPNG());
                 }
                 else
                 {
-                    bool animated = false;
+                    //bool animated = false;
                     // test if animated
                     for (int i = 0; i < 32; i++)
                     {
                         string frameITexture = texturePath.Substring(0, texturePath.Length - ".png".Length) + i + ".png";
                         if (File.Exists(frameITexture))
                         {
-                            animated = true;
+                            //animated = true;
 
                             byte[] imageData = File.ReadAllBytes(frameITexture);
                             Texture2D blockTexture = new Texture2D(2, 2);

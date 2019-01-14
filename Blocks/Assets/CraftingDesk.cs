@@ -46,7 +46,7 @@ public class CraftingDesk : InventoryListener {
             if (recipe.InventoryMatchesRecipe(inventory, numRows, maxItems, false))
             {
                 addedTmpItemWithRecipe = recipe;
-                inventory.resultBlocks[0] = new BlockStack(recipe.result.block, recipe.result.count);
+                inventory.resultBlocks[0] = recipe.result.Copy();
                 break;
             }
         }

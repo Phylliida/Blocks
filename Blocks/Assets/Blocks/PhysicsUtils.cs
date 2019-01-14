@@ -470,7 +470,7 @@ namespace Blocks
 
         public static bool SearchOutwards(LVector3 start, int maxSteps, bool searchUp, bool searchDown, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult, GetBlock getBlock = null)
         {
-            World world = World.mainWorld;
+            //World world = World.mainWorld;
             InitializeGlobalSearchVars(maxSteps);
             xOffsets.Enqueue(0);
             yOffsets.Enqueue(0);
@@ -569,9 +569,9 @@ namespace Blocks
             mcy = cy;
             mcz = cz;
             return;
-            mcx = GoodMod(cx, 1);
-            mcy = GoodMod(cy, 1);
-            mcz = GoodMod(cz, 1);
+            //mcx = GoodMod(cx, 1);
+            //mcy = GoodMod(cy, 1);
+            //mcz = GoodMod(cz, 1);
         }
 
         public static void ModPos(long x, long y, long z, out long mx, out long my, out long mz)
@@ -580,9 +580,9 @@ namespace Blocks
             my = y;
             mz = z;
             return;
-            mx = GoodMod(x, BlocksWorld.chunkSize * 1);
-            my = GoodMod(y, BlocksWorld.chunkSize * 1);
-            mz = GoodMod(z, BlocksWorld.chunkSize * 1);
+            //mx = GoodMod(x, BlocksWorld.chunkSize * 1);
+            //my = GoodMod(y, BlocksWorld.chunkSize * 1);
+            //mz = GoodMod(z, BlocksWorld.chunkSize * 1);
         }
 
         // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer
@@ -632,7 +632,7 @@ namespace Blocks
             int prevMinD = 0;
             // start slightly back in case we are very very close to a block
             float[] curPosF = new float[] { origin.x, origin.y, origin.z };
-            LVector3 curPosL = LVector3.FromUnityVector3(new Vector3(curPosF[0], curPosF[1], curPosF[2]));
+            //LVector3 curPosL = LVector3.FromUnityVector3(new Vector3(curPosF[0], curPosF[1], curPosF[2]));
             float[] rayDir = new float[] { dir.x, dir.y, dir.z };
             hitPos = new LVector3(camX, camY, camZ);
             surfaceHitPos = new Vector3(origin.x, origin.y, origin.z);
@@ -655,7 +655,7 @@ namespace Blocks
                     // time = dist/velocity
                     if (rayDir[d] != 0)
                     {
-                        int offsetSign;
+                        //int offsetSign;
                         float nextWall;
                         if (rayDir[d] > 0)
                         {
@@ -664,7 +664,7 @@ namespace Blocks
                             {
                                 nextWall += 1.0f;
                             }
-                            offsetSign = 1;
+                            //offsetSign = 1;
                         }
                         else
                         {
@@ -673,10 +673,10 @@ namespace Blocks
                             {
                                 nextWall -= 1.0f;
                             }
-                            offsetSign = -1;
+                            //offsetSign = -1;
                         }
-                        long dest;
-                        long offset;
+                        //long dest;
+                        //long offset;
                         /*
                         // if on first step, try just going to the next face without an offset if it is ahead
                         if (Mathf.Sign(curPosL[d] - curPosF[d] / world.worldScale) == offsetSign && i == 0)
@@ -720,7 +720,7 @@ namespace Blocks
                 Vector3 midPoint = (prevPosF + resPosF) / 2.0f;
                 LVector3 newCurPosL = LVector3.FromUnityVector3(midPoint);
                 //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF);
-                curPosL = LVector3.FromUnityVector3(resPosF);
+                //curPosL = LVector3.FromUnityVector3(resPosF);
 
                 if (Vector3.Distance(prevPosF, origin) > maxDist) // too far
                 {
@@ -798,7 +798,7 @@ namespace Blocks
                     // time = dist/velocity
                     if (rayDir[d] != 0)
                     {
-                        int offsetSign;
+                        //int offsetSign;
                         float nextWall;
                         if (rayDir[d] > 0)
                         {
@@ -807,7 +807,7 @@ namespace Blocks
                             {
                                 nextWall += 1.0f;
                             }
-                            offsetSign = 1;
+                            //offsetSign = 1;
                         }
                         else
                         {
@@ -816,10 +816,10 @@ namespace Blocks
                             {
                                 nextWall -= 1.0f;
                             }
-                            offsetSign = -1;
+                            //offsetSign = -1;
                         }
-                        long dest;
-                        long offset;
+                        //long dest;
+                        //long offset;
                         /*
                         // if on first step, try just going to the next face without an offset if it is ahead
                         if (Mathf.Sign(curPosL[d] - curPosF[d] / world.worldScale) == offsetSign && i == 0)
@@ -986,7 +986,7 @@ namespace Blocks
             youShouldJump = false;
             Vector3 startPosVec3 = startPos.BlockCentertoUnityVector3();
             Vector3 goalPosVec3 = goalPos.BlockCentertoUnityVector3();
-            long maxSteps = LVector3.CityBlockDistance(startPos, goalPos) + 5;
+            //long maxSteps = LVector3.CityBlockDistance(startPos, goalPos) + 5;
             RaycastResults results;
             List<PathNode> positions = new List<PathNode>();
             positions.Add(new PathNode(startPos, null));

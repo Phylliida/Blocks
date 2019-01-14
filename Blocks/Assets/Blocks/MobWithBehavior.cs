@@ -697,7 +697,7 @@ namespace Blocks
             {
                 if (updateWander.Do())
                 {
-                    int randVal = Random.Range(0, 5);
+                    //int randVal = Random.Range(0, 5);
                     Vector3[] options = new Vector3[] { Vector3.zero, Vector3.forward, Vector3.right, Vector3.left, Vector3.back };
                     Vector3 desiredMove = options[Random.Range(0, options.Length)];
                     MovingEntity me = GetComponent<MovingEntity>();

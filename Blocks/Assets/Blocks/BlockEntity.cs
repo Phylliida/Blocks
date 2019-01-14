@@ -10,6 +10,25 @@ namespace Blocks
         public int blockId;
         public string blockName;
         public BlockStack blockStack;
+        public BlockStack Stack
+        {
+            get
+            {
+                if (blockStack == null)
+                {
+                    return new BlockStack(blockId, 1);
+                }
+                else
+                {
+                    return blockStack;
+                }
+            }
+            set
+            {
+                blockStack = value;
+                blockId = value.block;
+            }
+        }
         int displayedBlockId = -1;
         public MovingEntity playerPulling;
         public MovingEntity playerThrowing;
@@ -30,8 +49,20 @@ namespace Blocks
 
             if (blockName != "")
             {
-                blockId = BlockUtils.StringToBlockId(blockName);
-                blockName = "";
+                try
+                {
+
+                    blockId = BlockUtils.StringToBlockId(blockName);
+                    if (blockStack != null)
+                    {
+                        blockStack.block = blockId;
+                    }
+                    blockName = "";
+                }
+                catch
+                {
+
+                }
             }
             if (playerThrowing != null)
             {
@@ -46,7 +77,10 @@ namespace Blocks
                     playerThrowing = null;
                 }
             }
-
+            if (blockStack == null)
+            {
+                blockStack = new BlockStack(blockId, 1);
+            }
             if (blockStack != null)
             {
                 if (blockStack.count <= 0)
@@ -89,6 +123,18 @@ namespace Blocks
             {
                 GetComponent<UnityEngine.UI.Outline>().enabled = selected;
             }
+
+            if (GetComponentInChildren<DurabilityBar>() != null)
+            {
+                DurabilityBar bar = GetComponentInChildren<DurabilityBar>();
+                bar.enabled = blockStack != null && blockStack.maxDurability != 0;
+                if (bar.enabled)
+                {
+                    bar.durability = blockStack.durability/(float)blockStack.maxDurability;
+                }
+                
+            }
+
             if ((displayedBlockId != blockId && !(blockId == -1 && displayedBlockId == (int)BlockValue.Air)) || !initialized)
             {
                 initialized = true;

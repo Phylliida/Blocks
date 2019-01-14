@@ -89,6 +89,7 @@ namespace Blocks
                 return;
             }
 
+
             bool inventoryModified = false;
             // click when not capturing
             if (playerUsing.blocksHoldingWithMouse == null)
@@ -103,9 +104,9 @@ namespace Blocks
                             if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.blocks[i] != null)
                             {
                                 //Debug.Log("got dat boi");
-                                playerUsing.blocksHoldingWithMouse = inventory.blocks[i];
+                                playerUsing.blocksHoldingWithMouse = inventory.blocks[i].Copy();
                                 playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
-                                playerUsing.holdingWithMouseEntity.blockStack = inventory.blocks[i];
+                                playerUsing.holdingWithMouseEntity.Stack = inventory.blocks[i];
                                 inventory.blocks[i] = null;
                                 inventoryModified = true;
                                 //playerUsing.mouseLook.allowedToCapture = false;
@@ -119,9 +120,9 @@ namespace Blocks
                             if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.resultBlocks[ind] != null)
                             {
                                 //Debug.Log("got dat boi");
-                                playerUsing.blocksHoldingWithMouse = inventory.resultBlocks[ind];
+                                playerUsing.blocksHoldingWithMouse = inventory.resultBlocks[ind].Copy();
                                 playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
-                                playerUsing.holdingWithMouseEntity.blockStack = inventory.resultBlocks[ind];
+                                playerUsing.holdingWithMouseEntity.Stack = inventory.resultBlocks[ind].Copy();
                                 inventory.resultBlocks[ind] = null;
                                 inventoryModified = true;
                                 //playerUsing.mouseLook.allowedToCapture = false;
@@ -135,25 +136,25 @@ namespace Blocks
             else if (playerUsing.blocksHoldingWithMouse != null && displaying)
             {
                 //player.mouseLook.allowedToCapture = false;
-                Vector3 offset;
-                Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
+                //Vector3 offset;
+                //Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
                 playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
                 if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
                 {
-                    bool foundCollision = false;
+                    //bool foundCollision = false;
                     for (int i = 0; i < blockItems.Count && i < inventory.blocks.Length; i++)
                     {
                         if (MouseIntersectsBlockEntity(blockItems[i]))
                         {
-                            foundCollision = true;
+                            //foundCollision = true;
                             bool letGo = false;
                             if (inventory.blocks[i] == null)
                             {
                                 // right click, drop one
                                 if (Input.GetMouseButtonDown(1))
                                 {
-
-                                    inventory.blocks[i] = new BlockStack(playerUsing.blocksHoldingWithMouse.block, 1);
+                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
+                                    inventory.blocks[i].count = 1;
                                     inventoryModified = true;
                                     if (playerUsing.blocksHoldingWithMouse.count == 1)
                                     {
@@ -167,7 +168,7 @@ namespace Blocks
                                 // left click, put all
                                 else if (Input.GetMouseButtonDown(0))
                                 {
-                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse;
+                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
                                     inventoryModified = true;
                                     letGo = true;
                                 }
@@ -248,11 +249,11 @@ namespace Blocks
                                 // different things, swap
                                 else if (Input.GetMouseButtonDown(0))
                                 {
-                                    BlockStack tmp = inventory.blocks[i];
-                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse;
+                                    BlockStack tmp = inventory.blocks[i].Copy();
+                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
                                     inventoryModified = true;
                                     playerUsing.blocksHoldingWithMouse = tmp;
-                                    playerUsing.holdingWithMouseEntity.blockStack = tmp;
+                                    playerUsing.holdingWithMouseEntity.Stack = tmp;
                                 }
                             }
                             if (letGo)
@@ -275,8 +276,8 @@ namespace Blocks
             if (playerUsing.blocksHoldingWithMouse != null && displaying)
             {
                 //player.mouseLook.allowedToCapture = false;
-                Vector3 offset;
-                Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
+                //Vector3 offset;
+                //Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
                 playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
             }
 
@@ -392,10 +393,12 @@ namespace Blocks
             if (itemStack == null)
             {
                 displayItem.blockId = -1;
+                displayItem.blockStack = null;
             }
             else
             {
                 displayItem.blockId = itemStack.block;
+                displayItem.blockStack = itemStack;
             }
 
             if (itemStack != null && itemStack.count > 1)
@@ -445,17 +448,19 @@ namespace Blocks
         {
             for (int i = 0; i < playerUsing.blocksHoldingWithMouse.count; i++)
             {
-                BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(playerUsing.blocksHoldingWithMouse.Block, transform.position + transform.forward * 1.0f);
+                BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(playerUsing.blocksHoldingWithMouse, transform.position + transform.forward * 1.0f);
                 worldEntity.timeThrown = Time.time;
                 worldEntity.GetComponent<MovingEntity>().SetAbsoluteDesiredMove(playerUsing.transform.forward);
                 worldEntity.playerThrowing = playerUsing.GetComponent<MovingEntity>();
                 //Debug.Log(playerUsing.transform.forward);
             }
             CallInventoryModifiedCallbacks();
-
             playerUsing.blocksHoldingWithMouse = null;
-            GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);
-            playerUsing.holdingWithMouseEntity = null;
+            if (playerUsing.holdingWithMouseEntity != null)
+            {
+                GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);
+                playerUsing.holdingWithMouseEntity = null;
+            }
         }
 
 

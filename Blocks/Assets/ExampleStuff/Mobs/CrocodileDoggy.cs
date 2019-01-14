@@ -66,7 +66,7 @@ public class CrocodileDoggy : MonoBehaviour {
         {
             float minLegRot = 0;
             float maxLegRot = 20;
-            Vector3 resEulerAngles = new Vector3(0, 0, 0);
+            //Vector3 resEulerAngles = new Vector3(0, 0, 0);
             leftFrontLeg.transform.localEulerAngles = new Vector3(0, 0, Mathf.Sin(Time.time * actualLegSpeed + 0 * offsetAmount / 4.0f) * (maxLegRot - minLegRot) + minLegRot);
             rightFrontLeg.transform.localEulerAngles = new Vector3(0, 0, Mathf.Sin(Time.time * actualLegSpeed + 1 * offsetAmount / 4.0f) * (maxLegRot - minLegRot) + minLegRot);
             leftBackLeg.transform.localEulerAngles = new Vector3(0, 0, Mathf.Sin(Time.time * actualLegSpeed + 2 * offsetAmount / 4.0f) * (maxLegRot - minLegRot) + minLegRot);

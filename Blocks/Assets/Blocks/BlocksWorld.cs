@@ -146,7 +146,6 @@ namespace Blocks
         int chunkSize;
         public ComputeBuffer drawDataTransparent;
         public ComputeBuffer drawDataNotTransparent;
-        bool using1;
         public int numRendereredCubesTransparent;
         public int numRendereredCubesNotTransparent;
 
@@ -163,6 +162,7 @@ namespace Blocks
         {
 
         }
+
         public void Render(bool onlyTransparent, Chunk chunk)
         {
             if (chunk.chunkData.needToBeUpdated)
@@ -761,13 +761,16 @@ namespace Blocks
 
         public delegate void ChunkPropertyEventCallback(long x, long y, long z, BlockData blockData);
 
+        public int priority;
+
         ChunkPropertyEventCallback eventCallback;
 
-        public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback)
+        public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback, int priority)
         {
             // pretend on 1d line cause that should be good enough
             lambda = World.mainWorld.chunkSize* World.mainWorld.chunkSize / avgNumBlocksBetween;
             this.eventCallback = eventCallback;
+            this.priority = priority;
         }
 
         public void Run(long cx, long cy, long cz)
@@ -992,9 +995,6 @@ namespace Blocks
             posChunks = new Chunk[] { null, null, null };
             negChunks = new Chunk[] { null, null, null };
 
-            long baseX = chunkX * chunkSize;
-            long baseY = chunkY * chunkSize;
-            long baseZ = chunkZ * chunkSize;
 
             generating = true;
 
@@ -1015,7 +1015,7 @@ namespace Blocks
             long baseY = cy * chunkSize;
             long baseZ = cz * chunkSize;
             Structure myStructure = new Structure(cx + " " + cy + " " + cz, true, this, priority:0);
-            long start = PhysicsUtils.millis();
+            //long start = PhysicsUtils.millis();
             //Debug.Log("generating chunk " + cx + " " + cy + " " + cz + " ");
             try
             {
@@ -1058,15 +1058,25 @@ namespace Blocks
                     }
                 }
 
-                Structure myStructure2 = new Structure(cx + " " + cy + " " + cz, true, this, priority: 1);
-                world.worldGeneration.blockGetter = myStructure2;
-                chunkBiomeData.RunChunkPropertyEventsOnGeneration();
+                // sort events by priority
 
-                if (!myStructure2.HasAllChunksGenerated())
+                chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents.Sort((x, y) =>
                 {
-                    world.AddUnfinishedStructure(myStructure2);
-                }
+                    return x.priority.CompareTo(y.priority);
+                });
 
+                // give each event a seperate structure with the correct priority so the filling in priority algorithms elsewhere will overwrite properly
+                foreach (ChunkPropertyEvent chunkPropertyEvent in chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents)
+                {
+                    Structure myStructure2 = new Structure(cx + " " + cy + " " + cz, true, this, priority: chunkPropertyEvent.priority);
+                    world.worldGeneration.blockGetter = myStructure2;
+                    chunkPropertyEvent.Run(cx, cy, cz);
+                    if (!myStructure2.HasAllChunksGenerated())
+                    {
+                        world.AddUnfinishedStructure(myStructure2);
+                    }
+
+                }
             }
             catch (System.Exception e)
             {
@@ -1076,8 +1086,8 @@ namespace Blocks
                 generating = false;
                 Debug.LogError("error in generating chunk " + cx + " " + cy + " " + cz + " " + e);
             }
-            long end = PhysicsUtils.millis();
-            float secondsTaken = (end - start) / 1000.0f;
+            //long end = PhysicsUtils.millis();
+            //float secondsTaken = (end - start) / 1000.0f;
             //Debug.Log("done generating chunk " + cx + " " + cy + " " + cz + " in " + secondsTaken + " seconds");
             if (!myStructure.HasAllChunksGenerated())
             {
@@ -1291,8 +1301,8 @@ namespace Blocks
                 }
                 chunkData.blocksNeedUpdating.Clear();
                 */
-                bool relevantChunk = true;
-                int k = 0;
+                //bool relevantChunk = true;
+                //int k = 0;
                 foreach (int i in chunkData.blocksNeedUpdating)
                 {
                     long ind = (long)(i);
@@ -1301,7 +1311,7 @@ namespace Blocks
                     long wx = x + cx * chunkSize;
                     long wy = y + cy * chunkSize;
                     long wz = z + cz * chunkSize;
-                    long mwx, mwy, mwz;
+                    //long mwx, mwy, mwz;
                     //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
                     using (BlockData block = world.GetBlockData(wx, wy, wz))
                     {
@@ -1834,6 +1844,12 @@ namespace Blocks
         }
 
 
+        public bool CanAddToChunk(Chunk chunk)
+        {
+            LVector3 chunkPos = new LVector3(chunk.cx, chunk.cy, chunk.cz);
+            return ungeneratedChunkPositions.ContainsKey(chunkPos);
+        }
+
         /// <summary>
         /// Returns true if filled in all of its chunks, otherwise false
         /// </summary>
@@ -2189,7 +2205,7 @@ namespace Blocks
     {
         public static bool creativeMode = false;
         public static World mainWorld;
-        public const int maxAnimFrames = 32;
+        public const int maxAnimFrames = 64;
         public const int numBlocks = 64;
         public const int numBreakingFrames = 10;
 
@@ -2204,6 +2220,8 @@ namespace Blocks
             public long x, y, z;
             public int[] blocks;
             public int[] counts;
+            public int[] durabilities;
+            public int[] maxDurabilities;
 
             public BlockInventory()
             {
@@ -2218,12 +2236,16 @@ namespace Blocks
 
                 blocks = new int[inventory.blocks.Length];
                 counts = new int[inventory.blocks.Length];
+                durabilities = new int[inventory.blocks.Length];
+                maxDurabilities = new int[inventory.blocks.Length];
                 for (int i = 0; i < blocks.Length; i++)
                 {
                     if (inventory.blocks[i] != null)
                     {
                         blocks[i] = inventory.blocks[i].block;
                         counts[i] = inventory.blocks[i].count;
+                        durabilities[i] = inventory.blocks[i].durability;
+                        maxDurabilities[i] = inventory.blocks[i].maxDurability;
                     }
                 }
             }
@@ -2451,7 +2473,7 @@ namespace Blocks
                     {
                         if (inventory.counts[j] != 0 && inventory.blocks[j] != 0)
                         {
-                            blockInventory.blocks[j] = new BlockStack(inventory.blocks[j], inventory.counts[j]);
+                            blockInventory.blocks[j] = new BlockStack(inventory.blocks[j], inventory.counts[j], inventory.durabilities[j], inventory.maxDurabilities[j]);
                         }
                     }
                     blocksWorld.blockInventories[blockPos] = blockInventory;
@@ -2602,11 +2624,20 @@ namespace Blocks
             return true;
         }
 
-        public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
+        BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
         {
             GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockEntityPrefab);
             blockEntity.transform.position = position;
             blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
+            return blockEntity.GetComponent<BlockEntity>();
+        }
+
+        public BlockEntity CreateBlockEntity(BlockStack block, Vector3 position)
+        {
+            GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockEntityPrefab);
+            blockEntity.transform.position = position;
+            blockEntity.GetComponent<BlockEntity>().blockId = block.block;
+            blockEntity.GetComponent<BlockEntity>().blockStack = block.Copy();
             return blockEntity.GetComponent<BlockEntity>();
         }
 
@@ -2881,7 +2912,7 @@ namespace Blocks
                 maxCapacityTo = maxCapacities[blockTo];
             }
             return System.Math.Min(powerFrom, maxCapacityTo); // doesn't lose support power if stacked on top of each other, but certain types of blocks can only hold so much support power
-            return powerFrom; // or we just carry max power for up?
+            //return powerFrom; // or we just carry max power for up?
         }
         public int TrickleSupportPowerSidewaysOrDown(int blockFrom, int powerFrom, int blockTo)
         {
@@ -3964,7 +3995,7 @@ namespace Blocks
 
             chunk.CreateStuff();
             return;
-
+            /*
             int loopMax = 2;
 
             Chunk otherLoop = chunk;
@@ -3976,6 +4007,7 @@ namespace Blocks
             {
                 otherLoop = GetOrGenerateChunk(otherLoopCx, otherLoopCy, otherLoopCz);
             }
+            */
 
             /*
 
@@ -3999,7 +4031,7 @@ namespace Blocks
                 otherLoop = GetOrGenerateChunk(otherLoop.cx, otherLoop.cy, loopMax);
             }
             */
-
+            /*
             if (otherLoop.cx != chunk.cx || otherLoop.cy != chunk.cy || otherLoop.cz != chunk.cz)
             {
                 chunk.chunkData = otherLoop.chunkData;
@@ -4012,6 +4044,7 @@ namespace Blocks
             {
                 chunk.CreateStuff();
             }
+            */
             /*
             int initialCount = 0;
             // fun code that makes chunks repeat around in a very non-euclidean way
@@ -4195,7 +4228,20 @@ namespace Blocks
                         allowGenerate = false;
                     }
                     List<Structure> leftoverStructures = new List<Structure>();
+                    Priority_Queue.SimplePriorityQueue<Structure, int> chunkStructures = new Priority_Queue.SimplePriorityQueue<Structure, int>();
                     foreach (Structure structure in unfinishedStructures)
+                    {
+                        if (structure.CanAddToChunk(chunk))
+                        {
+                            chunkStructures.Enqueue(structure, structure.priority);
+                        }
+                        else
+                        {
+                            leftoverStructures.Add(structure);
+                        }
+                    }
+
+                    foreach (Structure structure in chunkStructures)
                     {
                         if (!structure.AddNewChunk(chunk))
                         {
@@ -4204,11 +4250,6 @@ namespace Blocks
                     }
 
                     unfinishedStructures = leftoverStructures;
-
-                    if (frameId > 5)
-                    {
-                        //break;
-                    }
                 }
             }
         }
@@ -4413,7 +4454,7 @@ namespace Blocks
 ";
             for (int b = 0; b < packBlocks.Count; b++)
             {
-                int index = b + startOffset + 1;
+                //int index = b + startOffset + 1;
 
 
                 if (packBlocks[b].isTransparent)
@@ -4827,9 +4868,33 @@ namespace Blocks
 
         public ComputeBuffer blockBreakingBuffer;
         public static Mesh blockMesh;
+
+        public float ApplyEpsPerturb(float val, float eps)
+        {
+            if (val == 0)
+            {
+                return eps;
+            }
+            else if (val == 1.0f)
+            {
+                return 1.0f - eps;
+            }
+            else
+            {
+                return val;
+            }
+        }
+
+        // shifts [0,1] to [eps, 1-eps] so rendering won't show the neighboring textures due to rounding errors
+        public Vector3 ApplyEpsPerturb(Vector3 offset, float eps)
+        {
+            return new Vector3(ApplyEpsPerturb(offset.x, eps), ApplyEpsPerturb(offset.y, eps), ApplyEpsPerturb(offset.z, eps));
+        }
+
         void SetupRendering()
         {
             LoadMaterials();
+            float epsPerturb = 1.0f/64.0f;
 
             float[] texOffsets = new float[36 * 4];
             float[] vertNormals = new float[36 * 4];
@@ -4894,48 +4959,57 @@ namespace Blocks
                     case 34: offset = new Vector3(1, 1, 1); break;
                     case 35: offset = new Vector3(1, 0, 0); break;
                 }
+
+
+
+
                 // bottom
                 float texX = 0.0f;
                 float texY = 0.0f;
+
+                Vector3 offsetForTex = ApplyEpsPerturb(offset, epsPerturb);
+
+
+
                 if (i >= 0 && i <= 5)
                 {
-                    texX = offset.x + 1.0f;
-                    texY = offset.z + 2.0f;
+                    texX = offsetForTex.x + 1.0f;
+                    texY = offsetForTex.z + 2.0f;
                     normal = new Vector3(0, -1, 0);
                 }
                 // top
                 else if (i >= 6 && i <= 11)
                 {
-                    texX = offset.x;
-                    texY = offset.z + 2.0f;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.z + 2.0f;
                     normal = new Vector3(0, 1, 0);
                 }
                 // left
                 else if (i >= 12 && i <= 17)
                 {
-                    texX = offset.x;
-                    texY = offset.y + 1.0f;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.y + 1.0f;
                     normal = new Vector3(0, 0, -1);
                 }
                 // right
                 else if (i >= 18 && i <= 23)
                 {
-                    texX = offset.x + 1.0f;
-                    texY = offset.y + 1.0f;
+                    texX = offsetForTex.x + 1.0f;
+                    texY = offsetForTex.y + 1.0f;
                     normal = new Vector3(0, 0, 1);
                 }
                 // forward
                 else if (i >= 24 && i <= 29)
                 {
-                    texX = offset.z;
-                    texY = offset.y;
+                    texX = offsetForTex.z;
+                    texY = offsetForTex.y;
                     normal = new Vector3(-1, 0, 0);
                 }
                 // back
                 else if (i >= 30 && i <= 35)
                 {
-                    texX = offset.z + 1.0f;
-                    texY = offset.y;
+                    texX = offsetForTex.z + 1.0f;
+                    texY = offsetForTex.y;
                     normal = new Vector3(1, 0, 0);
                 }
                 texOffset = new Vector2(texX, texY);
@@ -4944,11 +5018,11 @@ namespace Blocks
                 triOffsets[i * 4 + 2] = offset.z;
                 triOffsets[i * 4 + 3] = 0;
 
-
                 texOffsets[i * 4] = texOffset.x / 2.0f;
                 texOffsets[i * 4 + 1] = texOffset.y / (float)World.numBlocks;
                 texOffsets[i * 4 + 2] = 0;
                 texOffsets[i * 4 + 3] = 0;
+
 
                 vertNormals[i * 4] = normal.x;
                 vertNormals[i * 4 + 1] = normal.y;
@@ -4959,12 +5033,12 @@ namespace Blocks
                 vertOffsetsGood.Add(offset - new Vector3(0.5f, 0.5f, 0.5f));
             }
 
-            blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4, ComputeBufferType.GPUMemory);
-            cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+            blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4);
+            cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             cubeOffsets.SetData(triOffsets);
-            cubeNormals = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+            cubeNormals = new ComputeBuffer(36, sizeof(float) * 4);
             cubeNormals.SetData(vertNormals);
-            uvOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+            uvOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             uvOffsets.SetData(texOffsets);
 
             float[] texOffsetsSingleBlock = new float[36 * 4];
@@ -5027,40 +5101,41 @@ namespace Blocks
                 // bottom
                 float texX = 0.0f;
                 float texY = 0.0f;
+                Vector3 offsetForTex = ApplyEpsPerturb(offset, epsPerturb);
                 if (i >= 0 && i <= 5)
                 {
-                    texX = offset.x;
-                    texY = offset.z;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.z;
                 }
                 // top
                 else if (i >= 6 && i <= 11)
                 {
-                    texX = offset.x;
-                    texY = offset.z;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.z;
                 }
                 // left
                 else if (i >= 12 && i <= 17)
                 {
-                    texX = offset.x;
-                    texY = offset.y;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.y;
                 }
                 // right
                 else if (i >= 18 && i <= 23)
                 {
-                    texX = offset.x;
-                    texY = offset.y;
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.y;
                 }
                 // forward
                 else if (i >= 24 && i <= 29)
                 {
-                    texX = offset.z;
-                    texY = offset.y;
+                    texX = offsetForTex.z;
+                    texY = offsetForTex.y;
                 }
                 // back
                 else if (i >= 30 && i <= 35)
                 {
-                    texX = offset.z;
-                    texY = offset.y;
+                    texX = offsetForTex.z;
+                    texY = offsetForTex.y;
                 }
                 texOffset = new Vector2(texX, texY);
 
@@ -5070,7 +5145,7 @@ namespace Blocks
                 texOffsetsSingleBlock[i * 4 + 3] = 0;
             }
 
-            breakingUVOffsets = new ComputeBuffer(36, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+            breakingUVOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             breakingUVOffsets.SetData(texOffsetsSingleBlock);
 
             blockMesh = new Mesh();
@@ -5160,7 +5235,7 @@ namespace Blocks
 
 
 
-            linesOffsets = new ComputeBuffer(24, sizeof(float) * 4, ComputeBufferType.GPUMemory);
+            linesOffsets = new ComputeBuffer(24, sizeof(float) * 4);
             linesOffsets.SetData(lineOffsets);
 
             outlineMaterial.SetBuffer("lineOffsets", linesOffsets);
@@ -5169,7 +5244,7 @@ namespace Blocks
             drawPositions1 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
             drawPositions2 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
 
-            chunkBlockData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
+            chunkBlockData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
             cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
             cullBlocksShader.SetBuffer(1, "DataIn", chunkBlockData);
 

@@ -32,7 +32,7 @@ namespace Blocks
 
         public void GetBlockEntity(BlockEntity blockEntity)
         {
-            if (inventory.TryToAddBlock(blockEntity.blockId))
+            if (inventory.TryToAddBlock(blockEntity.Stack))
             {
                 GameObject.Destroy(blockEntity.gameObject);
             }
@@ -146,7 +146,7 @@ namespace Blocks
                     continue;
                 }
                 Vector3 grabFromPos = transform.position - Vector3.up * GetComponent<MovingEntity>().heightBelowHead / 3.0f;
-                if (inventory.CanAddBlock(blockEntity.blockId))
+                if (inventory.CanAddBlock(blockEntity.Stack))
                 {
                     if ((Vector3.Distance(blockEntity.transform.position, grabFromPos) < reachRange && blockEntity.playerPulling == null) || blockEntity.playerPulling == GetComponent<MovingEntity>())
                     {
@@ -178,11 +178,6 @@ namespace Blocks
             }
             if (Input.GetMouseButton(0) && showingHotbarOnly)
             {
-                LVector3 hitPos;
-                LVector3 posBeforeHit;
-                Vector3 surfaceHitPos;
-
-
                 RaycastResults hitResults;
 
                 if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
@@ -202,6 +197,17 @@ namespace Blocks
                     {
                         timeBreaking = 0.0f;
                         //Debug.Log("hit at pos " + hitPos);
+
+                        BlockStack currentItem = inventory.blocks[inventoryGui.selection];
+                        if (currentItem != null && currentItem.maxDurability != 0)
+                        {
+                            currentItem.durability -= 1;
+                            if (currentItem.durability == 0)
+                            {
+                                inventory.blocks[inventoryGui.selection] = null;
+                            }
+                        }
+
                         if (World.mainWorld.DropBlockOnDestroy(hitResults.hitBlock.BlockV, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                         {
                             if (hitResults.hitBlock.BlockV == Example.CraftingTable && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))

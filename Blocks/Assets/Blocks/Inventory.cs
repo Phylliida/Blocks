@@ -5,12 +5,18 @@ using UnityEngine;
 
 namespace Blocks
 {
+    [System.Serializable]
     public class BlockStack
     {
         public int block;
         public int count;
-        
+        public int durability = 0;
+        public int maxDurability = 0;
 
+        public BlockStack Copy()
+        {
+            return new BlockStack(block, count, durability, maxDurability);
+        }
         public BlockValue Block
         {
             get
@@ -23,24 +29,32 @@ namespace Blocks
             }
         }
 
-        public BlockStack(int block, int count)
+        public BlockStack(int block, int count, int durability=0, int maxDurability=0)
         {
             this.block = block;
             this.count = count;
+            this.durability = durability;
+            this.maxDurability = maxDurability;
         }
 
-        public BlockStack(BlockValue block, int count)
+        public BlockStack(BlockValue block, int count, int durability = 0, int maxDurability =0)
         {
             this.block = (int)block;
             this.count = count;
+            this.durability = durability;
+            this.maxDurability = maxDurability;
         }
 
-        public bool CanAddToStack(int block)
+        public bool CanAddToStack(BlockStack block)
         {
-            return (block == this.block && World.stackableSize.ContainsKey(block) && World.stackableSize[block] > count);
+            if (maxDurability != 0 || block.maxDurability != 0)
+            {
+                return false;
+            }
+            return (block.block == this.block && World.stackableSize.ContainsKey(this.block) && World.stackableSize[this.block] > count);
         }
 
-        public bool TryToAddToStack(int block)
+        public bool TryToAddToStack(BlockStack block)
         {
             if (CanAddToStack(block))
             {
@@ -75,19 +89,19 @@ namespace Blocks
                 {
                     for (int j = 0; j < blocks[i].count; j++)
                     {
-                        World.mainWorld.CreateBlockEntity(blocks[i].block, position + Random.insideUnitSphere * 0.5f);
+                        World.mainWorld.CreateBlockEntity(blocks[i], position + Random.insideUnitSphere * 0.5f);
                     }
                     blocks[i] = null;
                 }
             }
         }
 
-        public bool CanAddBlock(int block)
+        public bool CanAddBlock(BlockStack block)
         {
             // look for a stack
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] != null && blocks[i].block == block)
+                if (blocks[i] != null && blocks[i].block == block.block)
                 {
                     if (blocks[i].CanAddToStack(block))
                     {
@@ -108,12 +122,12 @@ namespace Blocks
             // no empty spots or stacks we can put it in, return false
             return false;
         }
-        public bool TryToAddBlock(int block)
+        public bool TryToAddBlock(BlockStack block)
         {
             // look for a stack
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] != null && blocks[i].block == block)
+                if (blocks[i] != null && blocks[i].block == block.block)
                 {
                     if (blocks[i].TryToAddToStack(block))
                     {
@@ -127,7 +141,7 @@ namespace Blocks
             {
                 if (blocks[i] == null)
                 {
-                    blocks[i] = new BlockStack(block, 1);
+                    blocks[i] = block.Copy();
                     return true;
                 }
             }

@@ -740,21 +740,21 @@ public class ExamplePack : BlocksPack {
             { Example.Air, Example.LargeRock,  Example.Air},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Shovel, 1)));
+        }, new BlockStack(Example.Shovel, 1, 10, 10)));
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
             { Example.Air, Example.LargeSharpRock,  Example.Air},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Axe, 1)));
+        }, new BlockStack(Example.Axe, 1, 10, 10)));
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
             { Example.LargeSharpRock, Example.LargeRock,  Example.LargeSharpRock},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Pickaxe, 1)));
+        }, new BlockStack(Example.Pickaxe, 1, 10, 10)));
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {

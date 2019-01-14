@@ -183,7 +183,7 @@ namespace Blocks
             {
                 return;
             }
-            Vector3 goodDiff;
+            //Vector3 goodDiff;
             Vector3 desiredDiff = desiredMove * Time.deltaTime * speed;
             desiredDiff = new Vector3(desiredDiff.x, 0, desiredDiff.z);
             if (OKToMove(desiredDiff))
@@ -386,6 +386,7 @@ namespace Blocks
                 }
             }
             return false;
+            /*
             float worldScale = World.mainWorld.worldScale;
 
 
@@ -407,7 +408,7 @@ namespace Blocks
             int atFeet = World.mainWorld[feetX, feetY, feetZ];
             int atBody = World.mainWorld[bodyX, bodyY, bodyZ];
             return atHead != 0 || atEyes != 0 || atFeet != 0 || atBody != 0;
-            /*
+            / *
             LVector3 eyesPos = LVector3.FromUnityVector3(position);
             LVector3 feetPos = LVector3.FromUnityVector3(position + new Vector3(0, -heightBelowHead+0.02f, 0));
             LVector3 topOfHeadPos = LVector3.FromUnityVector3(position + new Vector3(0, heightAboveHead, 0));

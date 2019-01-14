@@ -18,20 +18,17 @@ public class ExampleGeneration : GenerationClass
         //Simplex.Noise.Seed = 27;
         elevationProp = new ChunkProperty("elevation", minVal, maxVal, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
-        treeEvent = new ChunkPropertyEvent(100.0f, OnTree);
-        riverEvent = new ChunkPropertyEvent(3000.0f, OnRiver);
-        caveEvent = new ChunkPropertyEvent(4000.0f, OnCave);
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(riverProp);
-        world.AddChunkPropertyEvent(treeEvent);
-        world.AddChunkPropertyEvent(riverEvent);
-        world.AddChunkPropertyEvent(caveEvent);
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnRiver, 1));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(4000.0f, OnCave, 2));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
     }
 
     public void OnIronOre(long x, long y, long z, BlockData outBlock)
     {
-        float randVal = Simplex.Noise.rand(x, y, z);
+        //float randVal = Simplex.Noise.rand(x, y, z);
 
         int numThings = Simplex.Noise.randInt(5, 9, x, y, z);
 
@@ -64,13 +61,13 @@ public class ExampleGeneration : GenerationClass
 
     public void OnRiver(long x, long y, long z, BlockData outBlock)
     {
-        float caveLevelX = outBlock.GetChunkProperty(riverProp);
+        //float caveLevelX = outBlock.GetChunkProperty(riverProp);
         long curX = x;
         long curY = y + 20;
         long curZ = z;
 
         int offsetX = 0;
-        int offsetY = 0;
+        //int offsetY = 0;
         int offsetZ = 0;
         int[] xOffsets = new int[] { 1, -1, 0, 0 };
         int[] zOffsets = new int[] { 0, 0, 1, -1 };

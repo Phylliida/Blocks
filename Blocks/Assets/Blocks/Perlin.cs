@@ -52,7 +52,7 @@ namespace Blocks
                     int t, v;
 
                     // Update Weyl generator.
-                    w = w = (w + 0x61c88647) | 0;
+                    w = (w + 0x61c88647) | 0;
                     // Update xor generator.
                     v = X[(i + 34) & 127];
                     i = ((i + 1) & 127);
