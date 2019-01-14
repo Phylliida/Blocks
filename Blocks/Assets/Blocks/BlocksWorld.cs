@@ -1595,6 +1595,35 @@ namespace Blocks
             blockLighting = (lightingState & BLOCK_LIGHTING_MASK);
         }
 
+
+        public void GetHighestLightings(long x, long y, long z, ref int curHighestSkyLight, ref int curHighestBlockLight)
+        {
+            int lightingState = chunkData.GetState(x, y, z, BlockState.Lighting);
+            int neighborSkyLighting;
+            int neighborBlockLighting;
+            bool neighborTouchingSky;
+            GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky);
+            curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
+            curHighestBlockLight = System.Math.Max(neighborBlockLighting, curHighestBlockLight);
+        }
+
+
+
+        public void GetHighestLightingsOutsideChunk(long x, long y, long z, ref int curHighestSkyLight, ref int curHighestBlockLight)
+        {
+            Chunk other = world.GetChunkAtPos(cx * chunkSize + x, cy * chunkSize + y, cz * chunkSize + z);
+            if (other != null)
+            {
+                int lightingState = other.GetState(cx * chunkSize + x, cy * chunkSize + y, cz * chunkSize + z, BlockState.Lighting);
+                int neighborSkyLighting;
+                int neighborBlockLighting;
+                bool neighborTouchingSky;
+                GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky);
+                curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
+                curHighestBlockLight = System.Math.Max(neighborBlockLighting, curHighestBlockLight);
+            }
+        }
+
         public bool Tick(bool allowGenerate)
         {
             if (cleanedUp)
@@ -1664,22 +1693,24 @@ namespace Blocks
                         int highestBlockLighting = 0;
                         bool hasAnOpenNeighbor = false;
                         // check neighbors to see if we need to trickle their light values
-                        foreach (LVector3 neighbor in world.AllNeighborsRelative(new LVector3(wx, wy, wz)))
-                        {
-                            if (world.GetChunkAtPos(neighbor.x, neighbor.y, neighbor.z) != null)
-                            {
-                                if (neighbor.Block <= 0)
-                                {
-                                    hasAnOpenNeighbor = true;
-                                }
-                                int neighborSkyLighting;
-                                int neighborBlockLighting;
-                                bool neighborTouchingSky;
-                                GetLightingValues(neighbor.LightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky);
-                                highestSkyLighting = System.Math.Max(neighborSkyLighting, highestSkyLighting);
-                                highestBlockLighting = System.Math.Max(neighborBlockLighting, highestBlockLighting);
-                            }
-                        }
+
+
+
+                        // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
+                        if (x == 0) GetHighestLightingsOutsideChunk(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        else                    GetHighestLightings(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (y == 0) GetHighestLightingsOutsideChunk(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        else                    GetHighestLightings(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (z == 0) GetHighestLightingsOutsideChunk(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting);
+                        else                    GetHighestLightings(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting);
+
+                        if (x == chunkSize-1) GetHighestLightingsOutsideChunk(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        else                              GetHighestLightings(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (y == chunkSize-1) GetHighestLightingsOutsideChunk(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        else                              GetHighestLightings(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (z == chunkSize-1) GetHighestLightingsOutsideChunk(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting);
+                        else                              GetHighestLightings(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting);
+
                         bool lightModified = false;
 
                         // neighbors light has changed so we need to trickle their values
@@ -1730,25 +1761,22 @@ namespace Blocks
 
                         if (block.WasModified)
                         {
-                            bool neighborsInsideThisChunk =
-                                (x != 0 && x != chunkSize - 1) &&
-                                (y != 0 && y != chunkSize - 1) &&
-                                (z != 0 && z != chunkSize - 1);
                             chunkData.needToBeUpdated = true;
                             // don't call lots of chunk lookups if we don't need to
-                            if (!neighborsInsideThisChunk)
-                            {
-                                world.AddBlockUpdateToNeighbors(wx, wy, wz);
-                            }
-                            else
-                            {
-                                chunkData.AddBlockUpdate(x - 1, y, z);
-                                chunkData.AddBlockUpdate(x + 1, y, z);
-                                chunkData.AddBlockUpdate(x, y - 1, z);
-                                chunkData.AddBlockUpdate(x, y + 1, z);
-                                chunkData.AddBlockUpdate(x, y, z - 1);
-                                chunkData.AddBlockUpdate(x, y, z + 1);
-                            }
+                            if (x == 0) world.AddBlockUpdate(wx - 1, wy, wz);
+                            else chunkData.AddBlockUpdate(x - 1, y, z);
+                            if (y == 0) world.AddBlockUpdate(wx, wy - 1, wz);
+                            else chunkData.AddBlockUpdate(x, y - 1, z);
+                            if (z == 0) world.AddBlockUpdate(wx, wy, wz - 1);
+                            else chunkData.AddBlockUpdate(x, y, z - 1);
+
+                            if (x == chunkSize - 1) world.AddBlockUpdate(wx + 1, wy, wz);
+                            else chunkData.AddBlockUpdate(x + 1, y, z);
+                            if (y == chunkSize - 1) world.AddBlockUpdate(wx, wy + 1, wz);
+                            else chunkData.AddBlockUpdate(x, y + 1, z);
+                            if (z == chunkSize - 1) world.AddBlockUpdate(wx, wy, wz + 1);
+                            else chunkData.AddBlockUpdate(x, y, z + 1);
+
                             if (block.block == BlockValue.Air)
                             {
                                 block.state = 0;
@@ -3163,7 +3191,7 @@ namespace Blocks
             this.worldGeneration.OnGenerationInit();
             GenerateChunk(0, 0, 0);
             //return;
-            int viewDist = 1;
+            int viewDist = 3;
             for (int i = -viewDist; i <= viewDist; i++)
             {
                 for (int j = -viewDist; j <= viewDist; j++)
@@ -4677,7 +4705,7 @@ namespace Blocks
             }
 
             int numGenerated = 0;
-            int maxGenerating = 3;
+            int maxGenerating = 20;
             bool allowGenerate = true;
             foreach (Chunk chunk in allChunksHere)
             {
