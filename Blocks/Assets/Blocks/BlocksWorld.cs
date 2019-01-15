@@ -3,10 +3,172 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-
+using System.Runtime.CompilerServices;
 
 namespace Blocks
 {
+    public class QuickGrowingArray<T> where T : class
+    {
+        T[] arr;
+        long count;
+        public long Count
+        {
+            get
+            {
+                return count;
+            }
+            private set
+            {
+
+            }
+        }
+        public QuickGrowingArray(int initialCapacity)
+        {
+            arr = new T[initialCapacity];
+            count = 0;
+        }
+
+        public T this[long i]
+        {
+            get
+            {
+                if (i >= arr.LongLength)
+                {
+                    return null;
+                }
+                if (count < i+1)
+                {
+                    count = i + 1;
+                }
+                return arr[i];
+            }
+            set
+            {
+                while (i >= arr.LongLength)
+                {
+                    ExpandArr();
+                }
+                if (count < i + 1)
+                {
+                    count = i + 1;
+                }
+                arr[i] = value;
+            }
+        }
+
+        void ExpandArr()
+        {
+            T[] newArr = new T[arr.Length * 2];
+            for (int i = 0; i < count; i++)
+            {
+                newArr[i] = arr[i];
+            }
+            arr = newArr;
+        }
+
+        public void Clear()
+        {
+            if (count > 0)
+            {
+                System.Array.Clear(arr, 0, arr.Length);
+            }
+        }
+    }
+
+    public class QuickLongDict<T> : IEnumerable<KeyValuePair<long, T>> where T : class
+    {
+        QuickGrowingArray<T> negativeValues;
+        QuickGrowingArray<T> positiveValues;
+        public QuickLongDict(int initialCapacity)
+        {
+            negativeValues = new QuickGrowingArray<T>(initialCapacity);
+            positiveValues = new QuickGrowingArray<T>(initialCapacity);
+        }
+
+        public void Clear()
+        {
+            negativeValues.Clear();
+            positiveValues.Clear();
+        }
+
+        public bool ContainsKey(long i)
+        {
+            return this[i] != null;
+        }
+
+        public bool ContainsKey(long i, out T val)
+        {
+            val = this[i];
+            return val != null;
+        }
+
+        public IEnumerator<KeyValuePair<long, T>> GetEnumerator()
+        {
+            for (long i = 1; i < negativeValues.Count; i++)
+            {
+                if (negativeValues[i] != null)
+                {
+                    yield return new KeyValuePair<long, T>(-i, negativeValues[i]);
+                }
+            }
+
+            for (long i = 0; i < positiveValues.Count; i++)
+            {
+                if (positiveValues[i] != null)
+                {
+                    yield return new KeyValuePair<long, T>(i, positiveValues[i]);
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            for (long i = 1; i < negativeValues.Count; i++)
+            {
+                if (negativeValues[i] != null)
+                {
+                    yield return new KeyValuePair<long, T>(-i, negativeValues[i]);
+                }
+            }
+
+            for (long i = 0; i < positiveValues.Count; i++)
+            {
+                if (positiveValues[i] != null)
+                {
+                    yield return new KeyValuePair<long, T>(i, positiveValues[i]);
+                }
+            }
+        }
+
+        public T this[long i]
+        {
+           get
+            {
+                if (i < 0)
+                {
+                    return negativeValues[-i];
+                }
+                else
+                {
+                    return positiveValues[i];
+                }
+            }
+            set
+            {
+                if (i < 0)
+                {
+                    negativeValues[-i] = value;
+                }
+                else
+                {
+                    positiveValues[i] = value;
+                }
+            }
+        }
+    }
+
+
+
 
     public class FastSimpleBlockLookup : IEnumerable<KeyValuePair<BlockValue, BlockOrItem>>
     {
@@ -696,6 +858,7 @@ namespace Blocks
         long curBlockModifyState2 = 0;
         long curBlockModifyState3 = 0;
         long curBlockModifyStateBlock = 0;
+        public Chunk myChunk;
         public bool WasModified
         {
             get
@@ -737,10 +900,60 @@ namespace Blocks
         int cachedState3 = 0;
         BlockValue cachedBlock = BlockValue.Air;
 
-        public int state { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState1) { cachedState1 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.State); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state) { wasModified = true; cachedState1 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.State); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
-        public int lightingState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState2) { cachedState2 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != lightingState) { wasModified = true; cachedState2 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
-        public int animationState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = world.GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState) { wasModified = true; cachedState3 = value; world.SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
-        public BlockValue block { get { if (!isGenerated) { return BlockValue.Wildcard; } if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = world[wx, wy, wz, cx, cy, cz]; curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
+        int GetState(long wx, long wy, long wz, long cx, long cy, long cz, BlockState stateType)
+        {
+            if (myChunk == null)
+            {
+                return world.GetState(wx, wy, wz, cx, cy, cz, stateType);
+            }
+            else
+            {
+                return myChunk.GetState(wx, wy, wz, stateType);
+            }
+        }
+
+        void SetState(long wx, long wy, long wz, long cx, long cy, long cz, int value, BlockState stateType)
+        {
+            if (myChunk == null)
+            {
+                world.SetState(wx, wy, wz, cx, cy, cz, value, stateType);
+            }
+            else
+            {
+                myChunk.SetState(wx, wy, wz, value, stateType);
+                world.blockModifyState += 1;
+            }
+        }
+
+        BlockValue GetBlock(long wx, long wy, long wz, long cx, long cy, long cz)
+        {
+            if (myChunk == null)
+            {
+                return world[wx, wy, wz, cx, cy, cz];
+            }
+            else
+            {
+                return myChunk[wx, wy, wz];
+            }
+        }
+
+        void SetBlock(long wx, long wy, long wz, long cx, long cy, long cz, BlockValue value)
+        {
+            if (myChunk == null)
+            {
+                world[wx, wy, wz, cx, cy, cz] = value;
+            }
+            else
+            {
+                myChunk[wx, wy, wz] = value;
+                world.blockModifyState += 1;
+            }
+        }
+
+        public int state { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState1) { cachedState1 = GetState(wx, wy, wz, cx, cy, cz, BlockState.State); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state) { wasModified = true; cachedState1 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.State); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
+        public int lightingState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState2) { cachedState2 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != lightingState) { wasModified = true; cachedState2 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
+        public int animationState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState) { wasModified = true; cachedState3 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+        public BlockValue block { get { if (!isGenerated) { return BlockValue.Wildcard; } if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = GetBlock(wx, wy, wz, cx, cy, cz); curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; SetBlock(wx, wy, wz, cx, cy, cz,value); curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
         //public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 2); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
         //public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 3); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
         //public BlockValue block { get { return (BlockValue)world[wx, wy, wz, cx, cy, cz]; } set { if (curBlockModifyState != world.blockModifyState && (BlockValue)world[wx, wy, wz, cx, cy, cz] != value) { wasModified = true; world[wx, wy, wz, cx, cy, cz] = (int)value; curBlockModifyState = world.blockModifyState; } } }
@@ -773,6 +986,7 @@ namespace Blocks
                 isGenerated = true;
             }
             needsAnotherTick = false;
+            myChunk = null;
         }
 
         public bool isGenerated = false;
@@ -803,6 +1017,7 @@ namespace Blocks
             this.wx = x;
             this.wy = y;
             this.wz = z;
+            myChunk = null;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
             //cachedBlock = world[wx, wy, wz, cx, cy, cz];
             //this.curBlockModifyStateBlock = world.blockModifyState;
@@ -1292,6 +1507,8 @@ namespace Blocks
         public bool valid = true;
         public long cx, cy, cz;
 
+        long lastWorldNumChunks;
+
         public long GetPos(int d)
         {
             if (d == 0)
@@ -1639,6 +1856,7 @@ namespace Blocks
 
         public void TickStart(long chunkId)
         {
+            valid = true;
             if (valid && this.chunkData.TickStart(chunkId)) // this.chunkData.TickStart(chunkId) only returns true if it is the first TickStart called this frame. That ensures that we don't swap around valid multiple times during a single tick start
             {
                 int maxNews = 10;
@@ -1714,7 +1932,7 @@ namespace Blocks
         {
             if (chunk == null)
             {
-                chunk = world.GetChunkAtPos(wx, wy,wz);
+                chunk = world.GetChunkAtPos(wx, wy, wz);
             }
             if (chunk != null)
             {
@@ -1740,7 +1958,7 @@ namespace Blocks
             }
         }
 
-        public bool Tick(bool allowGenerate)
+        public bool Tick(bool allowGenerate, ref int maxMillisInFrame)
         {
             if (cleanedUp)
             {
@@ -1781,6 +1999,12 @@ namespace Blocks
                 for(int j = 0; j < chunkData.blocksNeedUpdating.Count; j++)
                 {
                     int i = chunkData.blocksNeedUpdating[j];
+
+                    //if (PhysicsUtils.millis() - world.frameTimeStart > maxMillisInFrame)
+                   // {
+                   //     chunkData.blocksNeedUpdatingNextFrame.Add(i);
+                   //     continue;
+                    //}
                     long ind = (long)(i);
                     long x, y, z;
                     chunkData.to3D(ind, out x, out y, out z);
@@ -1791,6 +2015,7 @@ namespace Blocks
                     //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
                     using (BlockData block = world.GetBlockData(wx, wy, wz))
                     {
+                        block.myChunk = this;
                         BlockValue blockValue = block.block;
                         int skyLighting;
                         int blockLighting;
@@ -2160,11 +2385,13 @@ namespace Blocks
             x = ind % chunkSize;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int to1D(int x, int y, int z)
         {
-            return x + y * chunkSize + z * chunkSize_2;
+            return x + y * BlocksWorld.chunkSize + z * BlocksWorld.chunkSize * BlocksWorld.chunkSize;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void to3D(long ind, out long x, out long y, out long z)
         {
             z = ind / (chunkSize_2);
@@ -2173,11 +2400,13 @@ namespace Blocks
             x = ind % chunkSize;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public long to1D(long x, long y, long z)
         {
-            return x + y * chunkSize + z * chunkSize_2;
+            return x + y * BlocksWorld.chunkSize + z * BlocksWorld.chunkSize * BlocksWorld.chunkSize;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetState(long i, long j, long k, BlockState stateType)
         {
             long ind = to1D(i, j, k);
@@ -3138,10 +3367,10 @@ namespace Blocks
         public static Dictionary<int, int> stackableSize;
 
         public int chunkSize;
-        Dictionary<long, List<Chunk>> chunksPerX;
-        Dictionary<long, List<Chunk>> chunksPerY;
-        Dictionary<long, List<Chunk>> chunksPerZ;
-        Dictionary<long, List<Chunk>>[] chunksPer;
+        QuickLongDict<List<Chunk>> chunksPerX;
+        QuickLongDict<List<Chunk>> chunksPerY;
+        QuickLongDict<List<Chunk>> chunksPerZ;
+        QuickLongDict<List<Chunk>>[] chunksPer;
         public const int DIM = 3;
         long lowestCy = long.MaxValue;
 
@@ -3278,10 +3507,10 @@ namespace Blocks
             stackableSize[(int)Example.String] = 64;
             */
 
-            chunksPerX = new Dictionary<long, List<Chunk>>();
-            chunksPerY = new Dictionary<long, List<Chunk>>();
-            chunksPerZ = new Dictionary<long, List<Chunk>>();
-            chunksPer = new Dictionary<long, List<Chunk>>[] { chunksPerX, chunksPerY, chunksPerZ };
+            chunksPerX = new QuickLongDict<List<Chunk>>(8);
+            chunksPerY = new QuickLongDict<List<Chunk>>(8);
+            chunksPerZ = new QuickLongDict< List<Chunk>>(8);
+            chunksPer = new QuickLongDict<List<Chunk>>[] { chunksPerX, chunksPerY, chunksPerZ };
 
             argBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.IndirectArguments);
 
@@ -3303,7 +3532,7 @@ namespace Blocks
             this.worldGeneration.OnGenerationInit();
             GenerateChunk(0, 0, 0);
             //return;
-            int viewDist = 3;
+            int viewDist = 1;
             for (int i = -viewDist; i <= viewDist; i++)
             {
                 for (int j = viewDist; j >= -viewDist; j--)
@@ -4323,11 +4552,13 @@ namespace Blocks
         // I didn't want to convert to a float or double and floor because that can lead to precision issues
         // here we assume b is never less than 0
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public long divWithFloorForChunkSize(long a)
         {
             return a / chunkSize - ((a < 0 && a % chunkSize != 0) ? 1 : 0);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         long divWithFloor(long a, long b)
         {
             return a / b - (((a < 0 == b < 0) || a % b == 0) ? 0 : 1);
@@ -4403,6 +4634,7 @@ namespace Blocks
         }
 
         Chunk lastChunk;
+
 
         public Chunk GetChunk(long chunkX, long chunkY, long chunkZ)
         {
@@ -4792,6 +5024,7 @@ namespace Blocks
         }
 
         long frameId = 0;
+        public long frameTimeStart = 0;
         public void Tick()
         {
             frameId += 1;
@@ -4806,22 +5039,22 @@ namespace Blocks
             // Randomly shuffle the order we update the chunks in, for the memes when they are tiled procedurally
             //Shuffle(allChunksHere);
 
-
+            frameTimeStart = PhysicsUtils.millis();
             numBlockUpdatesThisTick = 0;
             numWaterUpdatesThisTick = 0;
 
 
             foreach (Chunk chunk in allChunksHere)
             {
-                chunk.TickStart(frameId);
             }
 
             int numGenerated = 0;
-            int maxGenerating = 10;
-            Debug.Log(frameId);
-            if (frameId > 40)
+            int maxGenerating = 1000;
+            int maxTickSteps = 10000000;
+            if (frameId > 200)
             {
-                maxGenerating = 1;
+                maxTickSteps = 10;
+                maxGenerating = 1000;
                 if (frameId % 2 != 0)
                 {
                     maxGenerating = 0;
@@ -4834,7 +5067,12 @@ namespace Blocks
                 {
                     allowGenerate = false;
                 }
-                if (chunk.Tick(allowGenerate))
+                if (PhysicsUtils.millis() - frameTimeStart > maxTickSteps)
+                {
+                    break;
+                }
+                chunk.TickStart(frameId);
+                if (chunk.Tick(allowGenerate, ref maxTickSteps))
                 {
                     numGenerated += 1;
                     if (numGenerated > maxGenerating)
@@ -4870,6 +5108,7 @@ namespace Blocks
 
                 }
             }
+            Debug.Log(maxTickSteps + " ticks left");
         }
     }
 
@@ -4919,8 +5158,12 @@ namespace Blocks
 
         public void Clear()
         {
-            count = 0;
-            System.Array.Clear(contained, 0, contained.Length);
+            if (count > 0)
+            {
+
+                count = 0;
+                System.Array.Clear(contained, 0, contained.Length);
+            }
         }
     }
 

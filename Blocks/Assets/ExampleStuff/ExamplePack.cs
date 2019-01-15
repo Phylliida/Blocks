@@ -40,6 +40,42 @@ public class Sand : Block
 }
 
 
+public class Lava : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        destroyBlock = false;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = false;
+        block.lightingState = block.lightingState | 15;
+        /*
+        using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
+        {
+            if (below.block == Example.Water || below.block == Example.WaterNoFlow)
+            {
+                below.block = Example.Water;
+                block.state = 1 - block.state;
+                below.state = block.state;
+            }
+            else if (below.block == Example.Air)
+            {
+                below.block = Example.Water;
+            }
+        }
+        */
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.0f;
+    }
+}
+
+
+
 public class BallTrack : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
@@ -729,6 +765,7 @@ public class ExamplePack : BlocksPack {
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
         AddCustomBlock(Example.Water, new Water(), 64);
         AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
+        AddCustomBlock(Example.Lava, new Lava(), 64);
         AddCustomBlock(Example.BallTrack, new BallTrack(), 64);
         AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
