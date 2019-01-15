@@ -77,7 +77,7 @@ Shader "Blocks/SandDrawer" {
 		int3 idPt = DrawingThings[id].data1.xyz;
 		int animFrame = DrawingThings[id].data2.w;
 		int lightLevelI = DrawingThings[id].data2.z;
-		float skyLightLevel = ((lightLevelI & 0x1F0) >> 4) / 16.0f*globalLightLevel;
+		float skyLightLevel = ((lightLevelI & 0xF0) >> 4) / 15.0f*globalLightLevel;
 		float blockLightLevel = (lightLevelI & 0xF)/15.0f;
 		float lightLevel = max(skyLightLevel, blockLightLevel);
 		animFrame = 0;

@@ -7,6 +7,78 @@ using UnityEngine;
 
 namespace Blocks
 {
+
+    public class FastSimpleBlockLookup : IEnumerable<KeyValuePair<BlockValue, BlockOrItem>>
+    {
+        public int[] ids;
+        public BlockValue[] values;
+        public BlockOrItem[] customItems;
+        int maxBlocks;
+
+        public FastSimpleBlockLookup(int maxBlocks)
+        {
+            ids = new int[maxBlocks];
+            values = new BlockValue[maxBlocks];
+            customItems = new BlockOrItem[maxBlocks];
+            this.maxBlocks = maxBlocks;
+        }
+
+        public BlockOrItem this[BlockValue key]
+        {
+            get
+            {
+                int uid = System.Math.Abs(key.id);
+                return customItems[uid];
+            }
+            set
+            {
+                int uid = System.Math.Abs(key.id);
+                ids[uid] = key.id;
+                values[uid] = key;
+                customItems[uid] = value;
+            }
+        }
+
+        public bool ContainsKey(BlockValue value, out BlockOrItem customItem)
+        {
+            int uid = System.Math.Abs(value.id);
+            customItem = customItems[uid];
+            return customItem != null;
+        }
+
+        public void Clear()
+        {
+            ids = new int[maxBlocks];
+            values = new BlockValue[maxBlocks];
+            customItems = new BlockOrItem[maxBlocks];
+        }
+
+        
+        public IEnumerator<KeyValuePair<BlockValue, BlockOrItem>> GetEnumerator()
+        {
+            for (int i = 0; i < maxBlocks; i++)
+            {
+                if (customItems[i] != null)
+                {
+                    yield return new KeyValuePair<BlockValue, BlockOrItem>(values[i], customItems[i]);
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            for (int i = 0; i < maxBlocks; i++)
+            {
+                if (customItems[i] != null)
+                {
+                    yield return new KeyValuePair<BlockValue, BlockOrItem>(values[i], customItems[i]);
+                }
+            }
+        }
+    }
+
+
+
     // fast for just a few elements (10-20)
     public class FastSmallDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>
     {
@@ -18,6 +90,26 @@ namespace Blocks
         {
             keys = new T1[maxCapacity];
             values = new T2[maxCapacity];
+            firstEmptyPos = 0;
+        }
+
+
+        public bool ContainsKey(T1 key, out T2 value)
+        {
+            value = default(T2);
+            for (int i = 0; i < firstEmptyPos; i++)
+            {
+                if (keys[i].Equals(key))
+                {
+                    value = values[i];
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public void Clear()
+        {
             firstEmptyPos = 0;
         }
 
@@ -323,16 +415,18 @@ namespace Blocks
         {
             int prevLightingState = world.GetState(x, y, z, BlockState.Lighting);
             world.SetState(x, y, z, prevLightingState & (~Chunk.TOUCHING_SKY_BIT), BlockState.Lighting);
+            world.AddBlockUpdate(x, y, z, true);
         }
 
         public void SetTouchingSky(long x, long y, long z)
         {
             int prevLightingState = world.GetState(x, y, z, BlockState.Lighting);
-            world.SetState(x, y, z, prevLightingState | Chunk.TOUCHING_SKY_BIT, BlockState.Lighting);
+            world.SetState(x, y, z, prevLightingState | Chunk.TOUCHING_SKY_BIT | (15 << 4), BlockState.Lighting);
+            world.AddBlockUpdate(x, y, z, true);
         }
 
         /// <summary>
-        /// Assumes you update the BlockTouchingSkyChunk data elsewhere, this just updates the block lighting states
+        /// Assumes you update the BlockTouchingSkyChunk data elsewhere (before or after calling this method is fine), this just updates the block lighting states
         /// </summary>
         /// <param name="x"></param>
         /// <param name="y"></param>
@@ -438,7 +532,7 @@ namespace Blocks
                 {
                     long curHighestY = skyChunk.highestBlocks[x, z];
                     long highestYInNewChunk = chunk.cy * world.chunkSize + world.chunkSize - 1;
-                    // we already have something higher than the top of this chunk, ignore this position
+                    // we already have something higher than the top of this chunk, ignore this xz position
                     if (highestYInNewChunk < curHighestY)
                     {
                         continue;
@@ -458,14 +552,20 @@ namespace Blocks
                             // found one that is higher, update
                             if (IsSolid(chunk.chunkData[x,y,z]))
                             {
-
                                 AddedHigherBlockTouchingSky(x+ chunkX, z+chunkZ, curHighestY, chunkY+y);
                                 curHighestY = chunkY + y;
+                                skyChunk.highestBlocks[x, z] = curHighestY;
                                 break;
+                            }
+                            // previously highest one has been removed
+                            else if(curY == curHighestY)
+                            {
+                                RemovedSolidBlockTouchingSky(chunkX + x, chunkY + y, chunkZ + z);
+                                // update cur highest y to the new height of the tallest one that RemovedSolidBlockTouchingSky found
+                                curHighestY = skyChunk.highestBlocks[x, z];
                             }
                         }
                     }
-                    skyChunk.highestBlocks[x, z] = curHighestY;
                 }
             }
         }
@@ -1275,7 +1375,6 @@ namespace Blocks
         {
             this.world = world;
             this.chunkSize = chunkSize;
-            this.touchingSkyChunk = world.blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
             this.cx = chunkX;
             this.cy = chunkY;
             this.cz = chunkZ;
@@ -1396,7 +1495,8 @@ namespace Blocks
             chunkData.blocksNeedUpdatingNextFrame.Clear();
             generating = false;
 
-            world.blocksTouchingSky.GeneratedChunk(this);
+            this.touchingSkyChunk = world.blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
+            //world.blocksTouchingSky.GeneratedChunk(this);
 
             /*
 
@@ -1608,19 +1708,35 @@ namespace Blocks
         }
 
 
+        Chunk negX, posX, negY, posY, negZ, posZ;
 
-        public void GetHighestLightingsOutsideChunk(long x, long y, long z, ref int curHighestSkyLight, ref int curHighestBlockLight)
+        public void GetHighestLightingsOutsideChunk(long wx, long wy, long wz, ref int curHighestSkyLight, ref int curHighestBlockLight,ref Chunk chunk)
         {
-            Chunk other = world.GetChunkAtPos(cx * chunkSize + x, cy * chunkSize + y, cz * chunkSize + z);
-            if (other != null)
+            if (chunk == null)
             {
-                int lightingState = other.GetState(cx * chunkSize + x, cy * chunkSize + y, cz * chunkSize + z, BlockState.Lighting);
+                chunk = world.GetChunkAtPos(wx, wy,wz);
+            }
+            if (chunk != null)
+            {
+                int lightingState = chunk.GetState(wx, wy, wz, BlockState.Lighting);
                 int neighborSkyLighting;
                 int neighborBlockLighting;
                 bool neighborTouchingSky;
                 GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky);
                 curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
                 curHighestBlockLight = System.Math.Max(neighborBlockLighting, curHighestBlockLight);
+            }
+        }
+
+        public void AddBlockUpdateOutsideChunk(long wx, long wy, long wz, ref Chunk chunk)
+        {
+            if (chunk == null)
+            {
+                chunk = world.GetChunkAtPos(wx, wy, wz);
+            }
+            if (chunk != null)
+            {
+                chunk.AddBlockUpdate(wx, wy, wz);
             }
         }
 
@@ -1637,6 +1753,8 @@ namespace Blocks
                 {
 
                     Generate();
+                    this.chunkRenderer.Tick();
+                    return true;
                 }
                 else
                 {
@@ -1658,22 +1776,11 @@ namespace Blocks
             int numLightUpdated = 0;
             if (chunkData.blocksNeedUpdating.Count != 0)
             {
-                
-                int[] oldBlocksNeedUpdating = new int[chunkData.blocksNeedUpdating.Count];
-                int j = 0;
-                foreach (int ind in chunkData.blocksNeedUpdating)
-                {
-                    oldBlocksNeedUpdating[j] = ind;
-                    j += 1;
-                }
-                chunkData.blocksNeedUpdating.Clear();
-
-
-
                 //bool relevantChunk = true;
                 //int k = 0;
-                foreach (int i in oldBlocksNeedUpdating)
+                for(int j = 0; j < chunkData.blocksNeedUpdating.Count; j++)
                 {
+                    int i = chunkData.blocksNeedUpdating[j];
                     long ind = (long)(i);
                     long x, y, z;
                     chunkData.to3D(ind, out x, out y, out z);
@@ -1697,18 +1804,18 @@ namespace Blocks
 
 
                         // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
-                        if (x == 0) GetHighestLightingsOutsideChunk(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref negX);
                         else                    GetHighestLightings(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
-                        if (y == 0) GetHighestLightingsOutsideChunk(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref negY);
                         else                    GetHighestLightings(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting);
-                        if (z == 0) GetHighestLightingsOutsideChunk(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting);
+                        if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, ref highestSkyLighting, ref highestBlockLighting, ref negZ);
                         else                    GetHighestLightings(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting);
 
-                        if (x == chunkSize-1) GetHighestLightingsOutsideChunk(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (x == chunkSize-1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref posX);
                         else                              GetHighestLightings(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting);
-                        if (y == chunkSize-1) GetHighestLightingsOutsideChunk(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting);
+                        if (y == chunkSize-1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref posY);
                         else                              GetHighestLightings(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting);
-                        if (z == chunkSize-1) GetHighestLightingsOutsideChunk(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting);
+                        if (z == chunkSize-1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, ref highestSkyLighting, ref highestBlockLighting, ref posZ);
                         else                              GetHighestLightings(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting);
 
                         bool lightModified = false;
@@ -1748,33 +1855,33 @@ namespace Blocks
                             numLightUpdated += 1;
                         }
 
-                        if (world.customBlocks.ContainsKey(blockValue))
+                        BlockOrItem customBlock;
+                        if (world.customBlocks.ContainsKey(blockValue, out customBlock))
                         {
-                            BlockOrItem customBlock = world.customBlocks[blockValue];
                             customBlock.OnTick(block);
                         }
 
                         if (block.needsAnotherTick)
                         {
-                            chunkData.blocksNeedUpdating.Add((int)ind);
+                            chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
                         }
 
                         if (block.WasModified)
                         {
                             chunkData.needToBeUpdated = true;
                             // don't call lots of chunk lookups if we don't need to
-                            if (x == 0) world.AddBlockUpdate(wx - 1, wy, wz);
+                            if (x == 0) AddBlockUpdateOutsideChunk(wx - 1, wy, wz, ref negX);
                             else chunkData.AddBlockUpdate(x - 1, y, z);
-                            if (y == 0) world.AddBlockUpdate(wx, wy - 1, wz);
+                            if (y == 0) AddBlockUpdateOutsideChunk(wx, wy - 1, wz, ref negY);
                             else chunkData.AddBlockUpdate(x, y - 1, z);
-                            if (z == 0) world.AddBlockUpdate(wx, wy, wz - 1);
+                            if (z == 0) AddBlockUpdateOutsideChunk(wx, wy, wz - 1, ref negZ);
                             else chunkData.AddBlockUpdate(x, y, z - 1);
 
-                            if (x == chunkSize - 1) world.AddBlockUpdate(wx + 1, wy, wz);
+                            if (x == chunkSize - 1) AddBlockUpdateOutsideChunk(wx + 1, wy, wz, ref posX);
                             else chunkData.AddBlockUpdate(x + 1, y, z);
-                            if (y == chunkSize - 1) world.AddBlockUpdate(wx, wy + 1, wz);
+                            if (y == chunkSize - 1) AddBlockUpdateOutsideChunk(wx, wy + 1, wz, ref posY);
                             else chunkData.AddBlockUpdate(x, y + 1, z);
-                            if (z == chunkSize - 1) world.AddBlockUpdate(wx, wy, wz + 1);
+                            if (z == chunkSize - 1) AddBlockUpdateOutsideChunk(wx, wy, wz + 1, ref posZ);
                             else chunkData.AddBlockUpdate(x, y, z + 1);
 
                             if (block.block == BlockValue.Air)
@@ -1929,8 +2036,8 @@ namespace Blocks
     public class ChunkData
     {
         public bool needToBeUpdated = false;
-        public HashSet<int> blocksNeedUpdating = new HashSet<int>();
-        public HashSet<int> blocksNeedUpdatingNextFrame = new HashSet<int>();
+        public IntegerSet blocksNeedUpdating;
+        public IntegerSet blocksNeedUpdatingNextFrame;
         int[] data;
         public int chunkSize;
 
@@ -1944,6 +2051,8 @@ namespace Blocks
             this.chunkSize_2 = chunkSize * chunkSize;
             this.chunkSize_3 = chunkSize * chunkSize * chunkSize;
             data = new int[chunkSize * chunkSize * chunkSize * 4];
+            this.blocksNeedUpdating = new IntegerSet(chunkSize * chunkSize * chunkSize);
+            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSize * chunkSize * chunkSize);
             if (fillWithWildcard)
             {
                 for (int i = 0; i < data.Length; i++)
@@ -2025,7 +2134,7 @@ namespace Blocks
             if (curFrame != frameId)
             {
                 curFrame = frameId;
-                HashSet<int> tmp = blocksNeedUpdating;
+                IntegerSet tmp = blocksNeedUpdating;
                 blocksNeedUpdating = blocksNeedUpdatingNextFrame;
                 blocksNeedUpdatingNextFrame = tmp;
                 blocksNeedUpdatingNextFrame.Clear();
@@ -2323,7 +2432,6 @@ namespace Blocks
                 chunkData.CopyIntoChunk(chunk, priority);
                 ungeneratedChunkPositions.Remove(chunkPos);
             }
-            World.mainWorld.blocksTouchingSky.GeneratedChunk(chunk);
             return ungeneratedChunkPositions.Count == 0;
         }
 
@@ -2452,7 +2560,7 @@ namespace Blocks
                 if (madeInGeneration)
                 {
                     Chunk chunk = World.mainWorld.GetChunkAtPos(x, y, z);
-                    if (chunk == null)
+                    if (chunk == null || chunk.generating)
                     {
                         LVector3 chunkPos;
                         World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
@@ -2470,10 +2578,10 @@ namespace Blocks
                     {
                         if (value != BlockValue.Wildcard)
                         {
-                            bool wasGenerating = chunk.generating;
-                            chunk.generating = true;
+                            //bool wasGenerating = chunk.generating;
+                            //chunk.generating = true;
                             chunk[x, y, z] = value;
-                            chunk.generating = wasGenerating;
+                            //chunk.generating = wasGenerating;
                         }
                     }
                 }
@@ -2631,7 +2739,10 @@ namespace Blocks
 
     public abstract class BlocksPack : MonoBehaviour
     {
-        public Dictionary<BlockValue, BlockOrItem> customBlocks = new Dictionary<BlockValue, BlockOrItem>();
+        /// <summary>
+        ///  todo: increase size if we have more than 10000 custom blocks
+        /// </summary>
+        public FastSimpleBlockLookup customBlocks = new FastSimpleBlockLookup(2000);
         public GenerationClass customGeneration;
         public List<Recipe> customRecipes = new List<Recipe>();
 
@@ -2842,7 +2953,7 @@ namespace Blocks
             // clear structures
             unfinishedStructures.Clear();
 
-            Dictionary<BlockValue, BlockOrItem> newCustomBlocks = new Dictionary<BlockValue, BlockOrItem>();
+            FastSimpleBlockLookup newCustomBlocks = new FastSimpleBlockLookup(100000);
             foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
             {
                 newCustomBlocks[block.Key.id] = block.Value;
@@ -3062,9 +3173,9 @@ namespace Blocks
             {
                 thingHolding = new BlockStack(BlockValue.Air, 1);
             }
-            if (customBlocks.ContainsKey(block))
+            BlockOrItem customBlock;
+            if (customBlocks.ContainsKey(block, out customBlock))
             {
-                BlockOrItem customBlock = customBlocks[block];
                 bool destroyBlock;
                 using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
                 {
@@ -3086,9 +3197,10 @@ namespace Blocks
 
         public bool AllowedtoPlaceBlock(BlockValue block)
         {
-            if (customBlocks.ContainsKey(block))
+            BlockOrItem customBlock;
+            if (customBlocks.ContainsKey(block, out customBlock))
             {
-                return customBlocks[block].CanBePlaced();
+                return customBlock.CanBePlaced();
             }
             foreach (BlockValue item in items)
             {
@@ -3117,7 +3229,7 @@ namespace Blocks
             return blockEntity.GetComponent<BlockEntity>();
         }
 
-        public Dictionary<BlockValue, BlockOrItem> customBlocks;
+        public FastSimpleBlockLookup customBlocks;
         public GenerationClass worldGeneration;
         public BlocksTouchingSky blocksTouchingSky;
 
@@ -3194,7 +3306,7 @@ namespace Blocks
             int viewDist = 3;
             for (int i = -viewDist; i <= viewDist; i++)
             {
-                for (int j = -viewDist; j <= viewDist; j++)
+                for (int j = viewDist; j >= -viewDist; j--)
                 {
                     for (int k = -viewDist; k <= viewDist; k++)
                     {
@@ -4596,7 +4708,7 @@ namespace Blocks
         }
 
 
-        public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors = true)
+        public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors = false)
         {
             long chunkX = divWithFloorForChunkSize(i);
             long chunkY = divWithFloorForChunkSize(j);
@@ -4607,10 +4719,10 @@ namespace Blocks
                 chunk.AddBlockUpdate(i, j, k);
             }
             //GetOrGenerateChunk(divWithFloorForChunkSize(i), divWithFloorForChunkSize(j), divWithFloorForChunkSize(k)).AddBlockUpdate(i, j, k);
-            //if (alsoToNeighbors)
-            //{
-            //    AddBlockUpdateToNeighbors(i, j, k);
-            //}
+            if (alsoToNeighbors)
+            {
+                AddBlockUpdateToNeighbors(i, j, k);
+            }
         }
 
 
@@ -4705,10 +4817,23 @@ namespace Blocks
             }
 
             int numGenerated = 0;
-            int maxGenerating = 20;
+            int maxGenerating = 10;
+            Debug.Log(frameId);
+            if (frameId > 40)
+            {
+                maxGenerating = 1;
+                if (frameId % 2 != 0)
+                {
+                    maxGenerating = 0;
+                }
+            }
             bool allowGenerate = true;
             foreach (Chunk chunk in allChunksHere)
             {
+                if (maxGenerating == 0)
+                {
+                    allowGenerate = false;
+                }
                 if (chunk.Tick(allowGenerate))
                 {
                     numGenerated += 1;
@@ -4738,11 +4863,64 @@ namespace Blocks
                         }
                     }
 
+                    World.mainWorld.blocksTouchingSky.GeneratedChunk(chunk);
+
 
                     unfinishedStructures = leftoverStructures;
 
                 }
             }
+        }
+    }
+
+    public class IntegerSet
+    {
+        int[] items;
+        bool[] contained;
+        int count = 0;
+        public int Count
+        {
+            get
+            {
+                return count;
+            }
+            private set
+            {
+
+            }
+        }
+        public IntegerSet(int maxVal)
+        {
+            items = new int[maxVal];
+            contained = new bool[maxVal];
+        }
+
+        public void Add(int val)
+        {
+            if (!contained[val])
+            {
+                contained[val] = true;
+                items[count] = val;
+                count++;
+            }
+        }
+
+        public int this[int i]
+        {
+            get
+            {
+                return items[i];
+            }
+            private set
+            {
+
+            }
+        }
+
+        public void Clear()
+        {
+            count = 0;
+            System.Array.Clear(contained, 0, contained.Length);
         }
     }
 
@@ -5936,9 +6114,9 @@ namespace Blocks
             {
                 itemHittingWith = new BlockStack(BlockValue.Air, 1);
             }
-            if (world.customBlocks.ContainsKey(block))
+            BlockOrItem customBlock;
+            if (world.customBlocks.ContainsKey(block, out customBlock))
             {
-                BlockOrItem customBlock = world.customBlocks[block];
                 using (BlockData blockData = world.GetBlockData(blockPos.x, blockPos.y, blockPos.z))
                 {
                     return customBlock.TimeNeededToBreak(blockData, itemHittingWith);

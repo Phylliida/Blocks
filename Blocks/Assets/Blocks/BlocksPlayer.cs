@@ -64,7 +64,7 @@ namespace Blocks
 
                 for (int i = -viewDist; i <= viewDist; i++)
                 {
-                    for (int j = -2; j <= 2; j++)
+                    for (int j = 2; j >= -2; j--)
                     {
                         for (int k = -viewDist; k <= viewDist; k++)
                         {
