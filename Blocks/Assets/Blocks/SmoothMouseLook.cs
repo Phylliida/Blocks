@@ -95,6 +95,8 @@ namespace Blocks
                 rotationY += Input.GetAxis("Mouse Y") * sensitivityY;
                 rotationX += Input.GetAxis("Mouse X") * sensitivityX;
 
+                rotationY = ClampAngle(rotationY, minimumY, maximumY);
+                rotationX = ClampAngle(rotationX, minimumX, maximumX);
                 rotArrayY.Add(rotationY);
                 rotArrayX.Add(rotationX);
 
@@ -132,6 +134,7 @@ namespace Blocks
                 rotAverageX = 0f;
 
                 rotationX += Input.GetAxis("Mouse X") * sensitivityX;
+                rotationX = ClampAngle(rotationX, minimumX, maximumX);
 
                 rotArrayX.Add(rotationX);
 
@@ -155,6 +158,7 @@ namespace Blocks
                 rotAverageY = 0f;
 
                 rotationY += Input.GetAxis("Mouse Y") * sensitivityY;
+                rotationY = ClampAngle(rotationY, minimumY, maximumY);
 
                 rotArrayY.Add(rotationY);
 

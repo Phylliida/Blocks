@@ -290,12 +290,12 @@ namespace Blocks
                         thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, new ThingDoingTarget(foundThing));
                         pathingTarget = foundThing;
                     }
-                    Debug.Log("found thing when looking");
+                    //Debug.Log("found thing when looking");
                 }
                 else
                 {
                     // did not find
-                    Debug.Log("did not find thing when looking");
+                    //Debug.Log("did not find thing when looking");
                     //Debug.Log("did not find thing in " + steps + " steps");
                 }
                 frameUpdatedLast = Time.frameCount;
@@ -324,11 +324,11 @@ namespace Blocks
                         {
                             if (curPath.nextNode == null)
                             {
-                                Debug.Log("curPath = " + curPath.pos + " myPos = " + myPos + " next null");
+                                //Debug.Log("curPath = " + curPath.pos + " myPos = " + myPos + " next null");
                             }
                             else
                             {
-                                Debug.Log("curPath = " + curPath.pos + " myPos = " + myPos + " nextPath = " + curPath.nextNode.pos);
+                                //Debug.Log("curPath = " + curPath.pos + " myPos = " + myPos + " nextPath = " + curPath.nextNode.pos);
                             }
                         }
                         if (iShouldJump)
@@ -338,7 +338,7 @@ namespace Blocks
                     }
                     else
                     {
-                        Debug.Log("falling far, cannot pathfind");
+                        //Debug.Log("falling far, cannot pathfind");
                     }
                 }
                 lastPathfind = PhysicsUtils.millis();
@@ -451,7 +451,7 @@ namespace Blocks
                 if (pathingTarget.BlockV != Example.FlowerWithNectar)
                 {
                     this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
-                    Debug.Log("rip someone already ate my nectar, my block is " + World.BlockToString(pathingTarget.BlockV));
+                    //Debug.Log("rip someone already ate my nectar, my block is " + World.BlockToString(pathingTarget.BlockV));
                     curPath = null;
                     pathingTarget = LVector3.Invalid;
                 }
@@ -467,7 +467,6 @@ namespace Blocks
                         world[pathingTarget] = (int)Example.Flower;
                         */
                         this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
-                        Debug.Log("found dat flower, eating it");
                         curPath = null;
                         pathingTarget = LVector3.Invalid;
                         body.jumping = false;
@@ -619,7 +618,7 @@ namespace Blocks
 
             if (updateAction.Do())
             {
-                Debug.Log("updating action");
+                //Debug.Log("updating action");
                 float totalWeight = 0.0f;
                 for (int i = 0; i < (int)TypeOfThingDoing.MaxValue; i++)
                 {

@@ -15,18 +15,18 @@ public class ExampleGeneration : GenerationClass
     public override void OnGenerationInit()
     {
         float minVal = 10.0f;
-        float maxVal = 40.0f;
+        float maxVal = 100.0f;
         //Simplex.Noise.Seed = 27;
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, usesY: false);
+        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 2.0f, usesY: true);
         lavaProp = new ChunkProperty("lavaElevation", -400.0f, 0.0f, usesY: true);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(lavaProp);
         world.AddChunkProperty(riverProp);
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(300000.0f, OnRiver, 1));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnCave, 2));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
+        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
+        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(300000.0f, OnRiver, 1));
+        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
+        //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
     }
 
     public void OnIronOre(long x, long y, long z, BlockData outBlock)
@@ -124,7 +124,7 @@ public class ExampleGeneration : GenerationClass
     }
 
 
-    public void OnCave(long x, long y, long z, BlockData outBlock)
+    public void OnCave(long x, long y, long z)
     {
         long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
         if (elevation < y)
@@ -318,7 +318,7 @@ public class ExampleGeneration : GenerationClass
                 {
                     if (Simplex.Noise.rand(x*2+1, y, z) < 0.9f)
                     {
-                        SetBlock(x, y + 1, z, Example.FlowerWithNectar);
+                        //SetBlock(x, y + 1, z, Example.FlowerWithNectar);
                     }
                     else
                     {

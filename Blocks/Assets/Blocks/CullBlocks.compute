@@ -6,23 +6,44 @@
 // with cs.SetTexture
 RWStructuredBuffer<int4> DataIn;
 
+StructuredBuffer<float4> cubeOffsets;
+
+StructuredBuffer<float4> uvOffsets;
 
 
 struct DrawingData {
-	int4 data1;
-	int4 data2;
+	int4 data;
+	//int4 data1;
+	//int4 data2;
+	float4 vertexPos[3];
+	float2 texOffset[3];
+	//float2 texOffset;
 };
 
 AppendStructuredBuffer<DrawingData> DrawingThings;
 
 
-#define CHUNK_SIZE 16
+#define CHUNK_SIZE 8
 
 int T3(uint3 id)
 {
 	return id.x + id.y * CHUNK_SIZE + id.z * CHUNK_SIZE*CHUNK_SIZE;
 }
 
+int ptCloudWidth;
+float ptCloudScale;
+float4 ptCloudOffset;
+float4x4 localToWorld;
+
+
+float2 GetUvOffset(float2 texOffset, int id)
+{
+	int numBlocks = 64;
+	texOffset.x /= 64;
+	texOffset.y /= 3.0f;
+	texOffset.y += (id - 1) / (float)numBlocks;
+	return texOffset;
+}
 
 [numthreads(8,8,8)]
 void CSMainNoTransparent(uint3 id : SV_DispatchThreadID)
@@ -32,19 +53,52 @@ void CSMainNoTransparent(uint3 id : SV_DispatchThreadID)
 	// 0 is air
 
 	int3 ids = id;
-	bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
+	//bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
 
-	bool hasAirNeighbors =
-		DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
-		DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
-		DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
-
-	if (blockVal > 0 && (edge || hasAirNeighbors))
+	//bool hasAirNeighbors =
+	//	DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
+	//	DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
+	//	DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
+	bool touchingTransparentOrAir = ((1 << 9) & (blockVals.z)) != 0;
+	//if (blockVal > 0 && (edge || hasAirNeighbors))
+	if ((blockVal > 0 && touchingTransparentOrAir))
 	{
-		DrawingData res;
-		res.data1 = int4(id.x, id.y, id.z, blockVal);
-		res.data2 = blockVals;
-		DrawingThings.Append(res);
+		int idI = abs(blockVals.w);
+		float4 basePos = float4(id.x, id.y, id.z, 0.0);
+		[unroll]
+		for (int idQ = 0; idQ < 36; idQ+=3)
+		{
+
+			
+			DrawingData res;
+			res.data = blockVals;
+			res.vertexPos[0] = mul(localToWorld, (cubeOffsets[idQ] + basePos)*ptCloudScale + ptCloudOffset + float4(0.0, 0.0, 0.0, 1.0));
+			res.vertexPos[1] = mul(localToWorld, (cubeOffsets[idQ + 1] + basePos)*ptCloudScale + ptCloudOffset + float4(0.0, 0.0, 0.0, 1.0));
+			res.vertexPos[2] = mul(localToWorld, (cubeOffsets[idQ + 2] + basePos)*ptCloudScale + ptCloudOffset + float4(0.0, 0.0, 0.0, 1.0));
+			res.texOffset[0] = GetUvOffset(uvOffsets[idQ].xy, blockVal);
+			res.texOffset[1] = GetUvOffset(uvOffsets[idQ+1].xy, blockVal);
+			res.texOffset[2] = GetUvOffset(uvOffsets[idQ+2].xy, blockVal);
+			DrawingThings.Append(res);
+			/*
+			DrawingData res;
+			//res.data1 = int4(id.x, id.y, id.z, blockVal);
+			//res.data2 = blockVals;
+			float3 offset = cubeOffsets[idQ].xyz;
+			float2 uvOffset = uvOffsets[idQ].xy;
+			float3 pos = (ids + offset) * ptCloudScale;
+			float4 curPos = float4(pos + ptCloudOffset.xyz, 1);
+			curPos = mul(localToWorld, curPos);
+			res.vertexPos = float4(ids.x, ids.y, ids.z, 0.0) +float4(offset.x, offset.y, offset.z, 1.0);
+			int numBlocks = 64;
+			int animFrame = blockVals.w;
+			uvOffset.x += animFrame;
+			uvOffset.x /= 64;
+			uvOffset.y /= 3.0f;
+			uvOffset.y += (idI - 1) / (float)numBlocks;
+			//res.texOffset = uvOffset;
+			DrawingThings.Append(res);
+			*/
+		}
 	}
 }
 
@@ -56,18 +110,39 @@ void CSMainOnlyTransparent(uint3 id : SV_DispatchThreadID)
 	// 0 is air
 
 	int3 ids = id;
-	bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
+	//bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
 
-	bool hasAirNeighbors =
-		DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
-		DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
-		DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
+	//bool hasAirNeighbors =
+	//	DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
+	//	DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
+	//	DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
 
-	if (blockVal < 0 && (edge || hasAirNeighbors))
+	bool touchingTransparentOrAir = ((1 << 9) & (blockVals.z)) != 0;
+	//if (blockVal > 0 && (edge || hasAirNeighbors))
+	if (blockVal < 0 && touchingTransparentOrAir)
 	{
-		DrawingData res;
-		res.data1 = int4(id.x, id.y, id.z, blockVal);
-		res.data2 = blockVals;
-		DrawingThings.Append(res);
+		int idI = abs(blockVals.w);
+		for (int idQ = 0; idQ < 36; idQ++)
+		{
+			/*
+			DrawingData res;
+			res.data1 = int4(id.x, id.y, id.z, blockVal);
+			res.data2 = blockVals;
+			float3 offset = cubeOffsets[idQ].xyz;
+			float2 uvOffset = uvOffsets[idQ].xy;
+			float3 pos = (ids + offset) * ptCloudScale;
+			float4 curPos = float4(pos + ptCloudOffset.xyz, 1);
+			curPos = mul(localToWorld, curPos);
+			res.vertexPos = curPos;
+			int numBlocks = 64;
+			int animFrame = blockVals.w;
+			uvOffset.x += animFrame;
+			uvOffset.x /= 64;
+			uvOffset.y /= 3.0f;
+			uvOffset.y += (idI - 1) / (float)numBlocks;
+			res.texOffset = uvOffset;
+			DrawingThings.Append(res);
+			*/
+		}
 	}
 }
