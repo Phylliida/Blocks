@@ -80,7 +80,7 @@ Shader "Blocks/SandDrawerSimple" {
 		v2f o;
 		o.pos = UnityObjectToClipPos(DrawingThings[i1].vertexPos[i2]);
 		o.uv = DrawingThings[i1].texOffset[i2];
-		//o.uv = DrawingThings[ida].texOffset;
+		//o.uv = DrawingThings[ida].texOffset;f
 		o.lightLevel = lightLevel;
 		return o;
 	}
