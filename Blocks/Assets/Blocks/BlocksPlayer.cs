@@ -58,12 +58,12 @@ namespace Blocks
             World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
             if (curChunkPos != chunkPos)
             {
-                int viewDist = 2;
+                int viewDist = 0;
 
 
                 for (int i = -viewDist; i <= viewDist; i++)
                 {
-                    for (int j = 2; j >= -2; j--)
+                    for (int j = viewDist; j >= -viewDist; j--)
                     {
                         for (int k = -viewDist; k <= viewDist; k++)
                         {

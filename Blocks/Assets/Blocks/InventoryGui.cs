@@ -446,7 +446,7 @@ namespace Blocks
 
         void ThrowStuff()
         {
-            for (int i = 0; i < playerUsing.blocksHoldingWithMouse.count; i++)
+            //for (int i = 0; i < playerUsing.blocksHoldingWithMouse.count; i++)
             {
                 BlockEntity worldEntity = World.mainWorld.CreateBlockEntity(playerUsing.blocksHoldingWithMouse, transform.position + transform.forward * 1.0f);
                 worldEntity.timeThrown = Time.time;

@@ -12,6 +12,7 @@ public class ExampleGeneration : GenerationClass
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
+    bool isFlatland = true;
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
@@ -24,11 +25,18 @@ public class ExampleGeneration : GenerationClass
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(lavaProp);
         world.AddChunkProperty(riverProp);
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
-        world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnLavaTube, 1));
-        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
-        world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
-        //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
+        if (isFlatland)
+        {
+
+        }
+        else
+        {
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnLavaTube, 1));
+            //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
+            world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
+            //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
+        }
     }
 
     public void OnLavaTube(long x, long y, long z, BlockData outBlock)
@@ -401,7 +409,18 @@ public class ExampleGeneration : GenerationClass
     int undergroundCaveHeight = 50;
     public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
     {
-        
+        if (isFlatland)
+        {
+            if (y < 0)
+            {
+                outBlock.block = Example.Stone;
+            }
+            else
+            {
+                outBlock.block = Example.Wildcard;
+            }
+            return;
+        }
         float elevation = outBlock.GetChunkProperty(elevationProp);
         //if (y <= 0)
         //{

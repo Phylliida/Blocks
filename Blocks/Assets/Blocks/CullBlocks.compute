@@ -2,6 +2,7 @@
 #pragma kernel CSMainNoTransparent
 #pragma kernel CSMainOnlyTransparent
 #pragma kernel CSMainGetNonCubePositions
+#pragma kernel AppendToTheArrPls
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -22,6 +23,8 @@ struct DrawingData {
 };
 
 AppendStructuredBuffer<DrawingData> DrawingThings;
+StructuredBuffer<DrawingData> ThingsToAddToDrawingThings;
+int howManyToAdd;
 AppendStructuredBuffer<int> NonCubePositions;
 
 
@@ -171,4 +174,11 @@ void CSMainGetNonCubePositions(uint3 id : SV_DispatchThreadID)
 	{
 		NonCubePositions.Append(blockPos);
 	}
+}
+
+[numthreads(1, 1, 1)]
+void AppendToTheArrPls(uint3 id : SV_DispatchThreadID)
+{
+	DrawingThings.Append(ThingsToAddToDrawingThings[id.x]);
+
 }

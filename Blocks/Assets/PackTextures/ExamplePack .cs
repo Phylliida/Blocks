@@ -11,7 +11,7 @@ namespace Example_pack {
         public static BlockValue Clay = new BlockValue(false, "Clay", "Example");
         public static BlockValue CraftingTable = new BlockValue(false, "CraftingTable", "Example");
         public static BlockValue Dirt = new BlockValue(false, "Dirt", "Example");
-        public static BlockValue Flower = new BlockValue(false, "Flower", "Example");
+        public static BlockValue Flower = new BlockValue(true, "Flower", "Example");
         public static BlockValue FlowerBlue = new BlockValue(false, "FlowerBlue", "Example");
         public static BlockValue FlowerWithNectar = new BlockValue(false, "FlowerWithNectar", "Example");
         public static BlockValue Grass = new BlockValue(false, "Grass", "Example");

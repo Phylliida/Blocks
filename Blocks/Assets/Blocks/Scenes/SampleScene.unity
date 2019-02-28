@@ -2037,7 +2037,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
+  m_BackGroundColor: {r: 0.23584908, g: 0.21916164, b: 0.21916164, a: 0}
   m_projectionMatrixMode: 1
   m_SensorSize: {x: 36, y: 24}
   m_LensShift: {x: 0, y: 0}
@@ -2479,6 +2479,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab09a5a7eecbbe546a447adad67753f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  chunkRenderDist: 10
   skyLightLevel: 1
   cullBlocksShader: {fileID: 7200000, guid: 535674d4758b900489a5b18ef9852efd, type: 3}
   creativeMode: 1
@@ -2504,6 +2505,8 @@ MonoBehaviour:
   otherObjectInventoryGui: {fileID: 1234048945}
   ticksPerSecond: 100000
   blocksPack: {fileID: 324794739}
+  players: []
+  playerPositions: []
   numChunksTotal: 0
 --- !u!4 &324794737
 Transform:
@@ -3879,6 +3882,11 @@ PrefabInstance:
     - target: {fileID: 4901048976273912, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
       propertyPath: m_RootOrder
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: blockStack.count
+      value: 64
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
@@ -8231,12 +8239,12 @@ PrefabInstance:
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockName
-      value: Sand
+      value: LargeRock
       objectReference: {fileID: 0}
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockStack.count
-      value: 0
+      value: 64
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
@@ -11782,12 +11790,12 @@ PrefabInstance:
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockName
-      value: Sand
+      value: Flower
       objectReference: {fileID: 0}
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockStack.count
-      value: 0
+      value: 64
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}

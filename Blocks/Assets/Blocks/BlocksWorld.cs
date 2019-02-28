@@ -18,6 +18,43 @@ namespace Blocks
         public float z;
         public float w;
     }
+
+
+    public class Util
+    {
+
+        public static Float4 MakeFloat4(float x, float y, float z, float w)
+        {
+            Float4 res = new Float4();
+            res.x = x;
+            res.y = y;
+            res.z = z;
+            res.w = w;
+            return res;
+        }
+
+
+
+        public static Float4 MakeFloat4(Vector3 pos)
+        {
+            Float4 res = new Float4();
+            res.x = pos.x;
+            res.y = pos.y;
+            res.z = pos.z;
+            res.w = 1.0f;
+            return res;
+        }
+
+
+        public static Float2 MakeFloat2(float x, float y)
+        {
+            Float2 res = new Float2();
+            res.x = x;
+            res.y = y;
+            return res;
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct Float3
     {
@@ -439,9 +476,11 @@ namespace Blocks
     {
         Chunk chunk;
         int chunkSize;
+        public bool hasCustomBlocks = false;
         public ComputeBuffer drawDataTransparent;
         public ComputeBuffer drawDataNotTransparent;
         public ComputeBuffer notCubePositions;
+        public ComputeBuffer helperSpooker;
         public int numRendereredCubesTransparent;
         public int numRendereredCubesNotTransparent;
 
@@ -472,6 +511,7 @@ namespace Blocks
                 drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
                 drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 64, sizeof(int) * 22, ComputeBufferType.Append);
                 notCubePositions = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int), ComputeBufferType.Append);
+                helperSpooker = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.GPUMemory);
             }
 
             if (chunk.cx % 2 == 0 && chunk.cy % 2 == 0 && chunk.cz % 2 == 0)
@@ -555,8 +595,10 @@ namespace Blocks
             }
 
 
+            bool combineSpookers = false;
+
             // if we are a parent and aren't combining but something has updated, check to see if we can now
-            if (isMetaNode && !combiningDrawData && maybeCombineDrawData && numAllowedToDoFullRender > 8)
+            if (isMetaNode && !combiningDrawData && maybeCombineDrawData && numAllowedToDoFullRender > 8 && combineSpookers)
             {
                 int ind = 0;
                 bool allRendered = true;
@@ -611,13 +653,15 @@ namespace Blocks
 
 
 
+            
+
 
             if (!isMetaNode)
             {
                 // parent is rendering for us, we don't need to render
                 if (parentChunkRenderer != null && parentChunkRenderer.combiningDrawData)
                 {
-
+                    Debug.Log("parent is combining??");
                 }
                 // parent isn't rendering for us, we are renderering right now because all of our siblings aren't finished yet
                 else
@@ -634,6 +678,7 @@ namespace Blocks
                 // we are drawing our combined data
                 if (combiningDrawData)
                 {
+                    Debug.Log("combining??");
                     // temporairly set our draw data to be the combined stuff instead
                     ComputeBuffer tmp = drawDataNotTransparent;
                     int tmp2 = numRendereredCubesNotTransparent;
@@ -702,6 +747,12 @@ namespace Blocks
                 {
                     notCubePositions.Dispose();
                     notCubePositions = null;
+                }
+
+                if (helperSpooker != null)
+                {
+                    helperSpooker.Dispose();
+                    helperSpooker = null;
                 }
             }
         }
@@ -2213,6 +2264,7 @@ namespace Blocks
                 newValidOne.valid = true;
 
             }
+            valid = true;
         }
 
 
@@ -3706,7 +3758,7 @@ namespace Blocks
         }
 
 
-        public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, RenderTriangle template)
+        public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, RenderTriangle template, Vector3 blockPos, Matrix4x4 localToWorldMat)
         {
             RenderTriangle[] blockTris;
             if (blockCustomTriangles.ContainsKey(blockId))
@@ -3717,7 +3769,6 @@ namespace Blocks
             {
                 blockTris = defaultCubeTris;
             }
-
             RenderTriangle[] res = new RenderTriangle[blockTris.Length];
             for (int i = 0; i < res.Length; i++)
             {
@@ -3726,12 +3777,15 @@ namespace Blocks
                 res[i].state2 = template.state2;
                 res[i].state3 = template.state3;
                 res[i].state4 = template.state4;
-                res[i].vertex1 = res[i].vertex1;
-                res[i].vertex2 = res[i].vertex2;
-                res[i].vertex3 = res[i].vertex3;
-                res[i].uv1 = res[i].uv1;
-                res[i].uv2 = res[i].uv2;
-                res[i].uv3 = res[i].uv3;
+                res[i].vertex1 = Util.MakeFloat4(localToWorldMat.MultiplyPoint(new Vector3(blockTris[i].vertex1.x + blockPos.x, blockTris[i].vertex1.y + blockPos.y, blockTris[i].vertex1.z + blockPos.z) * worldScale));
+                res[i].vertex2 = Util.MakeFloat4(localToWorldMat.MultiplyPoint(new Vector3(blockTris[i].vertex2.x + blockPos.x, blockTris[i].vertex2.y + blockPos.y, blockTris[i].vertex2.z + blockPos.z) * worldScale));
+                res[i].vertex3 = Util.MakeFloat4(localToWorldMat.MultiplyPoint(new Vector3(blockTris[i].vertex3.x + blockPos.x, blockTris[i].vertex3.y + blockPos.y, blockTris[i].vertex3.z + blockPos.z) * worldScale));
+         
+                float yOffset = (Mathf.Abs(template.state1) - 1) / 64.0f;
+                yOffset = 12.0f/64.0f;
+                res[i].uv1 = Util.MakeFloat2(res[i].uv1.x, res[i].uv1.y + yOffset);
+                res[i].uv2 = Util.MakeFloat2(res[i].uv2.x, res[i].uv2.y + yOffset);
+                res[i].uv3 = Util.MakeFloat2(res[i].uv3.x, res[i].uv3.y + yOffset);
             }
             return res;
         }
@@ -3896,6 +3950,8 @@ namespace Blocks
             this.customBlocks = blocksPack.customBlocks;
             this.blocksTouchingSky = new BlocksTouchingSky(this);
             stackableSize = new Dictionary<int, int>();
+
+
             foreach (KeyValuePair<BlockValue, BlockOrItem> customBlock in customBlocks)
             {
                 customBlock.Value.blockGetter = this;
@@ -3915,6 +3971,11 @@ namespace Blocks
             chunkProperties = new ChunkProperties();
             World.mainWorld = this;
             this.blocksWorld = blocksWorld;
+
+
+
+
+            this.blockCustomTriangles[Example.Flower] = BlockModel.FromJSONFilePath(@"C:\Users\yams\Desktop\yams\prog\unity\Blocks\repo\Blocks\BlockSpecs\Example\blocks\Flower\model.json").ToRenderTriangles();
 
             /*
 
@@ -5569,16 +5630,17 @@ namespace Blocks
                     int tmp = 100000;
                     if(chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
                     {
-                        chunk.chunkRenderer.FinishRenderSync(chunk);
+                        //chunk.chunkRenderer.FinishRenderSync(chunk);
                         //chunksNotFinished.Add(chunk);
                     }
 
                 }
                 else
                 {
-                    if(chunk.chunkRenderer.RenderAsync(false, chunk, ref numAllowedToDoFullRender))
+                    int tmp = 100000;
+                    if (chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
                     {
-                        chunk.chunkRenderer.FinishRenderSync(chunk);
+                        //chunk.chunkRenderer.FinishRenderSync(chunk);
                         //chunksNotFinished.Add(chunk);
                     }
                 }
@@ -5587,7 +5649,7 @@ namespace Blocks
                 {
                     for (int i = 0; i < chunksNotFinished.Count; i++)
                     {
-                        chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
+                        //chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
                     }
                     chunksNotFinished.Clear();
                 }
@@ -5599,7 +5661,7 @@ namespace Blocks
 
                     if (frameId > 100 && elapsedTime > maxMillis)
                     {
-                        numAllowedToDoFullRender = 0;
+                        numAllowedToDoFullRender = 1000000;
                     }
                 }
             }
@@ -6479,20 +6541,24 @@ namespace Blocks
         
         Float4 MakeFloat4(float x, float y, float z, float w)
         {
-            Float4 res = new Float4();
-            res.x = x;
-            res.y = y;
-            res.z = z;
-            res.w = w;
+            Float4 res = new Float4
+            {
+                x = x,
+                y = y,
+                z = z,
+                w = w
+            };
             return res;
         }
 
 
         Float2 MakeFloat2(float x, float y)
         {
-            Float2 res = new Float2();
-            res.x = x;
-            res.y = y;
+            Float2 res = new Float2
+            {
+                x = x,
+                y = y
+            };
             return res;
         }
 
@@ -6643,7 +6709,8 @@ namespace Blocks
                 texOffsetsGood.Add(resTexOffset);
                 vertOffsetsGood.Add(resOffset);
 
-
+                resOffset = resOffset + new Vector3(0.5f, 0.5f, 0.5f);
+                resTexOffset = new Vector2(resTexOffset.x, resTexOffset.y * 3.0f / (float)World.numBlocks);
                 if (i % 3 == 0)
                 {
                     curCubeTri.vertex1 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
@@ -7145,6 +7212,7 @@ namespace Blocks
 
             chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
 
+            curChunkBlockDataI = 0;
             ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
             curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
             curChunkBlockData.SetData(chunk.chunkData.GetRawData());
@@ -7197,10 +7265,10 @@ namespace Blocks
         {
 
             int[] args = new int[] { 0 };
-
-            /*
             Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
             renderTransform.transform.position += offset;
+
+            /*
 
             chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
 
@@ -7230,35 +7298,74 @@ namespace Blocks
             int numNonCubes = args[0];
 
 
-            int[] nonCubePositions = new int[numNonCubes];
 
-            chunk.chunkRenderer.notCubePositions.GetData(nonCubePositions, 0, 0, nonCubePositions.Length);
-
-            List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
-
-            int[] rawData = chunk.chunkData.GetRawData();
-            RenderTriangle template = new RenderTriangle();
-            for (int i = 0; i < nonCubePositions.Length; i++)
+            if (numNonCubes > 0)
             {
-                int pos = nonCubePositions[i] * 4;
-                int blockId = rawData[pos];
-                template.state1 = rawData[pos];
-                template.state2 = rawData[pos + 1];
-                template.state3 = rawData[pos + 2];
-                template.state4 = rawData[pos + 3];
-                bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, template));
+                //Debug.Log("drawing custom model " + chunk.cx + " " + chunk.cy + " " + chunk.cz);
+                int[] nonCubePositions = new int[numNonCubes];
+                chunk.chunkRenderer.hasCustomBlocks = true;
+                chunk.chunkRenderer.notCubePositions.GetData(nonCubePositions);
+
+                List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
+
+                //Debug.Log("got " + numNonCubes + " non cubes for a total of " + bonusTriangles.Count + " bonus triangles");
+                /*
+                RenderTriangle[] prevTriangles = new RenderTriangle[numNotTransparent];
+                for (int i = 0; i < prevTriangles.Length; i++)
+                {
+                    prevTriangles[i] = new RenderTriangle();
+                    prevTriangles[i].vertex1 = new Float4();
+                    prevTriangles[i].vertex2 = new Float4();
+                    prevTriangles[i].vertex3 = new Float4();
+                    prevTriangles[i].uv1 = new Float2();
+                    prevTriangles[i].uv2 = new Float2();
+                    prevTriangles[i].uv3 = new Float2();
+                }
+                */
+
+
+                //chunk.chunkRenderer.drawDataNotTransparent.GetStructData(prevTriangles);
+                //bonusTriangles.AddRange(prevTriangles);
+
+
+                
+                int[] rawData = chunk.chunkData.GetRawData();
+                RenderTriangle template = new RenderTriangle();
+                for (int i = 0; i < nonCubePositions.Length; i++)
+                {
+                    int pos = nonCubePositions[i] * 4;
+                    int blockId = rawData[pos];
+                    template.state1 = rawData[pos];
+                    template.state2 = rawData[pos + 1];
+                    template.state3 = rawData[pos + 2];
+                    template.state4 = rawData[pos + 3];
+
+                    int lx, ly, lz;
+                    chunk.chunkData.to3D(nonCubePositions[i], out lx, out ly, out lz);
+                    Vector3 blockPos = new Vector3(lx, ly, lz);
+                    bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, template, blockPos, renderTransform.localToWorldMatrix));
+                }
+
+                
+
+                chunk.chunkRenderer.helperSpooker.SetStructData(bonusTriangles.ToArray());
+
+                cullBlocksShader.SetBuffer(3, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+                cullBlocksShader.SetBuffer(3, "ThingsToAddToDrawingThings", chunk.chunkRenderer.helperSpooker);
+
+                cullBlocksShader.Dispatch(3, bonusTriangles.Count, 1, 1);
+
+                RenderTriangle[] resTriangles = bonusTriangles.ToArray();
+                //chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue((uint)resTriangles.Length);
+                //chunk.chunkRenderer.drawDataNotTransparent.SetStructData(resTriangles);
+                numNotTransparent += bonusTriangles.Count;
+
             }
+            else
+            {
 
-
-            RenderTriangle[] prevTriangles = new RenderTriangle[numNotTransparent];
-            chunk.chunkRenderer.drawDataNotTransparent.GetStructData(prevTriangles);
-            bonusTriangles.AddRange(prevTriangles);
-
-            RenderTriangle[] resTriangles = bonusTriangles.ToArray();
-            chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue((uint)resTriangles.Length);
-            chunk.chunkRenderer.drawDataNotTransparent.SetStructData(resTriangles);
-            numNotTransparent = resTriangles.Length;
-
+                chunk.chunkRenderer.hasCustomBlocks = false;
+            }
 
 
             //float[] resVals = new float[numNotTransparent * (4 + 4 + 4 + 2)];
@@ -7278,7 +7385,7 @@ namespace Blocks
             //// new: I added this tmp and commented out the above
             numTransparent = 0;
 
-            //renderTransform.transform.position -= offset;
+            renderTransform.transform.position -= offset;
         }
 
         public Queue<Tuple<LVector3, float>> blocksBreaking = new Queue<Tuple<LVector3, float>>();
@@ -7554,6 +7661,13 @@ namespace Blocks
                     triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                     triMaterial.SetPass(0);
                     Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent*3);
+
+
+                    if (chunk.chunkRenderer.hasCustomBlocks)
+                    {
+                        //Debug.Log("Drawing with cutom blcoks " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " with " + chunk.chunkRenderer.numRendereredCubesNotTransparent + " triangles at position " + renderTransform.transform.position);
+                    }
+
                     // Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent * (36));
                 }
             }
@@ -7694,6 +7808,38 @@ namespace ExtensionMethods
             }
         }
 
+        // from https://stackoverflow.com/a/25311889/2924421
+        private static byte[] ToByteArray<T>(T[] source) where T : struct
+        {
+            GCHandle handle = GCHandle.Alloc(source, GCHandleType.Pinned);
+            try
+            {
+                System.IntPtr pointer = handle.AddrOfPinnedObject();
+                byte[] destination = new byte[source.Length * Marshal.SizeOf(typeof(T))];
+                Marshal.Copy(pointer, destination, 0, destination.Length);
+                return destination;
+            }
+            finally
+            {
+                if (handle.IsAllocated)
+                    handle.Free();
+            }
+        }
+
+        private static void CopyFromByteArray<T>(byte[] source, T[] destination) 
+        {
+            GCHandle handle = GCHandle.Alloc(destination, GCHandleType.Pinned);
+            try
+            {
+                System.IntPtr pointer = handle.AddrOfPinnedObject();
+                Marshal.Copy(source, 0, pointer, source.Length);
+            }
+            finally
+            {
+                if (handle.IsAllocated)
+                    handle.Free();
+            }
+        }
 
         private static unsafe void BlockCopy(Blocks.RenderTriangle[] src, int srcOffset, byte[] dst, int dstOffset, int count)
         {
@@ -7712,9 +7858,14 @@ namespace ExtensionMethods
             {
                 return;
             }
+
             byte[] rawData = new byte[System.Runtime.InteropServices.Marshal.SizeOf(typeof(Blocks.RenderTriangle)) * outData.Length];
-            buffer.GetData(rawData);
-            BlockCopy(rawData, 0, outData, 0, rawData.Length);
+            buffer.GetData(outData);
+
+
+            //CopyFromByteArray(rawData, outData);
+
+            //BlockCopy(rawData, 0, outData, 0, rawData.Length);
         }
 
         public static void SetStructData(this ComputeBuffer buffer, Blocks.RenderTriangle[] inData)
@@ -7723,9 +7874,13 @@ namespace ExtensionMethods
             {
                 return;
             }
-            byte[] rawData = new byte[System.Runtime.InteropServices.Marshal.SizeOf(typeof(Blocks.RenderTriangle)) * inData.Length];
-            BlockCopy(inData, 0, rawData, 0, rawData.Length);
-            buffer.SetData(rawData);
+
+            //byte[] rawData = ToByteArray(inData);
+            buffer.SetData(inData);
+
+            //byte[] rawData = new byte[System.Runtime.InteropServices.Marshal.SizeOf(typeof(Blocks.RenderTriangle)) * inData.Length];
+            //BlockCopy(inData, 0, rawData, 0, rawData.Length);
+            //buffer.SetData(rawData);
         }
     }
 }
