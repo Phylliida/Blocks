@@ -58,8 +58,7 @@ namespace Blocks
             World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
             if (curChunkPos != chunkPos)
             {
-                chunkPos = curChunkPos;
-                int viewDist = 3;
+                int viewDist = 2;
 
 
                 for (int i = -viewDist; i <= viewDist; i++)
@@ -68,7 +67,21 @@ namespace Blocks
                     {
                         for (int k = -viewDist; k <= viewDist; k++)
                         {
-                            World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
+                            Chunk prev = World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
+                            prev.mustRenderMe = false;
+                        }
+                    }
+                }
+
+                chunkPos = curChunkPos;
+                for (int i = -viewDist; i <= viewDist; i++)
+                {
+                    for (int j = 2; j >= -2; j--)
+                    {
+                        for (int k = -viewDist; k <= viewDist; k++)
+                        {
+                            Chunk blah = World.mainWorld.GetOrGenerateChunk(chunkPos.x + i, chunkPos.y + j, chunkPos.z + k);
+                            blah.mustRenderMe = true;
                         }
                     }
                 }

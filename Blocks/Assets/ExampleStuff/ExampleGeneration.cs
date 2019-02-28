@@ -12,32 +12,134 @@ public class ExampleGeneration : GenerationClass
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
+    // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
         float minVal = 10.0f;
         float maxVal = 100.0f;
         //Simplex.Noise.Seed = 27;
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 2.0f, usesY: true);
+        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 10.0f, usesY: true);
         lavaProp = new ChunkProperty("lavaElevation", -400.0f, 0.0f, usesY: true);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(lavaProp);
         world.AddChunkProperty(riverProp);
-        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
-        //world.AddChunkPropertyEvent(new ChunkPropertyEvent(300000.0f, OnRiver, 1));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
+        world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnLavaTube, 1));
         //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
-        //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
+        world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
+        //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
+    }
+
+    public void OnLavaTube(long x, long y, long z, BlockData outBlock)
+    {
+        if (bedrockMax >= y && bedrockMin <= y)
+        {
+            for (int i = bedrockMax; i >= bedrockMin - undergroundCaveHeight; i--)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    for (int k = 0; k < 2; k++)
+                    {
+                        SetBlock(x + j, i, z + k, Example.Lava);
+                    }
+                }
+            }
+        }
+    }
+
+    public void OnDeepCave(long x, long y, long z)
+    {
+        long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
+        if (elevation < y)
+        {
+            return;
+        }
+        long curX = x;
+        long curY = y;
+        long curZ = z;
+
+        int offsetX = 0;
+        int offsetY = 0;
+        int offsetZ = 0;
+        int[] xOffsets = new int[] { 1, -1, 0, 0, 0, 0 };
+        int[] yOffsets = new int[] { 1, -1, 0, 0, 1, -1 };
+        int[] zOffsets = new int[] { 0, 0, 1, -1, 0, 0 };
+        UnityEngine.Vector3 velocity = new UnityEngine.Vector3(0, 0, 0);
+
+        for (int i = 0; i < 30; i++)
+        {
+            // from negative one to one instead of 0 to 1
+            float valX = Simplex.Noise.rand(curX, curY, curZ) * 2 - 1;
+            float valY = Simplex.Noise.rand(curX + 3, curY, curZ) * 2 - 1;
+            float valZ = Simplex.Noise.rand(curX, curY + 3, curZ + 2) * 2 - 1;
+
+            float scaleChange = 0.4f;
+            velocity += new UnityEngine.Vector3(valX * scaleChange, valY * scaleChange, valZ * scaleChange);
+            velocity = velocity.normalized;
+            curX = (long)(curX + velocity.x * 4.0f);
+            curY = (long)(curY + velocity.y * 4.0f);
+            curZ = (long)(curZ + velocity.z * 4.0f);
+
+            //curY = (long)Math.Round(GetChunkProperty(curX, 0, curZ, elevationProp));
+            float caveWidth = 20.0f;
+            int caveWidthI = (int)Math.Floor(caveWidth);
+
+            for (int j = -caveWidthI; j <= caveWidthI; j++)
+            {
+                for (int l = -caveWidthI; l <= caveWidthI; l++)
+                {
+                    for (int k = -caveWidthI; k <= caveWidthI; k++)
+                    {
+                        if (Math.Sqrt(j * j + k * k + l * l) <= caveWidth)
+                        {
+                            if (l < -caveWidthI+10)
+                            {
+                                SetBlock(curX + j, curY + k, curZ + l, Example.Water);
+                            }
+                            else
+                            {
+                                if (Simplex.Noise.rand(curX+j, curY+k, curZ+l) < 0.01f)
+                                {
+                                    SetBlock(curX + j, curY + k, curZ + l, Example.Sand);
+                                }
+                                else
+                                {
+                                    SetBlock(curX + j, curY + k, curZ + l, Example.Air);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public void OnIronOre(long x, long y, long z, BlockData outBlock)
     {
-
-        float lavaCaveDepth = outBlock.GetChunkProperty(lavaProp) - 200.0f;
-        if (y < lavaCaveDepth)
+        BlockValue oreBlock = Example.IronOre;
+        long distFromSurface;
+        if (OnOrBelowSurface(x, y, z, out distFromSurface))
         {
-            return;
+            if (distFromSurface < 2)
+            {
+                return;
+            }
         }
-        //float randVal = Simplex.Noise.rand(x, y, z);
+        float randVal = Simplex.Noise.rand(x, y, z);
+        Random randomGen = new Random((int)(randVal * 10000.0f));
+        if (y < bedrockMin)
+        {
+            oreBlock = Example.Sand;
+        }
+        else if (distFromSurface < 10 && randomGen.NextDouble() < 0.2)
+        {
+            oreBlock = Example.IronOre;
+        }
+        else
+        {
+
+        }
 
         int numThings = Simplex.Noise.randInt(5, 9, x, y, z);
 
@@ -51,14 +153,13 @@ public class ExampleGeneration : GenerationClass
 
         for (int i = 0; i < numThings; i++)
         {
-            long distFromSurface;
             if (OnOrBelowSurface(curX, curY, curZ, out distFromSurface))
             {
                 if (distFromSurface < 2)
                 {
                     return;
                 }
-                SetBlock(curX, curY, curZ, Example.IronOre);
+                SetBlock(curX, curY, curZ, oreBlock);
             }
             int val = Simplex.Noise.randInt(0, xOffsets.Length, curX, curY, curZ);
             curX += xOffsets[val];
@@ -160,6 +261,11 @@ public class ExampleGeneration : GenerationClass
             //curY = (long)Math.Round(GetChunkProperty(curX, 0, curZ, elevationProp));
             float caveWidth = 4.0f;
             int caveWidthI = (int)Math.Floor(caveWidth);
+
+            if (curY < bedrockMax+caveWidth)
+            {
+                curY = bedrockMax + (long)caveWidth;
+            }
 
             for (int j = -caveWidthI; j <= caveWidthI; j++)
             {
@@ -289,6 +395,10 @@ public class ExampleGeneration : GenerationClass
         }
     }
 
+    int bedrockMin = -80;
+    int bedrockMax = -80 + 20;
+
+    int undergroundCaveHeight = 50;
     public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
     {
         
@@ -341,7 +451,7 @@ public class ExampleGeneration : GenerationClass
             else
             {
                 float lavaCaveDepth = outBlock.GetChunkProperty(lavaProp)-200.0f;
-                if (y > lavaCaveDepth)
+                if (y > bedrockMax)
                 {
                     float rVal = Simplex.Noise.rand(x, y, z);
                     if (rVal < 0.9 && distFromSurface == 5)
@@ -377,9 +487,19 @@ public class ExampleGeneration : GenerationClass
                 }
                 else
                 {
-                    float ceilHeight = 40.0f;
-                    float lavaFloorDepth = lavaCaveDepth - ceilHeight;
-                    if (y < lavaFloorDepth)
+                    if (y >= bedrockMin && y <= bedrockMax)
+                    {
+                        long distFromEdge = System.Math.Min(System.Math.Abs(bedrockMin - y), System.Math.Abs(bedrockMax - y));
+                        if (distFromEdge < 3 && Simplex.Noise.rand(x, y, z) < 0.2)
+                        {
+                            outBlock.block = Example.Air;
+                        }
+                        else
+                        {
+                            outBlock.block = Example.Bedrock;
+                        }
+                    }
+                    else if (y < bedrockMin - undergroundCaveHeight)
                     {
                         outBlock.block = Example.Lava;
                     }

@@ -133,7 +133,7 @@ namespace Blocks
                 }
             }
 
-            else if (playerUsing.blocksHoldingWithMouse != null && displaying)
+            else if (playerUsing.blocksHoldingWithMouse != null && playerUsing.holdingWithMouseEntity != null && displaying)
             {
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;
@@ -273,7 +273,7 @@ namespace Blocks
                 }
             }
 
-            if (playerUsing.blocksHoldingWithMouse != null && displaying)
+            if (playerUsing.blocksHoldingWithMouse != null && displaying && playerUsing.holdingWithMouseEntity != null)
             {
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;

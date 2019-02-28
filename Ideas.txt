@@ -697,3 +697,55 @@ giant aphids: same branch of tree of life of player species: size of rabbit, dri
  
  
 
+ 
+ 
+ 
+Something below the world:
+    - maybe there would be a bedrock layer that is unbreakable but very difficult to break through, but there are some natural holes in it
+    - one of those holes are volcanoes: full of lava
+        If you swim down through the lava tube with magic or remove it carefully or something that lets you survive:
+            bottom is eventually just lava going down forever
+            inbetween bedrock and lava down forever:
+                
+    nothing sinks in lava: lava is dense enough that things will float in it (including you), it will take lots of energy to swim through thick gloopy lava
+    islands of metal and crystal stuff that floats on the lava
+    giant stalagmaties that hang from the bedrock
+    
+    nothing down there is edible, because they are all metalic or made of crystals too
+        tend to have a ton of hit points and armor (not all hostile but might be some hostile ones) because made out of hefty materials
+        plantlike things that can only grow in metal, if they are exposed to water they will rust, if they rust to much they will die
+            you can get seeds for them and grow them on surface
+            fruit that you can smelt down into ingots
+        some metals and crystals that would only occur down there
+        one specific idea:
+            intelligent locals similar to zombie pigmen but more similar to villagers
+                default neutral but can become hostile
+                they have their own villages, something that looks vaugely otter like and can swim in the lava
+                they are only scared of things that can swim in the lava so they are friendly to/maybe curious about player species
+                you can drop items to them and they'll pick them up if it is something they'll want to trade for
+                    - since you can't speak to them you have to:
+                    - either if it is something they haven't seen they'll pick it up once, look at it and decide if they want it, then throw it back if they don't want it
+                    - if they like it they'll trade with you
+                    - make friends by giving them things that they like, then sometimes when you give them things they'll go and get an item and drop it for you
+                    - things they like will be mostly things from the world above
+                        things that are easy to get up above you might be able to trade with to get things that are difficult to get up above but easy to get below (such as tools to get out of tough materials, other things, etc.)
+                    - metalic sounding squeaky otter noises
+                    - villages and structures make buildings out of the logs and "trees" that grow down there
+                        - relatively simple villages, occasional slightly larger but mostly fairly simple
+                    - baby ones scamper around sometimes
+            shark like things might swim in the lava
+    glowy crystals
+    orcha like things: killer wales
+    - metal pill bug: crawls up on the shore to hide from spookers or can go in the lava
+  
+    things that look like ferns but made of crystals
+    
+    
+    lava lillypad like things
+        you can farm them but they only plant and spread in lava
+        
+        
+        
+        
+        
+    hydra, heads shoot lava, kill is to cut off all heads

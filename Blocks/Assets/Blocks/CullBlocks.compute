@@ -1,6 +1,7 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMainNoTransparent
 #pragma kernel CSMainOnlyTransparent
+#pragma kernel CSMainGetNonCubePositions
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -21,9 +22,10 @@ struct DrawingData {
 };
 
 AppendStructuredBuffer<DrawingData> DrawingThings;
+AppendStructuredBuffer<int> NonCubePositions;
 
 
-#define CHUNK_SIZE 8
+#define CHUNK_SIZE 16
 
 int T3(uint3 id)
 {
@@ -41,7 +43,7 @@ float2 GetUvOffset(float2 texOffset, int id)
 	int numBlocks = 64;
 	texOffset.x /= 64;
 	texOffset.y /= 3.0f;
-	texOffset.y += (id - 1) / (float)numBlocks;
+	texOffset.y += (abs(id) - 1) / (float)numBlocks;
 	return texOffset;
 }
 
@@ -144,5 +146,29 @@ void CSMainOnlyTransparent(uint3 id : SV_DispatchThreadID)
 			DrawingThings.Append(res);
 			*/
 		}
+	}
+}
+
+[numthreads(8, 8, 8)]
+void CSMainGetNonCubePositions(uint3 id : SV_DispatchThreadID)
+{
+	int blockPos = T3(id);
+	int4 blockVals = DataIn[blockPos];
+	int blockVal = blockVals.x;
+	// 0 is air
+
+	int3 ids = id;
+	//bool edge = ids.x == 0 || ids.y == 0 || ids.z == 0 || ids.x == CHUNK_SIZE - 1 || ids.y == CHUNK_SIZE - 1 || ids.z == CHUNK_SIZE - 1;
+
+	//bool hasAirNeighbors =
+	//	DataIn[T3(ids + int3(0, 0, 1))] <= 0 || DataIn[T3(ids + int3(0, 0, -1))] <= 0 ||
+	//	DataIn[T3(ids + int3(0, 1, 0))] <= 0 || DataIn[T3(ids + int3(0, -1, 0))] <= 0 ||
+	//	DataIn[T3(ids + int3(1, 0, 0))] <= 0 || DataIn[T3(ids + int3(-1, 0, 0))] <= 0;
+
+	bool touchingTransparentOrAir = ((1 << 9) & (blockVals.z)) != 0;
+	//if (blockVal > 0 && (edge || hasAirNeighbors))
+	if (blockVal < 0 && touchingTransparentOrAir)
+	{
+		NonCubePositions.Append(blockPos);
 	}
 }

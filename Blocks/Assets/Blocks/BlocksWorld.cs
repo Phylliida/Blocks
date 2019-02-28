@@ -5,9 +5,49 @@ using System.IO;
 using UnityEngine;
 using System.Runtime.CompilerServices;
 using System.Threading;
-
+using System.Runtime.InteropServices;
+using ExtensionMethods;
 namespace Blocks
 {
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Float4
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float w;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Float3
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Float2
+    {
+        public float x;
+        public float y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RenderTriangle
+    {
+        public int state1;
+        public int state2;
+        public int state3;
+        public int state4;
+        public Float4 vertex1;
+        public Float4 vertex2;
+        public Float4 vertex3;
+        public Float2 uv1;
+        public Float2 uv2;
+        public Float2 uv3;
+    }
+
     public class QuickGrowingArray<T> where T : class
     {
         T[] arr;
@@ -401,6 +441,7 @@ namespace Blocks
         int chunkSize;
         public ComputeBuffer drawDataTransparent;
         public ComputeBuffer drawDataNotTransparent;
+        public ComputeBuffer notCubePositions;
         public int numRendereredCubesTransparent;
         public int numRendereredCubesNotTransparent;
 
@@ -420,16 +461,32 @@ namespace Blocks
         {
             this.chunk = chunk;
             this.chunkSize = chunkSize;
+            InitStuff();
+        }
 
-            drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize*12, sizeof(int) * 22, ComputeBufferType.Append);
-            drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize*12, sizeof(int) * 22, ComputeBufferType.Append);
-
+        void InitStuff()
+        {
+            // we can only init compute buffers on the main thread
+            if (Thread.CurrentThread != World.mainWorld.helperThread)
+            {
+                drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
+                drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 64, sizeof(int) * 22, ComputeBufferType.Append);
+                notCubePositions = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int), ComputeBufferType.Append);
+            }
 
             if (chunk.cx % 2 == 0 && chunk.cy % 2 == 0 && chunk.cz % 2 == 0)
             {
                 isMetaNode = true;
-                combinedDrawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12*8, sizeof(int) * 22, ComputeBufferType.Append);
-                otherChunks = new ChunkRenderer[8];
+                if (Thread.CurrentThread != World.mainWorld.helperThread)
+                {
+                    combinedDrawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12 * 8, sizeof(int) * 22, ComputeBufferType.Append);
+                }
+
+                if (otherChunks == null)
+                {
+                    otherChunks = new ChunkRenderer[8];
+                }
+
                 otherChunks[0] = this;
                 parentChunkRenderer = this;
             }
@@ -444,13 +501,36 @@ namespace Blocks
 
         }
 
-        public void Render(bool onlyTransparent, Chunk chunk, ref int numAllowedToDoFullRender)
+
+        public void FinishRenderSync(Chunk chunk)
         {
+            if (needToFinishSync)
+            {
+                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRenderedCubesCombinedNotTransparent, out numRendereredCubesTransparent);
+                needToFinishSync = false;
+                chunk.world.blocksWorld.RenderChunk(chunk, false);
+            }
+        }
+
+        public bool needToFinishSync = false;
+        bool needToFinishSyncAsParent = false;
+        public bool RenderAsync(bool onlyTransparent, Chunk chunk, ref int numAllowedToDoFullRender)
+        {
+            // this object was made on a seperate thread, init stuff
+            if (drawDataTransparent == null)
+            {
+                InitStuff();
+            }
             if (chunk.chunkData.needToBeUpdated && numAllowedToDoFullRender > 0)
             {
                 numAllowedToDoFullRender -= 1;
                 chunk.chunkData.needToBeUpdated = false;
-                chunk.world.blocksWorld.MakeChunkTris(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent);
+                chunk.world.blocksWorld.MakeChunkTrisAsync(chunk);
+                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent);
+
+                //numRendereredCubesNotTransparent = 0;
+                //numRendereredCubesTransparent = 0;
+                //needToFinishSync = true;
                 // if we don't have a parent, try to find it
                 if (parentChunkRenderer == null)
                 {
@@ -542,7 +622,10 @@ namespace Blocks
                 // parent isn't rendering for us, we are renderering right now because all of our siblings aren't finished yet
                 else
                 {
-                    chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                    if (!needToFinishSync)
+                    {
+                        chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                    }
                 }
             }
             // we are a parent
@@ -565,9 +648,14 @@ namespace Blocks
                 // just render us
                 else
                 {
-                    chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                    if (!needToFinishSync)
+                    {
+                        chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                    }
                 }
             }
+
+            return needToFinishSync;
         }
 
         public void CombineAndRenderChildrenDrawData()
@@ -608,6 +696,12 @@ namespace Blocks
                 {
                     combinedDrawDataNotTransparent.Dispose();
                     combinedDrawDataNotTransparent = null;
+                }
+
+                if (notCubePositions != null)
+                {
+                    notCubePositions.Dispose();
+                    notCubePositions = null;
                 }
             }
         }
@@ -1753,6 +1847,7 @@ namespace Blocks
 
     public class Chunk
     {
+        public bool mustRenderMe = false;
         public bool valid = true;
         public long cx, cy, cz;
 
@@ -1851,7 +1946,7 @@ namespace Blocks
 
             generating = true;
 
-            if (createStuff || true)
+            if (createStuff)
             {
                 CreateStuff();
             }
@@ -3595,6 +3690,52 @@ namespace Blocks
             chunkProperties.AddChunkPropertyEvent(chunkPropertyEvent);
         }
 
+        Dictionary<BlockValue, RenderTriangle[]> blockCustomTriangles = new Dictionary<BlockValue, RenderTriangle[]>();
+
+
+        public RenderTriangle[] defaultCubeTris
+        {
+            get
+            {
+                return blocksWorld.cubeTris;
+            }
+            set
+            {
+                blocksWorld.cubeTris = value;
+            }
+        }
+
+
+        public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, RenderTriangle template)
+        {
+            RenderTriangle[] blockTris;
+            if (blockCustomTriangles.ContainsKey(blockId))
+            {
+                blockTris = blockCustomTriangles[blockId];
+            }
+            else
+            {
+                blockTris = defaultCubeTris;
+            }
+
+            RenderTriangle[] res = new RenderTriangle[blockTris.Length];
+            for (int i = 0; i < res.Length; i++)
+            {
+                res[i] = new RenderTriangle();
+                res[i].state1 = template.state1;
+                res[i].state2 = template.state2;
+                res[i].state3 = template.state3;
+                res[i].state4 = template.state4;
+                res[i].vertex1 = res[i].vertex1;
+                res[i].vertex2 = res[i].vertex2;
+                res[i].vertex3 = res[i].vertex3;
+                res[i].uv1 = res[i].uv1;
+                res[i].uv2 = res[i].uv2;
+                res[i].uv3 = res[i].uv3;
+            }
+            return res;
+        }
+
         public static string BlockToString(int block)
         {
             return BlockToString((BlockValue)block);
@@ -4911,15 +5052,22 @@ namespace Blocks
         {
             get
             {
-                Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
+                Chunk chunk = GetChunk(cx, cy, cz);
+                if (chunk == null)
+                {
+                    return 0;
+                }
                 return chunk[x, y, z];
             }
 
             set
             {
                 blockModifyState += 1;
-                Chunk chunk = GetOrGenerateChunk(cx, cy, cz);
-                chunk[x, y, z] = value;
+                Chunk chunk = GetChunk(cx, cy, cz);
+                if (chunk != null)
+                {
+                    chunk[x, y, z] = value;
+                }
             }
         }
 
@@ -5348,19 +5496,130 @@ namespace Blocks
             }
         }
 
+        public List<Tuple<Chunk, long>> GetChunksCloserThanRenderDist()
+        {
+            List<Chunk> allChunksHere = new List<Chunk>();
+            Vector3[] blocksPlayerPositions = blocksWorld.playerPositions;
+            LVector3[] blocksPlayerLPositionsDivChunkSize = new LVector3[blocksPlayerPositions.Length];
+            for (int i = 0; i < blocksPlayerPositions.Length; i++)
+            {
+                LVector3 tmp = LVector3.FromUnityVector3(blocksPlayerPositions[i]);
+                blocksPlayerLPositionsDivChunkSize[i] = new LVector3(divWithFloorForChunkSize(tmp.x), divWithFloorForChunkSize(tmp.y), divWithFloorForChunkSize(tmp.z));
+            }
+
+
+            List<Tuple<Chunk, long>> allChunksWithDists = new List<Tuple<Chunk, long>>();
+
+            for (int i = 0; i < allChunks.Count; i++)
+            {
+                long minPlayerDist = long.MaxValue;
+                foreach (LVector3 playerPosDivChunkSize in blocksPlayerLPositionsDivChunkSize)
+                {
+                    long distInChunks =
+                        System.Math.Abs(allChunks[i].cx - playerPosDivChunkSize.x) +
+                        System.Math.Abs(allChunks[i].cy - playerPosDivChunkSize.y) +
+                        System.Math.Abs(allChunks[i].cz - playerPosDivChunkSize.z);
+
+                    minPlayerDist = System.Math.Min(distInChunks, minPlayerDist);
+
+                }
+
+                if (allChunks[i].mustRenderMe)
+                {
+                    allChunksWithDists.Add(new Tuple<Chunk, long>(allChunks[i], minPlayerDist));
+                }
+                // don't render things further than render dist
+                else if (minPlayerDist <= blocksWorld.chunkRenderDist)
+                {
+                    allChunksWithDists.Add(new Tuple<Chunk, long>(allChunks[i], minPlayerDist));
+                }
+            }
+
+            // Sort by closest to player(s), so those are rendered first
+            allChunksWithDists.Sort((x, y) => { return x.b.CompareTo(y.b); });
+
+            return allChunksWithDists;
+        }
+
         public void Render()
         {
-            int numAllowedToDoFullRender = 8;
-            // render non-transparent
-            foreach (Chunk chunk in allChunks)
+            long maxMillis = 1000 / 60;
+            long pleaseMillis = 1000 / 60;
+            long elapsedTime = 0;
+            int numAllowedToDoFullRender = 100000;
+            if (frameId < 100)
             {
-                chunk.chunkRenderer.Render(false, chunk, ref numAllowedToDoFullRender);
+                numAllowedToDoFullRender = 10000;
             }
+            // render non-transparent
+
+
+            long curMillis = PhysicsUtils.millis();
+            List<Chunk> chunksNotFinished = new List<Chunk>();
+
+            List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist();
+
+            foreach (Tuple<Chunk, long> chunkAndDist in chunksToRender)
+            {
+                Chunk chunk = chunkAndDist.a;
+                int prev = numAllowedToDoFullRender;
+                long timeBefore = PhysicsUtils.millis();
+                if (chunkAndDist.b < 2)
+                {
+                    int tmp = 100000;
+                    if(chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
+                    {
+                        chunk.chunkRenderer.FinishRenderSync(chunk);
+                        //chunksNotFinished.Add(chunk);
+                    }
+
+                }
+                else
+                {
+                    if(chunk.chunkRenderer.RenderAsync(false, chunk, ref numAllowedToDoFullRender))
+                    {
+                        chunk.chunkRenderer.FinishRenderSync(chunk);
+                        //chunksNotFinished.Add(chunk);
+                    }
+                }
+
+                if (chunksNotFinished.Count >= blocksWorld.chunkBlockDatas.Length)
+                {
+                    for (int i = 0; i < chunksNotFinished.Count; i++)
+                    {
+                        chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
+                    }
+                    chunksNotFinished.Clear();
+                }
+                
+
+                if (numAllowedToDoFullRender != prev)
+                {
+                    elapsedTime += PhysicsUtils.millis() - timeBefore;
+
+                    if (frameId > 100 && elapsedTime > maxMillis)
+                    {
+                        numAllowedToDoFullRender = 0;
+                    }
+                }
+            }
+
+            for (int i = 0; i < chunksNotFinished.Count; i++)
+            {
+                chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
+            }
+            chunksNotFinished.Clear();
+            return;
             // render transparent
             foreach (Chunk chunk in allChunks)
             {
-                chunk.chunkRenderer.Render(true, chunk, ref numAllowedToDoFullRender);
+                //chunk.chunkRenderer.Render(true, chunk, ref numAllowedToDoFullRender);
+                if (frameId > 100 && PhysicsUtils.millis() - curMillis > maxMillis)
+                {
+                    numAllowedToDoFullRender = 0;
+                }
             }
+            Debug.Log("has total of " + elapsedTime + " elapsed time");
         }
 
         public static void Shuffle<T>(List<T> arr)
@@ -5388,11 +5647,7 @@ namespace Blocks
             }
             // what direction is checked first: goes in a weird order after that
             globalPreference = (globalPreference + 1) % 4;
-            List<Chunk> allChunksHere = new List<Chunk>();
-            for (int i = 0; i < allChunks.Count; i++)
-            {
-                allChunksHere.Add(allChunks[i]);
-            }
+            List<Tuple<Chunk, long>> allChunksHere = GetChunksCloserThanRenderDist();
 
             // Randomly shuffle the order we update the chunks in, for the memes when they are tiled procedurally
             //Shuffle(allChunksHere);
@@ -5410,10 +5665,10 @@ namespace Blocks
 
             bool allowGenerate = true;
 
-            /*
-            foreach (BlocksPlayer player in GameObject.FindObjectsOfType<BlocksPlayer>())
+            Vector3[] playerPositions = blocksWorld.playerPositions;
+            foreach (Vector3 playerPosition in playerPositions)
             {
-                LVector3 playerPos = LVector3.FromUnityVector3(player.transform.position);
+                LVector3 playerPos = LVector3.FromUnityVector3(playerPosition);
 
                 Chunk playerChunk = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z);
                 RunTick(playerChunk, true, ref maxTickSteps, ref numGenerated, maxGenerating);
@@ -5437,7 +5692,7 @@ namespace Blocks
                 Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSize);
                 RunTick(playerChunkZ2, true, ref maxTickSteps, ref numGenerated, maxGenerating);
             }
-            */
+            
 
 
             long frameTimeStart2 = PhysicsUtils.millis();
@@ -5454,7 +5709,7 @@ namespace Blocks
             bool bailed = false;
             for (int i = 0; i < allChunksHere.Count; i++)
             {
-                Chunk chunk = allChunksHere[i];
+                Chunk chunk = allChunksHere[i].a;
                 if (!chunk.generating && chunk.chunkData.blocksNeedUpdatingNextFrame.Count == 0)
                 {
                     continue;
@@ -5463,7 +5718,7 @@ namespace Blocks
                 {
                     allowGenerate = false;
                 }
-                if (PhysicsUtils.millis() - frameTimeStart > maxTickSteps)
+                if (PhysicsUtils.millis() - frameTimeStart > maxTickSteps && !chunk.mustRenderMe)
                 {
                     //Debug.Log("bailed on chunk " + (chunkI + 1) + "/" + allChunksHere.Count);
                     bailed = true;
@@ -6139,6 +6394,7 @@ namespace Blocks
 
     public class BlocksWorld : MonoBehaviour
     {
+        public int chunkRenderDist = 10;
         public float skyLightLevel = 1.0f;
         public ComputeShader cullBlocksShader;
         public bool creativeMode = false;
@@ -6173,11 +6429,12 @@ namespace Blocks
 
         public Dictionary<LVector3, Inventory> blockInventories = new Dictionary<LVector3, Inventory>();
 
-        public ComputeBuffer chunkBlockData;
+        public ComputeBuffer[] chunkBlockDatas;
+        public ComputeBuffer[] chunkBlockDatasForCombined;
 
         int[] worldData;
 
-        public const int chunkSize = 8;
+        public const int chunkSize = 16;
 
         public World world;
 
@@ -6217,6 +6474,28 @@ namespace Blocks
             return new Vector3(ApplyEpsPerturb(offset.x, eps), ApplyEpsPerturb(offset.y, eps), ApplyEpsPerturb(offset.z, eps));
         }
 
+        public RenderTriangle[] cubeTris;
+        
+        
+        Float4 MakeFloat4(float x, float y, float z, float w)
+        {
+            Float4 res = new Float4();
+            res.x = x;
+            res.y = y;
+            res.z = z;
+            res.w = w;
+            return res;
+        }
+
+
+        Float2 MakeFloat2(float x, float y)
+        {
+            Float2 res = new Float2();
+            res.x = x;
+            res.y = y;
+            return res;
+        }
+
         void SetupRendering()
         {
             LoadMaterials();
@@ -6226,6 +6505,9 @@ namespace Blocks
             float[] vertNormals = new float[36 * 4];
             List<Vector2> texOffsetsGood = new List<Vector2>();
             List<Vector3> vertOffsetsGood = new List<Vector3>();
+            List<RenderTriangle> defaultCubeTris = new List<RenderTriangle>();
+
+            RenderTriangle curCubeTri = new RenderTriangle();
             float[] triOffsets = new float[36 * 4];
             for (int i = 0; i < 36; i++)
             {
@@ -6350,14 +6632,42 @@ namespace Blocks
                 texOffsets[i * 4 + 3] = 0;
 
 
+
                 vertNormals[i * 4] = normal.x;
                 vertNormals[i * 4 + 1] = normal.y;
                 vertNormals[i * 4 + 2] = normal.z;
                 vertNormals[i * 4 + 3] = 0.0f;
 
-                texOffsetsGood.Add(new Vector2(texOffset.x / 2.0f, texOffset.y / 3.0f));
-                vertOffsetsGood.Add(offset - new Vector3(0.5f, 0.5f, 0.5f));
+                Vector2 resTexOffset = new Vector2(texOffset.x / 2.0f, texOffset.y / 3.0f);
+                Vector3 resOffset = offset - new Vector3(0.5f, 0.5f, 0.5f);
+                texOffsetsGood.Add(resTexOffset);
+                vertOffsetsGood.Add(resOffset);
+
+
+                if (i % 3 == 0)
+                {
+                    curCubeTri.vertex1 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv1 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+                }
+                else if (i % 3 == 1)
+                {
+                    curCubeTri.vertex2 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv2 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+                }
+                else if (i % 3 == 2)
+                {
+                    curCubeTri.vertex3 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv3 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+
+                    // we are finished with current tri, store it and start a new one
+
+                    defaultCubeTris.Add(curCubeTri);
+
+                    curCubeTri = new RenderTriangle();
+                }
             }
+
+            cubeTris = defaultCubeTris.ToArray();
 
             blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4);
             cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4);
@@ -6570,9 +6880,25 @@ namespace Blocks
             drawPositions1 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
             drawPositions2 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
 
-            chunkBlockData = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
-            cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
-            cullBlocksShader.SetBuffer(1, "DataIn", chunkBlockData);
+            // do multiple so we can run the cull blocks in parallel and don't have to wait for each one to finish
+            chunkBlockDatas = new ComputeBuffer[1];
+            for (int i = 0; i < chunkBlockDatas.Length; i++)
+            {
+                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
+                chunkBlockDatas[i] = chunkBlockDataI;
+            }
+
+            chunkBlockDatasForCombined = new ComputeBuffer[1];
+            for (int i = 0; i < chunkBlockDatasForCombined.Length; i++)
+            {
+                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
+                chunkBlockDatasForCombined[i] = chunkBlockDataI;
+            }
+
+
+            //cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
+            //cullBlocksShader.SetBuffer(1, "DataIn", chunkBlockData);
+
             cullBlocksShader.SetBuffer(0, "cubeOffsets", cubeOffsets);
             cullBlocksShader.SetBuffer(0, "uvOffsets", uvOffsets);
             cullBlocksShader.SetBuffer(1, "cubeOffsets", cubeOffsets);
@@ -6667,6 +6993,10 @@ namespace Blocks
 
         public BlocksPack blocksPack;
 
+
+        public BlocksPlayer[] players;
+        public Vector3[] playerPositions;
+
         // Use this for initialization
         void Start()
         {
@@ -6677,9 +7007,10 @@ namespace Blocks
             //customBlocks[BlockValue.GRASS] = new Grass();
             //GenerationClass customGeneration = new ExampleGeneration();
             world = new World(this, chunkSize, blocksPack);
+
             lastTick = 0;
 
-
+           
            world.helperThread = new Thread(() =>
            {
                while (threadKeepGoing)
@@ -6714,6 +7045,14 @@ namespace Blocks
         // Update is called once per frame
         void Update()
         {
+            players = FindObjectsOfType<BlocksPlayer>();
+
+            playerPositions = new Vector3[players.Length];
+            for(int i = 0; i < players.Length; i++)
+            {
+                playerPositions[i] = players[i].transform.position;
+            }
+
             World.creativeMode = creativeMode;
             triMaterial.SetFloat("globalLightLevel", skyLightLevel);
             triMaterialWithTransparency.SetFloat("globalLightLevel", skyLightLevel);
@@ -6760,12 +7099,21 @@ namespace Blocks
         }
 
 
+        ComputeBuffer tmpNonCubePositions;
+
+
+        int curChunkBlockDataI = 0;
+        int curChunkBlockDataCombinedI = 0;
+
+
         public void MakeChunkTrisForCombined(Chunk chunk,  ComputeBuffer drawData)
         {
             Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
             renderTransform.transform.position += offset;
 
-            chunkBlockData.SetData(chunk.chunkData.GetRawData());
+            ComputeBuffer curChunkBlockData = chunkBlockDatasForCombined[curChunkBlockDataCombinedI];
+            curChunkBlockDataCombinedI = (curChunkBlockDataCombinedI + 1) % chunkBlockDatasForCombined.Length;
+            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
 
             for (int i = 0; i < 2; i++)
             {
@@ -6773,23 +7121,33 @@ namespace Blocks
                 cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
                 cullBlocksShader.SetFloat("ptCloudScale", worldScale);
                 cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
             }
             // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
             cullBlocksShader.SetBuffer(0, "DrawingThings", drawData);
             cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
 
             renderTransform.transform.position -= offset;
+
+
+
+            //cullBlocksShader.SetBuffer(2, "NonCubePositions", )
         }
 
-        public void MakeChunkTris(Chunk chunk, out int numNotTransparent, out int numTransparent)
+
+        public void MakeChunkTrisAsync(Chunk chunk)
         {
-            int[] args = new int[] { 0 };
+            //int[] args = new int[] { 0 };
 
             Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
             renderTransform.transform.position += offset;
 
             chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
-            chunkBlockData.SetData(chunk.chunkData.GetRawData());
+
+            ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
+            curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
+            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
 
             for (int i = 0; i  < 2; i++)
             {
@@ -6797,11 +7155,23 @@ namespace Blocks
                 cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
                 cullBlocksShader.SetFloat("ptCloudScale", worldScale);
                 cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+                cullBlocksShader.SetBuffer(2, "DataIn", curChunkBlockData);
             }
             // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
             cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
             cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
 
+            chunk.chunkRenderer.notCubePositions.SetCounterValue(0);
+            cullBlocksShader.SetBuffer(2, "NonCubePositions", chunk.chunkRenderer.notCubePositions);
+            cullBlocksShader.Dispatch(2, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+
+
+
+
+
+            /*
             ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
             world.argBuffer.GetData(args);
             numNotTransparent = args[0];
@@ -6816,8 +7186,99 @@ namespace Blocks
             ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
             world.argBuffer.GetData(args);
             numTransparent = args[0];
+            */
 
             renderTransform.transform.position -= offset;
+        }
+
+
+
+        public void FinishChunkTrisSync(Chunk chunk, out int numNotTransparent, out int numTransparent)
+        {
+
+            int[] args = new int[] { 0 };
+
+            /*
+            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+            renderTransform.transform.position += offset;
+
+            chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
+
+            ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
+            curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
+            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
+
+            for (int i = 0; i < 2; i++)
+            {
+                cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                cullBlocksShader.SetFloat("ptCloudScale", worldScale);
+                cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+            }
+            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+            cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+            cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+            */
+            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
+            world.argBuffer.GetData(args);
+            numNotTransparent = args[0];
+
+            ComputeBuffer.CopyCount(chunk.chunkRenderer.notCubePositions, world.argBuffer, 0);
+            world.argBuffer.GetData(args);
+            int numNonCubes = args[0];
+
+
+            int[] nonCubePositions = new int[numNonCubes];
+
+            chunk.chunkRenderer.notCubePositions.GetData(nonCubePositions, 0, 0, nonCubePositions.Length);
+
+            List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
+
+            int[] rawData = chunk.chunkData.GetRawData();
+            RenderTriangle template = new RenderTriangle();
+            for (int i = 0; i < nonCubePositions.Length; i++)
+            {
+                int pos = nonCubePositions[i] * 4;
+                int blockId = rawData[pos];
+                template.state1 = rawData[pos];
+                template.state2 = rawData[pos + 1];
+                template.state3 = rawData[pos + 2];
+                template.state4 = rawData[pos + 3];
+                bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, template));
+            }
+
+
+            RenderTriangle[] prevTriangles = new RenderTriangle[numNotTransparent];
+            chunk.chunkRenderer.drawDataNotTransparent.GetStructData(prevTriangles);
+            bonusTriangles.AddRange(prevTriangles);
+
+            RenderTriangle[] resTriangles = bonusTriangles.ToArray();
+            chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue((uint)resTriangles.Length);
+            chunk.chunkRenderer.drawDataNotTransparent.SetStructData(resTriangles);
+            numNotTransparent = resTriangles.Length;
+
+
+
+            //float[] resVals = new float[numNotTransparent * (4 + 4 + 4 + 2)];
+            //Debug.Log("got num not transparent = " + numNotTransparent + " (" + (numNotTransparent / 36) + ")");
+
+            /*
+            chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
+            //chunkBlockData.SetData(chunk.chunkData.GetRawData());
+            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+            cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
+            cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
+            world.argBuffer.GetData(args);
+            numTransparent = args[0];
+            */
+
+            //// new: I added this tmp and commented out the above
+            numTransparent = 0;
+
+            //renderTransform.transform.position -= offset;
         }
 
         public Queue<Tuple<LVector3, float>> blocksBreaking = new Queue<Tuple<LVector3, float>>();
@@ -7149,10 +7610,28 @@ namespace Blocks
                 drawPositions2 = null;
             }
 
-            if (chunkBlockData != null)
+
+            if (chunkBlockDatas != null)
             {
-                chunkBlockData.Dispose();
-                chunkBlockData = null;
+                for (int i = 0; i < chunkBlockDatas.Length; i++)
+                {
+
+                    chunkBlockDatas[i].Dispose();
+                    chunkBlockDatas[i] = null;
+                }
+                chunkBlockDatas = null;
+            }
+
+
+            if (chunkBlockDatasForCombined != null)
+            {
+                for (int i = 0; i < chunkBlockDatasForCombined.Length; i++)
+                {
+
+                    chunkBlockDatasForCombined[i].Dispose();
+                    chunkBlockDatasForCombined[i] = null;
+                }
+                chunkBlockDatasForCombined = null;
             }
 
             if (world != null)
@@ -7191,6 +7670,62 @@ namespace Blocks
         void OnDestroy()
         {
             Cleanup();
+        }
+    }
+}
+
+
+namespace ExtensionMethods
+{
+    public static class BlocksComputeBufferExtensions
+    {
+
+        [DllImport("kernel32.dll", EntryPoint = "CopyMemory", SetLastError = false)]
+        private static unsafe extern void CopyMemory(void* dest, void* src, int count);
+
+        private static unsafe void BlockCopy(byte[] src, int srcOffset, Blocks.RenderTriangle[] dst, int dstOffset, int count) 
+        {
+            fixed (void* s = &src[0])
+            {
+                fixed (void* d = &dst[0])
+                {
+                    CopyMemory(d, s, src.Length);
+                }
+            }
+        }
+
+
+        private static unsafe void BlockCopy(Blocks.RenderTriangle[] src, int srcOffset, byte[] dst, int dstOffset, int count)
+        {
+            fixed (void* s = &src[0])
+            {
+                fixed (void* d = &dst[0])
+                {
+                    CopyMemory(d, s, dst.Length);
+                }
+            }
+        }
+
+        public static void GetStructData(this ComputeBuffer buffer, Blocks.RenderTriangle[] outData)
+        {
+            if (outData.Length == 0)
+            {
+                return;
+            }
+            byte[] rawData = new byte[System.Runtime.InteropServices.Marshal.SizeOf(typeof(Blocks.RenderTriangle)) * outData.Length];
+            buffer.GetData(rawData);
+            BlockCopy(rawData, 0, outData, 0, rawData.Length);
+        }
+
+        public static void SetStructData(this ComputeBuffer buffer, Blocks.RenderTriangle[] inData)
+        {
+            if (inData.Length == 0)
+            {
+                return;
+            }
+            byte[] rawData = new byte[System.Runtime.InteropServices.Marshal.SizeOf(typeof(Blocks.RenderTriangle)) * inData.Length];
+            BlockCopy(inData, 0, rawData, 0, rawData.Length);
+            buffer.SetData(rawData);
         }
     }
 }

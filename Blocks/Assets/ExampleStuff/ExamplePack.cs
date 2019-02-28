@@ -763,8 +763,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.String, new SimpleItem(), 64);
         //AddCustomBlock(Example.Water, new Water(), 64);
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
-        AddCustomBlock(Example.Water, new Water(), 64);
-        AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
+        AddCustomBlock(Example.Water, new SimpleWater(), 64);
+        AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
         AddCustomBlock(Example.Lava, new Lava(), 64);
         AddCustomBlock(Example.BallTrack, new BallTrack(), 64);
         AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
