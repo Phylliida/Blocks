@@ -306,9 +306,14 @@ namespace Blocks
         /// </summary>
         public float[] to;
 
+
+        public string texture;
+
         public BlockModelRotation rotation;
 
+        public bool shade;
 
+        public BlockModel rootModel;
 
         string __comment = "";
 
@@ -340,9 +345,21 @@ namespace Blocks
                 res = res.ApplyingTransformationToEachVertex(x => { return rotation.ApplyToPoint(x); });
             }
 
+            Debug.Log("my texture value is " + texture);
+
+            Debug.Log("my to value is " + to[0] + " " + to[1] + " " + to[2]);
+            Debug.Log("my from value is " + from[0] + " " + from[1] + " " + from[2]);
+            // offset uvs x value to match correct texture
+            if (texture != null)
+            {
+                int texIndex = rootModel.TexToIndex(texture);
+                Debug.Log("tex of " + texture + " maps to index " + texIndex);
+                res += new Vector2(texIndex / 64.0f, 0.0f);
+            }
+
             //res = res * new Vector2(1/64.0f, 1.0f/256.0f);
 
-            res = res * new Vector2(1.0f, 1.0f);
+            //res = res * new Vector2(1.0f, 1.0f);
 
             
 
@@ -376,8 +393,12 @@ namespace Blocks
         /// <summary>
         ///  Holds the textures of the model. Each texture starts in assets/<namespace>/textures or can be another texture variable.
         /// </summary>
-        public Dictionary<string, string> textures = new Dictionary<string, string>();
+        public Dictionary<string, string> textures;
 
+        /// <summary>
+        /// internal variable created when loading and processing model json files, stores the mapping of texture name to (index, texture, texturePath)
+        /// </summary>
+        Dictionary<string, Tuple<int, Texture2D, string>> texToIndex;
         /// <summary>
         /// Contains all the elements of the model. they can only have cubic forms. If both "parent" and "elements" are set, the "elements" tag overrides the "elements" tag from the previous model.
         /// </summary>
@@ -391,11 +412,102 @@ namespace Blocks
 
         }
 
+        string rootPath = "";
+
         public static BlockModel FromJSONFilePath(string jsonPath)
         {
-            return JsonUtility.FromJson<BlockModel>(System.IO.File.ReadAllText(jsonPath));
+            BlockModel res = LitJson.JsonMapper.ToObject<BlockModel>(System.IO.File.ReadAllText(jsonPath));
+            res.rootPath = System.IO.Path.GetDirectoryName(jsonPath);
+            return res;
         }
 
+
+        public int TexToIndex(string texName)
+        {
+            if (texToIndex == null)
+            {
+                GetTextures();
+            }
+
+            if (texToIndex.ContainsKey(texName))
+            {
+                return texToIndex[texName].a;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        public string[] GetTexturePaths()
+        {
+            GetTextures();
+
+            List<string> paths = new List<string>();
+            foreach (KeyValuePair<string, Tuple<int, Texture2D, string>> texture in texToIndex)
+            {
+                paths.Add(texture.Value.c);
+            }
+            return paths.ToArray();
+        }
+
+        public Texture2D[] GetTextures()
+        {
+            texToIndex = new Dictionary<string, Tuple<int, Texture2D, string>>();
+            List<Tuple<int, Texture2D, string>> res = new List<Tuple<int, Texture2D, string>>();
+            int i = 0;
+            foreach (KeyValuePair<string, string> texture in textures)
+            {
+                string texName = texture.Key;
+                Debug.Log("has texture key with name " + texName);
+                // already loaded
+                if (texToIndex.ContainsKey(texName))
+                {
+                    res.Add(texToIndex[texName]);
+                }
+                // need to be loaded
+                else
+                {
+                    string texFileName = texture.Value;
+                    string texFilePath = System.IO.Path.Combine(rootPath, texFileName);
+                    Debug.Log("trying to load flower texture with name " + texName + " and path " + texFilePath);
+                    if (System.IO.File.Exists(texFilePath))
+                    {
+                        Texture2D curTex = new Texture2D(10, 10);
+                        // will automatically resize and reformat as needed
+                        curTex.LoadImage(System.IO.File.ReadAllBytes(texFilePath));
+                        curTex.Apply();
+
+                        // convert to argb32
+                        Texture2D argbTexture = new Texture2D(curTex.width, curTex.height, TextureFormat.ARGB32, false, true);
+                        argbTexture.SetPixels(curTex.GetPixels());
+                        argbTexture.Apply();
+                        Color32[] argbColors = argbTexture.GetPixels32();
+
+                        // rescale if needed to correct size
+                        if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+                        {
+                            TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+                        }
+
+                        argbTexture.Apply();
+                        texToIndex[texName] = new Tuple<int, Texture2D, string>(i, curTex, texFilePath);
+                        i += 1;
+                        res.Add(texToIndex[texName]);
+                    }
+                }
+            }
+            // sort by index, this will make lowest first so they'll be in the right order
+            res.Sort((x, y) => { return x.a.CompareTo(y.a); });
+
+            Texture2D[] result = new Texture2D[res.Count];
+            for (int j = 0; j < res.Count; j++)
+            {
+                result[j] = res[j].b;
+            }
+
+            return result;
+        }
 
         public RenderTriangle[] ToRenderTriangles()
         {
@@ -407,6 +519,7 @@ namespace Blocks
             }
             foreach (BlockModelElement element in elements)
             {
+                element.rootModel = this;
                 results.AddRange(element.ToRenderTriangles());
             }
             return results.ToArray();

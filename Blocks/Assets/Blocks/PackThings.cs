@@ -57,6 +57,9 @@ namespace Blocks
             return x.id;
         }
 
+
+        public static Dictionary<BlockValue, BlockModel> customModels = new Dictionary<BlockValue, BlockModel>();
+
         public override bool Equals(object obj)
         {
             if (obj == null)
@@ -214,6 +217,19 @@ namespace Blocks
             return assetsPath.Replace("\\", "/") + "/PackTextures/" + packName + "/" + blockName + ".png";
         }
 
+        public string GetBlockModelPath(string packName, string blockName)
+        {
+            string assetsPath = UnityEngine.Application.dataPath;
+            // strip any trailing path seperators
+            while (assetsPath[assetsPath.Length - 1] == '/' || assetsPath[assetsPath.Length - 1] == '\\')
+            {
+                assetsPath = assetsPath.Substring(0, assetsPath.Length - 1);
+            }
+            // append pack textures directory
+            return assetsPath.Replace("\\", "/") + "/PackTextures/" + packName + "/" + blockName + "/" + "model.json";
+        }
+
+
         public BlockValue(int id, string name = "", string packName = "")
         {
             this.name = name;
@@ -292,7 +308,35 @@ namespace Blocks
 
             largestIdMag = System.Math.Max(largestIdMag, uid);
             Debug.Log(name + " has id " + id);
-            if (texturePath != "")
+
+            string modelPath = "";
+            if (packName != "")
+            {
+                modelPath = GetBlockModelPath(packName, name);
+            }
+
+            if (modelPath != "" && File.Exists(modelPath))
+            {
+                BlockModel model = BlockModel.FromJSONFilePath(modelPath);
+                Texture2D[] textures = model.GetTextures();
+                for (int i = 0; i < textures.Length; i++)
+                {
+                    Color[] pixels = textures[i].GetPixels();
+                    allBlocksTexture.SetPixels(i * 32, (uid - 1) * 16 * 3, 16 * 2, 16 * 3, pixels);
+                }
+                allBlocksTexture.Apply();
+                File.WriteAllBytes("res.png", allBlocksTexture.EncodeToPNG());
+
+                if (id > 0)
+                {
+                    _id = -uid;
+                    Debug.LogWarning("warning: detected custom model for block " + name + " with updated id " + id + " but we were told it does not have a custom model, set it to custom model anyway");
+                }
+
+                customModels[_id] = model;
+            }
+
+            else if (texturePath != "")
             {
                 if (File.Exists(texturePath))
                 {

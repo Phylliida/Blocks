@@ -3782,10 +3782,11 @@ namespace Blocks
                 res[i].vertex3 = Util.MakeFloat4(localToWorldMat.MultiplyPoint(new Vector3(blockTris[i].vertex3.x + blockPos.x, blockTris[i].vertex3.y + blockPos.y, blockTris[i].vertex3.z + blockPos.z) * worldScale));
          
                 float yOffset = (Mathf.Abs(template.state1) - 1) / 64.0f;
-                yOffset = 12.0f/64.0f;
-                res[i].uv1 = Util.MakeFloat2(res[i].uv1.x, res[i].uv1.y + yOffset);
-                res[i].uv2 = Util.MakeFloat2(res[i].uv2.x, res[i].uv2.y + yOffset);
-                res[i].uv3 = Util.MakeFloat2(res[i].uv3.x, res[i].uv3.y + yOffset);
+                //yOffset = 18.0f/64.0f;
+                
+                res[i].uv1 = Util.MakeFloat2(blockTris[i].uv1.x, blockTris[i].uv1.y + yOffset);
+                res[i].uv2 = Util.MakeFloat2(blockTris[i].uv2.x, blockTris[i].uv2.y + yOffset);
+                res[i].uv3 = Util.MakeFloat2(blockTris[i].uv3.x, blockTris[i].uv3.y + yOffset);
             }
             return res;
         }
@@ -3974,8 +3975,13 @@ namespace Blocks
 
 
 
+            foreach (KeyValuePair<BlockValue, BlockModel> blockModel in BlockValue.customModels)
+            {
+                this.blockCustomTriangles[blockModel.Key] = blockModel.Value.ToRenderTriangles();
+            }
 
-            this.blockCustomTriangles[Example.Flower] = BlockModel.FromJSONFilePath(@"C:\Users\yams\Desktop\yams\prog\unity\Blocks\repo\Blocks\BlockSpecs\Example\blocks\Flower\model.json").ToRenderTriangles();
+
+            //this.blockCustomTriangles[Example.Flower] = BlockModel.FromJSONFilePath(@"C:\Users\yams\Desktop\yams\prog\unity\Blocks\repo\Blocks\BlockSpecs\Example\blocks\Flower\model.json").ToRenderTriangles();
 
             /*
 
@@ -6024,6 +6030,24 @@ namespace Blocks
                         }
                     }
                 }
+                else if(block.hasCustomModel)
+                {
+                    // append directory for this block
+                    string blockModelPath = assetsPath + "/" + packName + "/" + block.blockName;
+
+                    DirectoryInfo blockModelPathInfo = new DirectoryInfo(blockModelPath);
+                    if (!blockModelPathInfo.Exists)
+                    {
+                        Directory.CreateDirectory(blockModelPathInfo.FullName);
+                    }
+
+                    foreach (string texturePath in block.blockCustomModelTexturePaths)
+                    {
+                        FileInfo texturePathInfo = new FileInfo(texturePath);
+                        File.WriteAllBytes(blockModelPath + "/" + texturePathInfo.Name, File.ReadAllBytes(texturePath));
+                    }
+                    File.WriteAllBytes(blockModelPath + "/model.json", File.ReadAllBytes(block.blockModelPath));
+                }
                 else
                 {
 
@@ -6343,9 +6367,13 @@ namespace Blocks
         public string blockName;
         public string blockRootDir;
         public string blockImagePath;
+        public string blockModelPath;
+        public BlockModel blockModel;
         public bool isValid;
         public bool isTransparent;
+        public bool hasCustomModel = false;
         public string[] blockAnimationImagePaths;
+        public string[] blockCustomModelTexturePaths;
         public bool isAnimated;
         public PackBlock(string blockDirectory)
         {
@@ -6366,22 +6394,53 @@ namespace Blocks
                     {
                         if (fInfo.Extension.ToLower() == ".png" || fInfo.Extension.ToLower() == ".jpg")
                         {
-                            Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                            //Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
                             if (fInfo.Name == blockName + fInfo.Extension)
                             {
                                 Debug.Log("image matches block name, using it for block art");
                                 blockImagePath = fInfo.FullName;
                                 isValid = true;
-                                break;
                             }
                         }
-                        else
+                        else if (fInfo.Extension.ToLower() == ".json")
                         {
-                            Debug.Log("got non-image for block " + blockName + " with path " + fInfo.FullName + " and name " + fInfo.Name + " and extension " + fInfo.Extension);
+                            Debug.Log("got model for block " + blockName + " with model path " + fInfo.FullName + " and model name " + fInfo.Name + " and extension " + fInfo.Extension);
+                            if (fInfo.Name == blockName + fInfo.Extension || fInfo.Name == "model.json")
+                            {
+                                Debug.Log("model name matches block name or is model.json, using it for block model");
+                                blockModelPath = fInfo.FullName;
+                                hasCustomModel = true;
+
+                            }
+                        }
+                        else {
+                            Debug.Log("got non-image or model for block " + blockName + " with path " + fInfo.FullName + " and name " + fInfo.Name + " and extension " + fInfo.Extension);
                         }
                     }
                 }
-                if (!isValid)
+                // if this block has a custom model, use it
+                if (hasCustomModel)
+                {
+                    hasCustomModel = false;
+                    try
+                    {
+                        blockModel = BlockModel.FromJSONFilePath(blockModelPath);
+                        blockCustomModelTexturePaths = blockModel.GetTexturePaths();
+
+                        // successfully parsed
+                        Debug.Log("successfully processed model for block " + blockName + " with model path " + blockModelPath + " and " + blockCustomModelTexturePaths.Length + " textures");
+                        isValid = true;
+                        hasCustomModel = true;
+                        isTransparent = true;
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogError("got exception when processing model file of " + blockModelPath + " for block " + blockName + " with block root dir " + blockRootDir + ". Exception was: " + e);
+                    }
+
+                }
+                // otherwise, if we haven't found a block art or model file yet it might be animated
+                else if (!isValid)
                 {
                     // see if an animated block
                     Dictionary<int, string> frames = new Dictionary<int, string>();
@@ -6394,17 +6453,17 @@ namespace Blocks
                         {
                             if (fInfo.Extension.ToLower() == ".png" || fInfo.Extension.ToLower() == ".jpg")
                             {
-                                Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                                //Debug.Log("got image for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
                                 if (fInfo.Name.Substring(0, blockName.Length) == blockName) // does the first piece match the block name?
                                 {
                                     string leftoverPieces = fInfo.Name.Substring(blockName.Length); // get stuff after blockName
                                     leftoverPieces = leftoverPieces.Substring(0, leftoverPieces.Length - fInfo.Extension.Length); // remove extension
-                                    Debug.Log("is potential frame with key " + leftoverPieces + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                                   // Debug.Log("is potential frame with key " + leftoverPieces + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
 
                                     int frameNum;
                                     if (int.TryParse(leftoverPieces, out frameNum))
                                     {
-                                        Debug.Log("is actual frame with index " + frameNum + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
+                                        //Debug.Log("is actual frame with index " + frameNum + " for block " + blockName + " with image path " + fInfo.FullName + " and image name " + fInfo.Name + " and extension " + fInfo.Extension);
                                         frames[frameNum] = fInfo.FullName;
                                         maxFrame = System.Math.Max(maxFrame, frameNum);
                                         minFrame = System.Math.Min(minFrame, frameNum);
@@ -6709,8 +6768,8 @@ namespace Blocks
                 texOffsetsGood.Add(resTexOffset);
                 vertOffsetsGood.Add(resOffset);
 
-                resOffset = resOffset + new Vector3(0.5f, 0.5f, 0.5f);
-                resTexOffset = new Vector2(resTexOffset.x, resTexOffset.y * 3.0f / (float)World.numBlocks);
+                resOffset = offset;
+                resTexOffset = new Vector2(texOffset.x/(2.0f*64.0f), resTexOffset.y / (float)World.numBlocks);
                 if (i % 3 == 0)
                 {
                     curCubeTri.vertex1 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
