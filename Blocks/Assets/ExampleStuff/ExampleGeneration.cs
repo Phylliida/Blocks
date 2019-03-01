@@ -12,7 +12,7 @@ public class ExampleGeneration : GenerationClass
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
-    bool isFlatland = true;
+    bool isFlatland = false;
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {

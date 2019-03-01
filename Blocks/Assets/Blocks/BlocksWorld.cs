@@ -479,8 +479,6 @@ namespace Blocks
         public bool hasCustomBlocks = false;
         public ComputeBuffer drawDataTransparent;
         public ComputeBuffer drawDataNotTransparent;
-        public ComputeBuffer notCubePositions;
-        public ComputeBuffer helperSpooker;
         public int numRendereredCubesTransparent;
         public int numRendereredCubesNotTransparent;
 
@@ -508,10 +506,8 @@ namespace Blocks
             // we can only init compute buffers on the main thread
             if (Thread.CurrentThread != World.mainWorld.helperThread)
             {
-                drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
-                drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 64, sizeof(int) * 22, ComputeBufferType.Append);
-                notCubePositions = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int), ComputeBufferType.Append);
-                helperSpooker = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.GPUMemory);
+                //drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
+                drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
             }
 
             if (chunk.cx % 2 == 0 && chunk.cy % 2 == 0 && chunk.cz % 2 == 0)
@@ -519,7 +515,7 @@ namespace Blocks
                 isMetaNode = true;
                 if (Thread.CurrentThread != World.mainWorld.helperThread)
                 {
-                    combinedDrawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12 * 8, sizeof(int) * 22, ComputeBufferType.Append);
+                    //combinedDrawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12 * 8, sizeof(int) * 22, ComputeBufferType.Append);
                 }
 
                 if (otherChunks == null)
@@ -557,7 +553,7 @@ namespace Blocks
         public bool RenderAsync(bool onlyTransparent, Chunk chunk, ref int numAllowedToDoFullRender)
         {
             // this object was made on a seperate thread, init stuff
-            if (drawDataTransparent == null)
+            if (drawDataNotTransparent == null)
             {
                 InitStuff();
             }
@@ -741,18 +737,6 @@ namespace Blocks
                 {
                     combinedDrawDataNotTransparent.Dispose();
                     combinedDrawDataNotTransparent = null;
-                }
-
-                if (notCubePositions != null)
-                {
-                    notCubePositions.Dispose();
-                    notCubePositions = null;
-                }
-
-                if (helperSpooker != null)
-                {
-                    helperSpooker.Dispose();
-                    helperSpooker = null;
                 }
             }
         }
@@ -1898,10 +1882,17 @@ namespace Blocks
 
     public class Chunk
     {
+
+
         public bool mustRenderMe = false;
         public bool valid = true;
         public long cx, cy, cz;
 
+
+        public int indexUsingInBatch;
+
+
+        public List<Tuple<long, long, long, int>> distancesOfPlacesToExpand;
         long lastWorldNumChunks;
 
         public long GetPos(int d)
@@ -5656,8 +5647,7 @@ namespace Blocks
                 }
                 else
                 {
-                    int tmp = 100000;
-                    if (chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
+                    if (chunk.chunkRenderer.RenderAsync(false, chunk, ref numAllowedToDoFullRender))
                     {
                         //chunk.chunkRenderer.FinishRenderSync(chunk);
                         //chunksNotFinished.Add(chunk);
@@ -5680,7 +5670,7 @@ namespace Blocks
 
                     if (frameId > 100 && elapsedTime > maxMillis)
                     {
-                        numAllowedToDoFullRender = 1000000;
+                        numAllowedToDoFullRender = 0;
                     }
                 }
             }
@@ -5717,6 +5707,8 @@ namespace Blocks
             }
         }
 
+
+        public bool playerMovedChunks = false;
         long frameId = 0;
         public long frameTimeStart = 0;
         public void Tick()
@@ -5772,9 +5764,59 @@ namespace Blocks
 
                 Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSize);
                 RunTick(playerChunkZ2, true, ref maxTickSteps, ref numGenerated, maxGenerating);
-            }
-            
 
+
+
+                if ((playerMovedChunks || playerChunk.distancesOfPlacesToExpand == null || playerChunk.distancesOfPlacesToExpand.Count > 0) && frameId % 10 == 0)
+                {
+                    Debug.Log("going now " + frameId);
+                    int viewDist = 4;
+
+                    long pcx = divWithFloorForChunkSize(playerPos.x);
+                    long pcy = divWithFloorForChunkSize(playerPos.y);
+                    long pcz = divWithFloorForChunkSize(playerPos.z);
+                    int numDone = 0;
+                    int maxGenThisStep = 10;
+
+                    if (playerMovedChunks || playerChunk.distancesOfPlacesToExpand == null)
+                    {
+                        playerMovedChunks = false;
+                        List<Tuple<long, long, long, int>> positionsToGen = new List<Tuple<long, long, long, int>>();
+
+                        // sort potential options by closeness
+                        for (int i = -viewDist; i <= viewDist; i++)
+                        {
+                            for (int j = viewDist; j >= -viewDist; j--)
+                            {
+                                for (int k = -viewDist; k <= viewDist; k++)
+                                {
+                                    int dist = System.Math.Abs(i) + System.Math.Abs(j) + System.Math.Abs(k);
+
+                                    if (dist >= 1 && dist < blocksWorld.chunkRenderDist)
+                                    {
+                                        Chunk blah = GetChunk(pcx + i, pcy + j, pcz + k);
+                                        if (blah == null)
+                                        {
+                                            positionsToGen.Add(new Tuple<long, long, long, int>(pcx + i, pcy + j, pcz + k, dist));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        positionsToGen.Sort((x, y) => { return x.d.CompareTo(y.d); });
+
+                        playerChunk.distancesOfPlacesToExpand = positionsToGen;
+                    }
+
+
+                    int numToGen = System.Math.Max(playerChunk.distancesOfPlacesToExpand.Count, maxGenThisStep);
+                    for (int i = 0; i < numToGen; i++)
+                    {
+                        GetOrGenerateChunk(playerChunk.distancesOfPlacesToExpand[i].a, playerChunk.distancesOfPlacesToExpand[i].b, playerChunk.distancesOfPlacesToExpand[i].c);
+                    }
+                    playerChunk.distancesOfPlacesToExpand.RemoveRange(0, numToGen);
+                }
+            }
 
             long frameTimeStart2 = PhysicsUtils.millis();
             if (frameId > 100 || blocksWorld.optimize)
@@ -6565,6 +6607,7 @@ namespace Blocks
 
         public ComputeBuffer[] chunkBlockDatas;
         public ComputeBuffer[] chunkBlockDatasForCombined;
+        public ComputeBuffer[] nonCubePositions;
 
         int[] worldData;
 
@@ -6633,6 +6676,9 @@ namespace Blocks
             };
             return res;
         }
+
+
+        ComputeBuffer helperForCustomBlocks;
 
         void SetupRendering()
         {
@@ -6714,7 +6760,6 @@ namespace Blocks
                 float texY = 0.0f;
 
                 Vector3 offsetForTex = ApplyEpsPerturb(offset, epsPerturb);
-
 
 
                 if (i >= 0 && i <= 5)
@@ -6815,6 +6860,7 @@ namespace Blocks
             cubeNormals.SetData(vertNormals);
             uvOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             uvOffsets.SetData(texOffsets);
+            helperForCustomBlocks = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.GPUMemory);
 
             float[] texOffsetsSingleBlock = new float[36 * 4];
             for (int i = 0; i < 36; i++)
@@ -7020,17 +7066,25 @@ namespace Blocks
             drawPositions2 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
 
             // do multiple so we can run the cull blocks in parallel and don't have to wait for each one to finish
-            chunkBlockDatas = new ComputeBuffer[1];
+            int numInBatch = 1;
+            chunkBlockDatas = new ComputeBuffer[numInBatch];
             for (int i = 0; i < chunkBlockDatas.Length; i++)
             {
-                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
+                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
                 chunkBlockDatas[i] = chunkBlockDataI;
+            }
+
+            nonCubePositions = new ComputeBuffer[numInBatch];
+            for (int i = 0; i < nonCubePositions.Length; i++)
+            {
+                ComputeBuffer nonCubePositionDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int), ComputeBufferType.Append);
+                nonCubePositions[i] = nonCubePositionDataI;
             }
 
             chunkBlockDatasForCombined = new ComputeBuffer[1];
             for (int i = 0; i < chunkBlockDatasForCombined.Length; i++)
             {
-                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4);
+                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
                 chunkBlockDatasForCombined[i] = chunkBlockDataI;
             }
 
@@ -7286,6 +7340,8 @@ namespace Blocks
 
             curChunkBlockDataI = 0;
             ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
+            ComputeBuffer curNotCubePositions = nonCubePositions[curChunkBlockDataI];
+            chunk.indexUsingInBatch = curChunkBlockDataI;
             curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
             curChunkBlockData.SetData(chunk.chunkData.GetRawData());
 
@@ -7303,8 +7359,8 @@ namespace Blocks
             cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
             cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
 
-            chunk.chunkRenderer.notCubePositions.SetCounterValue(0);
-            cullBlocksShader.SetBuffer(2, "NonCubePositions", chunk.chunkRenderer.notCubePositions);
+            curNotCubePositions.SetCounterValue(0);
+            cullBlocksShader.SetBuffer(2, "NonCubePositions", curNotCubePositions);
             cullBlocksShader.Dispatch(2, chunkSize / 8, chunkSize / 8, chunkSize / 8);
 
 
@@ -7365,7 +7421,9 @@ namespace Blocks
             world.argBuffer.GetData(args);
             numNotTransparent = args[0];
 
-            ComputeBuffer.CopyCount(chunk.chunkRenderer.notCubePositions, world.argBuffer, 0);
+            ComputeBuffer curNonCubePositions = nonCubePositions[chunk.indexUsingInBatch];
+
+            ComputeBuffer.CopyCount(curNonCubePositions, world.argBuffer, 0);
             world.argBuffer.GetData(args);
             int numNonCubes = args[0];
 
@@ -7376,7 +7434,7 @@ namespace Blocks
                 //Debug.Log("drawing custom model " + chunk.cx + " " + chunk.cy + " " + chunk.cz);
                 int[] nonCubePositions = new int[numNonCubes];
                 chunk.chunkRenderer.hasCustomBlocks = true;
-                chunk.chunkRenderer.notCubePositions.GetData(nonCubePositions);
+                curNonCubePositions.GetData(nonCubePositions);
 
                 List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
 
@@ -7418,12 +7476,12 @@ namespace Blocks
                     bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, template, blockPos, renderTransform.localToWorldMatrix));
                 }
 
-                
 
-                chunk.chunkRenderer.helperSpooker.SetStructData(bonusTriangles.ToArray());
+
+                helperForCustomBlocks.SetStructData(bonusTriangles.ToArray());
 
                 cullBlocksShader.SetBuffer(3, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-                cullBlocksShader.SetBuffer(3, "ThingsToAddToDrawingThings", chunk.chunkRenderer.helperSpooker);
+                cullBlocksShader.SetBuffer(3, "ThingsToAddToDrawingThings", helperForCustomBlocks);
 
                 cullBlocksShader.Dispatch(3, bonusTriangles.Count, 1, 1);
 
@@ -7770,7 +7828,11 @@ namespace Blocks
                 cubeOffsets.Dispose();
                 cubeOffsets = null;
             }
-
+            if (helperForCustomBlocks != null)
+            {
+                helperForCustomBlocks.Dispose();
+                helperForCustomBlocks = null;
+            }
 
             if (cubeNormals != null)
             {
@@ -7819,6 +7881,22 @@ namespace Blocks
                 }
                 chunkBlockDatasForCombined = null;
             }
+
+
+
+            if (nonCubePositions != null)
+            {
+                for (int i = 0; i < nonCubePositions.Length; i++)
+                {
+                    if (nonCubePositions[i] != null)
+                    {
+                        nonCubePositions[i].Dispose();
+                        nonCubePositions[i] = null;
+                    }
+                }
+                nonCubePositions = null;
+            }
+
 
             if (world != null)
             {

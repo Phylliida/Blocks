@@ -56,10 +56,10 @@ namespace Blocks
 
             LVector3 curChunkPos;
             World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
-            if (curChunkPos != chunkPos)
+            if (curChunkPos != chunkPos && Time.frameCount > 100)
             {
-                int viewDist = 2;
-
+                int viewDist = 1;
+                World.mainWorld.playerMovedChunks = true;
 
                 for (int i = -viewDist; i <= viewDist; i++)
                 {
