@@ -4,7 +4,26 @@ using System.Collections.Generic;
 using UnityEngine;
 using Blocks;
 
-public class Sand : Block
+public class Light : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Light, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = false;
+        block.lightingState = block.lightingState | 15 | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT;
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+public class WaterSource : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -14,9 +33,6 @@ public class Sand : Block
 
     public override void OnTick(BlockData block)
     {
-        block.needsAnotherTick = false;
-        block.lightingState = block.lightingState | 15;
-        /*
         using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
         {
             if (below.block == Example.Water || below.block == Example.WaterNoFlow)
@@ -30,7 +46,6 @@ public class Sand : Block
                 below.block = Example.Water;
             }
         }
-        */
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -759,7 +774,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Shovel, new SimpleItem(), 1);
         AddCustomBlock(Example.Axe, new SimpleItem(), 1);
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
-        AddCustomBlock(Example.Sand, new Sand(), 64);
+        AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
+        AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
         //AddCustomBlock(Example.Water, new Water(), 64);
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);

@@ -20,6 +20,7 @@ namespace Example_pack {
         public static BlockValue LargeSharpRock = new BlockValue(true, "LargeSharpRock", "Example");
         public static BlockValue Lava = new BlockValue(false, "Lava", "Example");
         public static BlockValue Leaf = new BlockValue(false, "Leaf", "Example");
+        public static BlockValue Light = new BlockValue(true, "Light", "Example");
         public static BlockValue LooseRocks = new BlockValue(false, "LooseRocks", "Example");
         public static BlockValue Pickaxe = new BlockValue(true, "Pickaxe", "Example");
         public static BlockValue Rock = new BlockValue(true, "Rock", "Example");

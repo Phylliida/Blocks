@@ -1,0 +1,13 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "light": "Light.png"
+    },
+    "elements": [
+        {   "from": [ 6, 4, 6 ],
+            "to": [ 10, 8, 10 ],
+            "shade": false,
+            "texture": "light"
+        }
+    ]
+}
