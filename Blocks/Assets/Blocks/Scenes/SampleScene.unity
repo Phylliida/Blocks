@@ -2491,6 +2491,8 @@ MonoBehaviour:
     type: 2}
   breakingMaterial: {fileID: 2100000, guid: 2eda9dd64ef9dcc4ebb582d7bff95a4d, type: 2}
   renderTransform: {fileID: 324794737}
+  loggingNodePrefab: {fileID: 5916884982075722079, guid: c3d7f5008b722fb4f8bc75142fddaa09,
+    type: 3}
   blockEntityPrefab: {fileID: 1582410441544872, guid: 491f439a3d84a3a44b04dca7a77f24bd,
     type: 3}
   blockRenderPrefab: {fileID: 1114930309802920, guid: 531df86fbc15aa84bb34b0cd5ae27cc3,

@@ -1883,7 +1883,7 @@ namespace Blocks
     public class Chunk
     {
 
-
+        public List<PathingNode> pathingNodes = new List<PathingNode>();
         public bool mustRenderMe = false;
         public bool valid = true;
         public long cx, cy, cz;
@@ -1894,6 +1894,39 @@ namespace Blocks
 
         public List<Tuple<long, long, long, int>> distancesOfPlacesToExpand;
         long lastWorldNumChunks;
+
+
+        public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight)
+        {
+            // see if we have already made one for the right body specs
+            foreach (PathingNode pathingNode in pathingNodes)
+            {
+                if (pathingNode.neededSizeSide ==  neededSizeSide && pathingNode.neededSizeForward == neededSizeForward && pathingNode.neededSizeUp == neededSizeUp && pathingNode.jumpHeight == jumpHeight)
+                {
+                    // refresh it if we have been modified
+                    if (pathingNode.editNum != editNum)
+                    {
+                        pathingNode.Refresh();
+                        pathingNode.editNum = editNum;
+                    }
+
+                    return pathingNode;
+                }
+            }
+
+            // we have not, we need to make one
+            PathingNode res = new PathingNode(world, new PathingNodeBlockChunk(world,
+                cx * world.chunkSize, cy * world.chunkSize, cz * world.chunkSize,
+                cx * world.chunkSize + world.chunkSize - 1, cy * world.chunkSize + world.chunkSize - 1, cz * world.chunkSize + world.chunkSize - 1), neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+
+            pathingNodes.Add(res);
+
+            res.Refresh();
+
+            res.editNum = editNum;
+
+            return res;
+        }
 
         public long GetPos(int d)
         {
@@ -1935,6 +1968,19 @@ namespace Blocks
 
         public World world;
 
+
+
+        long editNum
+        {
+            get
+            {
+                return chunkData.editNum;
+            }
+            set
+            {
+                chunkData.editNum = value;
+            }
+        }
 
         public bool TryGetHighestSolidBlockY(long x, long z, out long highestBlockY)
         {
@@ -2747,6 +2793,7 @@ namespace Blocks
 
         public void CopyIntoChunk(Chunk chunk, int priority=0)
         {
+            editNum += 1;
             int[] chunkData = chunk.chunkData.data;
             int totalLen = System.Math.Min(data.Length, chunkData.Length);
             for (int i = 0; i < totalLen; i++)
@@ -2881,6 +2928,7 @@ namespace Blocks
             long ind = to1D(i, j, k);
             if (data[ind * 4] != block)
             {
+                editNum += 1;
                 addedBlockUpdate = true;
                 needToBeUpdated = true;
             }
@@ -2892,6 +2940,8 @@ namespace Blocks
 
             data[ind * 4] = block;
         }
+
+        public long editNum = -1;
 
 
         public int this[long i, long j, long k]
@@ -3490,6 +3540,11 @@ namespace Blocks
             }
         }
 
+        public void MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
+        {
+            blocksWorld.MakeLoggingNode(tag, text, color, wx, wy, wz);
+        }
+
         BlockInventoryCollection GetBlockInventories()
         {
             BlockInventory[] res = new BlockInventory[blocksWorld.blockInventories.Count];
@@ -3501,6 +3556,9 @@ namespace Blocks
             }
             return new BlockInventoryCollection(res);
         }
+
+
+
 
         [System.Serializable]
         public class BlockInventoryCollection
@@ -5769,7 +5827,6 @@ namespace Blocks
 
                 if ((playerMovedChunks || playerChunk.distancesOfPlacesToExpand == null || playerChunk.distancesOfPlacesToExpand.Count > 0) && frameId % 10 == 0)
                 {
-                    Debug.Log("going now " + frameId);
                     int viewDist = 4;
 
                     long pcx = divWithFloorForChunkSize(playerPos.x);
@@ -5809,7 +5866,7 @@ namespace Blocks
                     }
 
 
-                    int numToGen = System.Math.Max(playerChunk.distancesOfPlacesToExpand.Count, maxGenThisStep);
+                    int numToGen = System.Math.Min(playerChunk.distancesOfPlacesToExpand.Count, maxGenThisStep);
                     for (int i = 0; i < numToGen; i++)
                     {
                         GetOrGenerateChunk(playerChunk.distancesOfPlacesToExpand[i].a, playerChunk.distancesOfPlacesToExpand[i].b, playerChunk.distancesOfPlacesToExpand[i].c);
@@ -6570,7 +6627,7 @@ namespace Blocks
 
     public class BlocksWorld : MonoBehaviour
     {
-        public int chunkRenderDist = 10;
+        public int chunkRenderDist = 3;
         public float skyLightLevel = 1.0f;
         public ComputeShader cullBlocksShader;
         public bool creativeMode = false;
@@ -6587,6 +6644,7 @@ namespace Blocks
         public Material triMaterialWithTransparency;
         public Material breakingMaterial;
         public Transform renderTransform;
+        public GameObject loggingNodePrefab;
 
         public GameObject blockEntityPrefab;
         public GameObject blockRenderPrefab;
@@ -6625,6 +6683,20 @@ namespace Blocks
         long lastTick = 0;
         public float ticksPerSecond = 20.0f;
 
+
+
+        public void MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
+        {
+            LVector3 pos = new LVector3(wx, wy, wz);
+            Vector3 unityPos = pos.BlockCentertoUnityVector3();
+
+            GameObject loggingNode = GameObject.Instantiate(loggingNodePrefab.gameObject);
+
+            loggingNode.transform.GetComponent<Renderer>().material.color = color;
+            loggingNode.GetComponent<LoggingNode>().logTag = tag;
+            loggingNode.GetComponent<LoggingNode>().text.text = text;
+            loggingNode.transform.position = unityPos;
+        }
 
         public ComputeBuffer blockBreakingBuffer;
         public static Mesh blockMesh;

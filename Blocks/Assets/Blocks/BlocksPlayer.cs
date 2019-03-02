@@ -44,6 +44,7 @@ namespace Blocks
         LVector3 curBlockBreaking;
         int curSelectionBreakingWith = -1;
         LVector3 chunkPos;
+        LVector3 startPathingPos;
         public void Update()
         {
             /*
@@ -53,6 +54,24 @@ namespace Blocks
                 PhysicsUtils.fmod(transform.position.y, modAmount),
                 PhysicsUtils.fmod(transform.position.z, modAmount));
             */
+
+
+            if (Input.GetKeyDown(KeyCode.O))
+            {
+                startPathingPos = LVector3.FromUnityVector3(transform.position);
+                Debug.Log("start pathing pos set to " + startPathingPos);
+            }
+
+            if (Input.GetKeyDown(KeyCode.I))
+            {
+                LVector3 endPathingPos = LVector3.FromUnityVector3(transform.position);
+                Debug.Log("trying to do pathing, starting from position " + startPathingPos + " and going to position " + endPathingPos);
+
+                bool pathingSuccess;
+                BlocksPathing.Pathfind(World.mainWorld, startPathingPos, endPathingPos, 1, 1, 2, 1, out pathingSuccess);
+
+                Debug.Log("did pathing");
+            }
 
             LVector3 curChunkPos;
             World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
