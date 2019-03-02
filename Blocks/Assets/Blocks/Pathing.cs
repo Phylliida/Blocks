@@ -1067,6 +1067,7 @@ namespace Blocks
         }
 
 
+
         public static long curRunId = 0;
         public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success)
         {
@@ -1099,6 +1100,7 @@ namespace Blocks
 
             long midTime = PhysicsUtils.millis();
             List<Tuple<PathingNodeExit, SpreadNode>> connectedExitsToStart = startNode.FindConnectedExits(startPos.x, startPos.y, startPos.z, true);
+            // the issue right now is this traverses from the end node out to the exits, but we need to traverse from the exits to the end node to have the code that checks "can you walk there" do it properly
             List<Tuple<PathingNodeExit, SpreadNode>> connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, true, reversed:true);
 
             world.MakeLoggingNode("resPos", "start", Color.gray, startPos.x, startPos.y, startPos.z);
