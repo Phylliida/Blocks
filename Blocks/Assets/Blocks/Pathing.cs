@@ -1,4 +1,5 @@
 ﻿using Blocks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,6 +16,15 @@ namespace Blocks
     {
         public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success)
         {
+
+            foreach (LoggingNode node in GameObject.FindObjectsOfType<LoggingNode>())
+            {
+                if (node.logTag == "resPos")
+                {
+                    GameObject.Destroy(node.gameObject);
+                }
+            }
+
             PathingSpreadNode res = PathingNode.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success);
 
             if (res == null)
@@ -25,18 +35,11 @@ namespace Blocks
             {
                 Debug.Log("got pathing result with path of length: " + res.distFromStart + " and success=" + success);
 
-                foreach (LoggingNode node in GameObject.FindObjectsOfType<LoggingNode>())
-                {
-                    if (node.logTag == "resPos")
-                    {
-                        GameObject.Destroy(node.gameObject);
-                    }
-                }
 
                 int pos = 0;
                 res.LoopThroughPositions((wx, wy, wz) =>
                 {
-                    world.MakeLoggingNode("resPos", "Path pos " + pos, Color.green, wx, wy, wz);
+                    world.MakeLoggingNode("resPos", "Path pos " + pos, Color.green, wx, wy, wz).transform.position -= new Vector3(0,0.5f, 0);
                     pos += 1;
                 });
 
@@ -240,7 +243,7 @@ namespace Blocks
 
         public long Dist(long worldX, long worldY, long worldZ)
         {
-            return System.Math.Abs(worldX - wx) + System.Math.Abs(worldY - wy) + System.Math.Abs(worldZ - wz);
+            return Math.Abs(worldX - wx) + Math.Abs(worldY - wy) + Math.Abs(worldZ - wz);
         }
     }
 
@@ -313,8 +316,8 @@ namespace Blocks
                 long actualZ = localPositions[i].a + parentNode.locationSpec.minZ;
 
 
-                long curDist = System.Math.Abs(x - actualX) + System.Math.Abs(y - actualY) + System.Math.Abs(z - actualZ);
-                minDist = System.Math.Min(curDist, minDist);
+                long curDist = Math.Abs(x - actualX) + Math.Abs(y - actualY) + Math.Abs(z - actualZ);
+                minDist = Math.Min(curDist, minDist);
             }
             return minDist;
         }
@@ -343,10 +346,10 @@ namespace Blocks
 
 
 
-        bool MeetsFitCriteria(int x, int y, int z, SpreadNode prev=null, bool allowFalling=true, bool reversed=false)
+        bool MeetsFitCriteria(int x, int y, int z, SpreadNode prev=null, bool allowFalling=true)
         {
             bool onLand;
-            return MeetsFitCriteria(x, y, z, out onLand, prev, allowFalling, reversed);
+            return MeetsFitCriteria(x, y, z, out onLand, prev, allowFalling);
         }
 
 
@@ -397,7 +400,7 @@ namespace Blocks
             return false;
         }
 
-        bool MeetsFitCriteria(int x, int y, int z, out bool onLand, SpreadNode prev = null, bool allowFalling=true, bool reversed=false)
+        bool MeetsFitCriteria(int x, int y, int z, out bool onLand, SpreadNode prev = null, bool allowFalling=true)
         {
             // try 2 rotations of us
             bool failed = false;
@@ -406,14 +409,31 @@ namespace Blocks
             {
                 for (int curZ = z; curZ >= 0 && curZ > z - neededSizeForward; curZ--)
                 {
+                    bool failedFirst = false;
                     for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
                     {
                         if (this[curX, curY, curZ] != BlockValue.Air)
                         {
-                            failed = true;
+                            failedFirst = true;
                             break;
                         }
                     }
+                    bool failedSecond = false;
+                    for (int curY = y; curY >= 0 && curY > y - neededSizeUp; curY--)
+                    {
+                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        {
+                            failedSecond = true;
+                            break;
+                        }
+                    }
+
+                    if (failedFirst && failedSecond)
+                    {
+                        failed = true;
+                        break;
+                    }
+
                     if (y > 0)
                     {
                         if (this[curX, y-1, curZ] != BlockValue.Air)
@@ -438,7 +458,7 @@ namespace Blocks
             if (!onLand && prev != null)
             {
                 // we are just falling, that is fine
-                if ((prev.localY == y+1 && !reversed) || (prev.localY + 1 == y && reversed))
+                if (prev.localY == y+1)
                 {
                     if (allowFalling)
                     {
@@ -546,6 +566,220 @@ namespace Blocks
                     }
                 }
             }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // try 2 rotations of us
+            failed = false;
+            onLand = false;
+            for (int curX = x; curX < locationSpec.xWidth && curX < x + neededSizeSide; curX++)
+            {
+                for (int curZ = z; curZ < locationSpec.zWidth && curZ < z + neededSizeForward; curZ++)
+                {
+                    bool failedFirst = false;
+                    for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
+                    {
+                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        {
+                            failedFirst = true;
+                            break;
+                        }
+                    }
+                    bool failedSecond = false;
+                    for (int curY = y; curY >= 0 && curY > y - neededSizeUp; curY--)
+                    {
+                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        {
+                            failedSecond = true;
+                            break;
+                        }
+                    }
+
+                    if (failedFirst && failedSecond)
+                    {
+                        failed = true;
+                        break;
+                    }
+
+                    if (y > 0)
+                    {
+                        if (this[curX, y - 1, curZ] != BlockValue.Air)
+                        {
+                            onLand = true;
+                        }
+                    }
+                    else
+                    {
+                        if (this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ) != BlockValue.Air)
+                        {
+                            onLand = true;
+                        }
+                    }
+                    if (failed) break;
+                }
+                if (failed) break;
+            }
+
+
+            onLandOrJumpingOrFalling = onLand;
+            if (!onLand && prev != null)
+            {
+                // we are just falling, that is fine
+                if (prev.localY == y + 1)
+                {
+                    if (allowFalling)
+                    {
+                        onLandOrJumpingOrFalling = true;
+                    }
+                }
+                // we aren't falling, are we jumping?
+                else
+                {
+                    int effectiveJumpDist = jumpHeight;
+                    SpreadNode effectivePrev = prev;
+                    // we are allowed to travel jumpHeight steps in the air without touching ground
+                    while (effectiveJumpDist > 0 && effectivePrev != null)
+                    {
+                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
+                        if (prevOnLand)
+                        {
+                            onLandOrJumpingOrFalling = true;
+                            break;
+                        }
+                        // step back one more
+                        else
+                        {
+                            effectiveJumpDist -= 1;
+                            effectivePrev = effectivePrev.prev;
+                        }
+                    }
+                }
+            }
+
+
+            // good
+            if (!failed && onLandOrJumpingOrFalling)
+            {
+                return true;
+            }
+
+            // not good, try rotated 90 degrees
+
+            failed = false;
+            onLand = false;
+            for (int curX = x; curX < locationSpec.xWidth && curX < x + neededSizeForward; curX++)
+            {
+                for (int curZ = z; curZ < locationSpec.zWidth && curZ < z + neededSizeSide; curZ++)
+                {
+                    for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
+                    {
+                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        {
+                            failed = true;
+                            break;
+                        }
+                    }
+
+                    if (y > 0)
+                    {
+                        if (this[curX, y - 1, curZ] != BlockValue.Air)
+                        {
+                            onLand = true;
+                        }
+                    }
+                    else
+                    {
+                        if (this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ) != BlockValue.Air)
+                        {
+                            onLand = true;
+                        }
+                    }
+                    if (failed) break;
+                }
+                if (failed) break;
+            }
+
+            onLandOrJumpingOrFalling = onLand;
+            if (!onLand && prev != null)
+            {
+                // we are just falling, that is fine
+                if (prev.localY == y + 1)
+                {
+                    if (allowFalling)
+                    {
+                        onLandOrJumpingOrFalling = true;
+                    }
+                }
+                // we aren't falling, are we jumping?
+                else
+                {
+                    int effectiveJumpDist = jumpHeight;
+                    SpreadNode effectivePrev = prev;
+                    // we are allowed to travel jumpHeight steps in the air without touching ground
+                    while (effectiveJumpDist > 0 && effectivePrev != null)
+                    {
+                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
+                        if (prevOnLand)
+                        {
+                            onLandOrJumpingOrFalling = true;
+                            break;
+                        }
+                        // step back one more
+                        else
+                        {
+                            effectiveJumpDist -= 1;
+                            effectivePrev = effectivePrev.prev;
+                        }
+                    }
+                }
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             return !failed && onLandOrJumpingOrFalling;
         }
 
@@ -558,6 +792,18 @@ namespace Blocks
 
             bool wallsWereExpanded = wallsExpanded;
             wallsExpanded = false;
+
+            // reset exit values to zero
+            for (int x = 0; x < locationSpec.xWidth; x++)
+            {
+                for (int y = 0; y < locationSpec.yWidth; y++)
+                {
+                    for (int z = 0; z < locationSpec.zWidth; z++)
+                    {
+                        data[x, y, z] = 0;
+                    }
+                }
+            }
 
             GetExits();
             ConnectExits();
@@ -796,6 +1042,8 @@ namespace Blocks
             {
                 for (int y = 0; y < locationSpec.yWidth; y++)
                 {
+                    callback(x, y, 0);
+                    /*
                     // because pathing works by always choosing a fixed point on you (if you are more than one block wide), MeetsFitCriteria will never return true for some borders unless we actually look at slightly inside the borders instead
                     if (neededSizeForward == 1)
                     {
@@ -813,6 +1061,7 @@ namespace Blocks
                     {
                         callback(x, y, neededSizeSide - 1);
                     }
+                    */
                 }
             }
 
@@ -826,7 +1075,8 @@ namespace Blocks
                     }
                     else if(neededSizeUp - 1 < locationSpec.yWidth)
                     {
-                        callback(x, neededSizeUp - 1, z);
+                        //callback(x, neededSizeUp - 1, z);
+                        callback(x, 0, z);
                     }
                 }
             }
@@ -836,6 +1086,8 @@ namespace Blocks
             {
                 for (int z = 0; z < locationSpec.zWidth; z++)
                 {
+                    callback(0, y, z);
+                    /*
                     if (neededSizeForward == 1)
                     {
                         callback(0, y, z);
@@ -852,6 +1104,7 @@ namespace Blocks
                     {
                         callback(neededSizeSide - 1, y, z);
                     }
+                    */
                 }
             }
 
@@ -919,10 +1172,13 @@ namespace Blocks
 
         void DoSpread(Tuple<int, int, int>[] startPoints, MeetsCriteria meetsSpreadCriteria)
         {
-            Queue<SpreadNode> needToBeProcessed = new Queue<SpreadNode>(System.Math.Max(10, startPoints.Length*2));
+            Queue<SpreadNode> needToBeProcessed = new Queue<SpreadNode>(Math.Max(10, startPoints.Length*2));
             foreach (Tuple<int, int, int> startPoint in startPoints)
             {
-                needToBeProcessed.Enqueue(new SpreadNode(startPoint.a, startPoint.b, startPoint.c, null, this));
+                SpreadNode startNode = new SpreadNode(startPoint.a, startPoint.b, startPoint.c, null, this);
+                // run function on starting positions, but don't actually care about output
+                meetsSpreadCriteria(startNode);
+                needToBeProcessed.Enqueue(startNode);
             }
 
             while (needToBeProcessed.Count > 0)
@@ -957,9 +1213,13 @@ namespace Blocks
             int localStartZ = (int)(startZ - locationSpec.minZ);
 
 
+
             List<PathingNodeExit> exits = GetExits();
             List<Tuple<PathingNodeExit, SpreadNode>> res = new List<Tuple<PathingNodeExit, SpreadNode>>();
             HashSet<int> foundExits = new HashSet<int>();
+
+
+
             DoSpread(localStartX, localStartY, localStartZ, (n) =>
             {
                 if (data[n.localX,n.localY,n.localZ,PathingFlags.Visited])
@@ -967,17 +1227,33 @@ namespace Blocks
                     return false;
                 }
 
-                data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
 
                 ushort exitNum = data[n.localX, n.localY, n.localZ];
 
-                bool canWeFit = MeetsFitCriteria(n.localX, n.localY, n.localZ, n.prev, allowFalling: allowFalling, reversed: reversed);
+                bool canWeFit;
+                if (reversed && n.prev != null)
+                {
+                    canWeFit = MeetsFitCriteria(n.prev.localX, n.prev.localY, n.prev.localZ, n, allowFalling: allowFalling);
+                }
+                else
+                {
+                    canWeFit = MeetsFitCriteria(n.localX, n.localY, n.localZ, n.prev, allowFalling: allowFalling);
+                }
                 // if we found an exit node (non-zero means exit node) and we haven't seen it yet, record the path
                 if (exitNum != 0 && !foundExits.Contains(exitNum) && canWeFit)
                 {
                     foundExits.Add(exitNum);
                     int exitNumI = exitNum - 1;
                     res.Add(new Tuple<PathingNodeExit, SpreadNode>(exits[exitNumI], n));
+
+                }
+                //GameObject spook = world.MakeLoggingNode("resPos", "connected to pos " + startX + " " + startY + " " + startZ, Color.blue, n.wx, n.wy, n.wz);
+                //spook.transform.localScale *= 0.5f;
+                //spook.transform.position += new Vector3(0.5f, 0, 0.5f);
+
+                if (canWeFit)
+                {
+                    data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
                 }
 
                 // only trickle if we can actually move through here
@@ -1007,7 +1283,7 @@ namespace Blocks
 
 
 
-        public SpreadNode FindPathThroughExit(int localStartX, int localStartY, int localStartZ, int localEndX, int localEndY, int localEndZ, ushort exitNum)
+        public SpreadNode FindPathThroughExit(int localStartX, int localStartY, int localStartZ, int localEndX, int localEndY, int localEndZ, ushort exitNum, bool verbose=false)
         {
             List<PathingNodeExit> exits = GetExits();
 
@@ -1022,6 +1298,8 @@ namespace Blocks
             }
 
             SpreadNode pathThroughExit = null;
+
+            data[localStartX, localStartY, localStartZ, PathingFlags.Visited] = true;
             // connect current position in exit to place where we are leaving exit
             DoSpread(localStartX, localStartY, localStartZ, (n) =>
             {
@@ -1030,7 +1308,10 @@ namespace Blocks
                 {
                     return false;
                 }
-                //Debug.Log("spread to node " + n);
+                if (verbose)
+                {
+                    Debug.Log("spread to node " + n + " with exitVal " + data[n.localX, n.localY, n.localZ] + " (desired exit val is " + exitNum + " )");
+                }
                 // only spread through exit
 
                 if (data[n.localX, n.localY, n.localZ, PathingFlags.Visited])
@@ -1061,12 +1342,12 @@ namespace Blocks
 
             if (pathThroughExit == null)
             {
-                Debug.LogWarning("unable to find path through exit, perhaps exit is segmented by a falling section? also, the ids were " + data[localStartX, localStartY, localStartZ] + " " + data[localEndX, localEndY, localEndZ]);
+                Debug.LogWarning("unable to find path through exit, perhaps exit is segmented by a falling section? also, the ids were " + data[localStartX, localStartY, localStartZ] + " " + data[localEndX, localEndY, localEndZ] + " and the positions were " + localStartX+ " " + localStartY + " " + localStartZ + " and " + localEndX + " " + localEndY + " " + localEndZ);
             }
             return pathThroughExit;
         }
 
-
+        List<GameObject> myLoggingNodes = new List<GameObject>();
 
         public static long curRunId = 0;
         public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success)
@@ -1134,15 +1415,14 @@ namespace Blocks
 
 
             long loopTime = PhysicsUtils.millis();
-            int maxSteps = 1000;
             int numSteps = 0;
             bool foundCompletePath = false;
-            while (pQueue.Count > 0 && (numSteps < maxSteps || PhysicsUtils.millis() - loopTime < 1000))
+            while (pQueue.Count > 0 && (numSteps < 20 || PhysicsUtils.millis() - loopTime < 5000))
             {
                 numSteps += 1;
                 PathingSpreadNode curNode = pQueue.Dequeue();
 
-                //world.MakeLoggingNode("resPos", "considered step " + numSteps, Random.ColorHSV(), curNode.wx, curNode.wy, curNode.wz);
+                //world.MakeLoggingNode("resPos", "considered step " + numSteps, UnityEngine.Random.ColorHSV(), curNode.wx, curNode.wy, curNode.wz);
 
 
                 // if we set connectedToExit to curRunId above, that means we found a node that is connected to the exit! We are done
@@ -1195,6 +1475,9 @@ namespace Blocks
                                 
                                 if (pathThroughExit == null)
                                 {
+                                    Debug.Log("failed to connect exit pieces, pos leaving exit " + posLeavingExit + " pos of cur node in exit " + posOfCurNodeInExit + " with exit value " + exitValue + " and leaving exit value " +  otherExitValue);
+                                    curNodeParent.FindPathThroughExit(posOfCurNodeInExit.localX, posOfCurNodeInExit.localY, posOfCurNodeInExit.localZ, posLeavingExit.localX, posLeavingExit.localY, posLeavingExit.localZ, exitValue, verbose: true);
+
                                     continue;
                                 }
                                 spreadNodeThroughExit = new PathingSpreadNode(connectedExit.outExit, curNode, pathThroughExit);
@@ -1228,7 +1511,7 @@ namespace Blocks
             long endTime = PhysicsUtils.millis();
 
 
-            Debug.Log(startTime + " " + (midTime-startTime) + " " + (loopTime-midTime) + " " + (endTime-loopTime));
+            //Debug.Log(startTime + " " + (midTime-startTime) + " " + (loopTime-midTime) + " " + (endTime-loopTime));
 
             curRunId += 1;
 
@@ -1255,6 +1538,11 @@ namespace Blocks
                             if (pathThroughExit != null)
                             {
                                 closest = new PathingSpreadNode(connectedExit.a, closest, pathThroughExit);
+                            }
+                            else
+                            {
+                                startOfPathToExit.parentNode.FindPathThroughExit(startOfPathToExit.localX, startOfPathToExit.localY, startOfPathToExit.localZ, currentPos.localX, currentPos.localY, currentPos.localZ, exitNum1, verbose: true);
+
                             }
                         }
 
@@ -1330,10 +1618,11 @@ namespace Blocks
             if (neighbor.locationSpec.minX - 1 == locationSpec.maxX)
             {
                 int myX = (int)(locationSpec.xWidth - 1);
-                int theirX = System.Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
-                for (long y = System.Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                //int theirX = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int theirX = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
                 {
-                    for (long z = System.Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
                     {
                         int myY = (int)(y - locationSpec.minY);
                         int theirY = (int)(y - neighbor.locationSpec.minY);
@@ -1344,13 +1633,13 @@ namespace Blocks
                     }
                 }
             }
-            else if (neighbor.locationSpec.minY - 1 == locationSpec.maxY)
+            if (neighbor.locationSpec.minY - 1 == locationSpec.maxY)
             {
                 int myY = (int)(locationSpec.yWidth - 1);
                 int theirY = 0;
-                for (long x = System.Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
                 {
-                    for (long z = System.Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
                     {
                         int myX = (int)(x - locationSpec.minX);
                         int theirX = (int)(x - neighbor.locationSpec.minX);
@@ -1361,13 +1650,14 @@ namespace Blocks
                     }
                 }
             }
-            else if (neighbor.locationSpec.minZ - 1 == locationSpec.maxZ)
+            if (neighbor.locationSpec.minZ - 1 == locationSpec.maxZ)
             {
                 int myZ = (int)(locationSpec.zWidth - 1);
-                int theirZ = System.Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
-                for (long y = System.Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                //int theirZ = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int theirZ = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
                 {
-                    for (long x = System.Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                    for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
                     {
                         int myY = (int)(y - locationSpec.minY);
                         int theirY = (int)(y - neighbor.locationSpec.minY);
@@ -1378,13 +1668,14 @@ namespace Blocks
                     }
                 }
             }
-            else if (locationSpec.minX - 1 == neighbor.locationSpec.maxX)
+            if (locationSpec.minX - 1 == neighbor.locationSpec.maxX)
             {
                 int theirX = (int)(neighbor.locationSpec.xWidth - 1);
-                int myX = System.Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
-                for (long y = System.Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                //int myX = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int myX = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
                 {
-                    for (long z = System.Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
                     {
                         int myY = (int)(y - locationSpec.minY);
                         int theirY = (int)(y - neighbor.locationSpec.minY);
@@ -1395,14 +1686,14 @@ namespace Blocks
                     }
                 }
             }
-            else if (locationSpec.minY - 1 == neighbor.locationSpec.maxY)
+            if (locationSpec.minY - 1 == neighbor.locationSpec.maxY)
             {
 
                 int theirY = (int)(neighbor.locationSpec.yWidth - 1);
                 int myY = 0; // todo: double check this
-                for (long x = System.Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
                 {
-                    for (long z = System.Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
                     {
                         int myX = (int)(x - locationSpec.minX);
                         int theirX = (int)(x - neighbor.locationSpec.minX);
@@ -1413,13 +1704,14 @@ namespace Blocks
                     }
                 }
             }
-            else if (locationSpec.minZ - 1 == neighbor.locationSpec.maxZ)
+            if (locationSpec.minZ - 1 == neighbor.locationSpec.maxZ)
             {
                 int theirZ = (int)(neighbor.locationSpec.zWidth - 1);
-                int myZ = System.Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
-                for (long y = System.Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                //int myZ = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int myZ = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
                 {
-                    for (long x = System.Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                    for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
                     {
                         int myY = (int)(y - locationSpec.minY);
                         int theirY = (int)(y - neighbor.locationSpec.minY);
@@ -1528,7 +1820,6 @@ namespace Blocks
                     {
                         return false;
                     }
-                    data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
                     ushort spreadExitVal = data[n.localX, n.localY, n.localZ];
                     int spreadExitI = spreadExitVal - 1;
                     // we reached an exit that is distinct from ours that we haven't reached before, mark that path
@@ -1541,6 +1832,11 @@ namespace Blocks
                         exitConnection.AddPath(n);
                         exits[curExitI].AddExitConnection(exitConnection);
                         pathsBetween[curExitI, spreadExitI] = n;
+                    }
+
+                    if (weCanFit)
+                    {
+                        data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
                     }
 
                     return weCanFit;
@@ -1620,13 +1916,24 @@ namespace Blocks
 
             cachedExits = exits;
 
+            foreach (GameObject node in myLoggingNodes)
+            {
+                GameObject.Destroy(node);
+            }
+            myLoggingNodes.Clear();
             //Debug.Log("got " + exits.Count + " exits with location spec " + locationSpec);
             for (int i = 0; i < exits.Count; i++)
             {
-                Color exitColor = Random.ColorHSV();
+                Color exitColor = UnityEngine.Random.ColorHSV();
+                string locationString = this.locationSpec.ToString();
+
                 foreach (Tuple<int, int, int> pos in exits[i].localPositions)
                 {
-                    //world.MakeLoggingNode("exit tag", "exit " + i + " for " + locationSpec, exitColor, pos.a + locationSpec.minX, pos.b + locationSpec.minY, pos.c + locationSpec.minZ);
+                    break;
+                    GameObject exitNode = world.MakeLoggingNode(locationString, "exit " + i + " for " + locationSpec, exitColor, pos.a + locationSpec.minX, pos.b + locationSpec.minY, pos.c + locationSpec.minZ);
+                    exitNode.transform.localScale *= 0.5f;
+                    exitNode.transform.localPosition += new Vector3(0.5f, 0.5f, 0.5f);
+                    myLoggingNodes.Add(exitNode);
                 }
             }
 
@@ -1638,9 +1945,9 @@ namespace Blocks
 
         public bool IsBorder(int x, int y, int z)
         {
-            return x == 0 || x == (locationSpec.xWidth - 1) ||
-                y == 0 || y == (locationSpec.xWidth - 1) ||
-                z == 0 || z == (locationSpec.xWidth - 1);
+            return x == neededSizeForward-1 || x == neededSizeSide - 1 || x == (locationSpec.xWidth - 1) ||
+                y == 0 || y == (locationSpec.yWidth - 1) ||
+                z == neededSizeForward-1 || z == neededSizeSide - 1 || z == (locationSpec.zWidth - 1);
         }
 
 

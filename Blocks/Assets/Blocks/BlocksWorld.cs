@@ -3540,9 +3540,9 @@ namespace Blocks
             }
         }
 
-        public void MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
+        public GameObject MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
         {
-            blocksWorld.MakeLoggingNode(tag, text, color, wx, wy, wz);
+            return blocksWorld.MakeLoggingNode(tag, text, color, wx, wy, wz);
         }
 
         BlockInventoryCollection GetBlockInventories()
@@ -6685,7 +6685,7 @@ namespace Blocks
 
 
 
-        public void MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
+        public GameObject MakeLoggingNode(string tag, string text, Color color, long wx, long wy, long wz)
         {
             LVector3 pos = new LVector3(wx, wy, wz);
             Vector3 unityPos = pos.BlockCentertoUnityVector3();
@@ -6696,6 +6696,8 @@ namespace Blocks
             loggingNode.GetComponent<LoggingNode>().logTag = tag;
             loggingNode.GetComponent<LoggingNode>().text.text = text;
             loggingNode.transform.position = unityPos;
+
+            return loggingNode;
         }
 
         public ComputeBuffer blockBreakingBuffer;
