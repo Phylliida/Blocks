@@ -49,9 +49,34 @@ namespace Blocks
                 {
                     myPos = blockStandingOn.hitBlock + new LVector3(0, blocksHeight, 0);
                 }
+
+                ////// new stuff
+                // find position on ground below player and path to that instead
                 LVector3 playerPos = LVector3.FromUnityVector3(pathingTarget.transform.position);
+                int goDownAmount = 10; // don't get into infinite loop, give up eventually
+                while (playerPos.BlockV == BlockValue.Air && goDownAmount > 0)
+                {
+                    playerPos = playerPos - new LVector3(0, 1, 0);
+                    goDownAmount--;
+                }
+                playerPos += new LVector3(0, 2, 0);
+                //////
+
+
                 bool iShouldJump;
-                PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, playerPos, 200);
+
+
+                //// new stuff
+                bool pathingSuccess = false;
+                PathingSpreadNode resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, playerPos, 1, 1, blocksHeight, 1, out pathingSuccess);
+                iShouldJump = true;
+                if (resPath != null)
+                {
+                    curPath = (new PathingResult(resPath)).GetPathNode();
+                }
+                /////
+
+                //PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, playerPos, 200);
 
                 if (iShouldJump)
                 {

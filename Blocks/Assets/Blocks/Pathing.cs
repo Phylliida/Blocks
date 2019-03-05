@@ -12,37 +12,105 @@ namespace Blocks
 
     }
 
+    public class PathingResult
+    {
+
+        public PathingSpreadNode result;
+
+        public List<LVector3> positions = new List<LVector3>();
+        public PathNode pathNode;
+
+        public PathNode GetPathNode()
+        {
+            return pathNode;
+        }
+
+        public PathingResult(PathingSpreadNode result)
+        {
+            this.result = result;
+
+            int length = 0;
+
+            result.LoopThroughPositions((wx, wy, wz, segment, pathingNode) =>
+            {
+                LVector3 curPos = new LVector3(wx, wy, wz);
+                // don't add duplicate positions (this sometimes happens due to pathing stuffs)
+                if (positions.Count > 0 && positions[positions.Count - 1] == curPos)
+                {
+                    Debug.Log(curPos + " duplicate with " + positions[positions.Count - 1]);
+                }
+                else
+                {
+                    positions.Add(curPos);
+                }
+            });
+
+            // path normally goes from finish to start
+            positions.Reverse();
+
+
+            PathNode prev = null;
+            for (int i = 0; i < positions.Count; i++)
+            {
+                PathNode cur = new PathNode(positions[i], prev);
+                if (prev != null)
+                {
+                    prev.nextNode = cur;
+                }
+                prev = cur;
+            }
+
+            pathNode = prev;
+
+        }
+
+
+
+    }
+
+
     public class BlocksPathing
     {
-        public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success)
+        public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
         {
 
-            foreach (LoggingNode node in GameObject.FindObjectsOfType<LoggingNode>())
+            if (verbose)
             {
-                if (node.logTag == "resPos")
+                foreach (LoggingNode node in GameObject.FindObjectsOfType<LoggingNode>())
                 {
-                    GameObject.Destroy(node.gameObject);
+                    if (node.logTag == "resPos")
+                    {
+                        GameObject.Destroy(node.gameObject);
+                    }
                 }
             }
 
-            PathingSpreadNode res = PathingNode.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success);
+            PathingSpreadNode res = PathingNode.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success, verbose: verbose);
 
             if (res == null)
             {
-                Debug.LogWarning("pathing failed");
+                if (verbose)
+                {
+                    Debug.LogWarning("pathing failed");
+                }
             }
             else
             {
-                Debug.Log("got pathing result with path of length: " + res.distFromStart + " and success=" + success);
-
-
-                int pos = 0;
-                res.LoopThroughPositions((wx, wy, wz) =>
+                if (verbose)
                 {
-                    world.MakeLoggingNode("resPos", "Path pos " + pos, Color.green, wx, wy, wz).transform.position -= new Vector3(0,0.5f, 0);
-                    pos += 1;
-                });
+                    Debug.Log("got pathing result with path of length: " + res.distFromStart + " and success=" + success);
+                }
 
+
+                if (verbose)
+                {
+                    int pos = 0;
+                    res.LoopThroughPositions((wx, wy, wz, segment, pathingNode) =>
+                    {
+                            world.MakeLoggingNode("resPos", "Path pos " + pos, Color.green, wx, wy, wz).transform.position -= new Vector3(0, 0.5f, 0);
+                        pos += 1;
+                    });
+                }
             }
 
 
@@ -56,10 +124,25 @@ namespace Blocks
         public PathingNodeExit curExit;
         public PathingSpreadNode prevNode;
         public SpreadNode pathToPrevNode;
+
+
+        public enum PathingSpreadNodeType
+        {
+            ConnectingExitsInSameChunk,
+            ConnectingExitsInTwoDifferentChunks,
+            ConnectingStartToExit,
+            ConnectingEndToExit,
+            ConnectingStartToEndDirectlyInSameChunk,
+            Unknown
+        }
+
+
+        public PathingSpreadNodeType pathingNodeSpreadType = PathingSpreadNodeType.Unknown;
+
         public int distFromStart;
 
 
-        public delegate void LoopThroughPositionsCallback(long wx, long wy, long wz);
+        public delegate void LoopThroughPositionsCallback(long wx, long wy, long wz, SpreadNode segment, PathingSpreadNode pathingNode);
 
         public void LoopThroughPositions(LoopThroughPositionsCallback callback)
         {
@@ -71,7 +154,7 @@ namespace Blocks
                 SpreadNode curPos = curNode.pathToPrevNode;
                 do
                 {
-                    callback(curPos.wx, curPos.wy, curPos.wz);
+                    callback(curPos.wx, curPos.wy, curPos.wz, curPos, curNode);
                     curPos = curPos.prev;
                 }
                 while (curPos != null);
@@ -156,6 +239,343 @@ namespace Blocks
                 localZ + "(" + wz + ")" + "]";
         }
 
+
+        /*
+        bool cachedValuesOnLand { get { return GetCacheBit(0); } set { SetCacheBit(0, value); } }
+        bool onLandJumping { get { return GetCacheBit(1); } set { SetCacheBit(1, value); } }
+
+        byte onLandHeightJumped { get { return GetCacheValue(8+8); } set { SetCacheValue(8 + 8, value); } }
+        bool onLandFalling { get { return GetCacheBit(2); } set { SetCacheBit(2, value); } }
+        byte onLandHeightFallen { get { return GetCacheValue(8 + 16); } set { SetCacheValue(8 + 16, value); } }
+        bool onLandIsValid { get { return GetCacheBit(3); } set { SetCacheBit(3, value); } }
+
+        bool cachedValuesOffLand { get { return GetCacheBit(4); } set { SetCacheBit(4, value); } }
+        bool offLandJumping { get { return GetCacheBit(5); } set { SetCacheBit(5, value); } }
+        byte offLandHeightJumped { get { return GetCacheValue(8 + 24); } set { SetCacheValue(8 + 24, value); } }
+        bool offLandFalling { get { return GetCacheBit(6); } set { SetCacheBit(6, value); } }
+        byte offLandHeightFallen { get { return GetCacheValue(8 + 32); } set { SetCacheValue(8 + 32, value); } }
+        bool offLandIsValid { get { return GetCacheBit(7); } set { SetCacheBit(7, value); } }
+
+        bool onLand { get { return GetCacheBit(8); } set { SetCacheBit(8, value); } }
+        */
+
+        bool cachedValuesOnLand = false;
+        bool onLandJumping;
+
+        byte onLandHeightJumped;
+        bool onLandFalling;
+        byte onLandHeightFallen;
+        bool onLandIsValid;
+
+        bool cachedValuesOffLand = false;
+        bool offLandJumping;
+        byte offLandHeightJumped;
+        bool offLandFalling;
+        byte offLandHeightFallen;
+        bool offLandIsValid;
+
+        public bool cachedOnLand = false;
+        public bool onLand;
+
+        ulong cachedValues;
+
+
+        public void SetCacheValue(int pos, byte value)
+        {
+            ulong clearedField = cachedValues & (~((ulong)0xFF << pos));
+            cachedValues = clearedField | ((ulong)(((ulong)value) << pos));
+        }
+
+        public byte GetCacheValue(int pos)
+        {
+            return (byte)((cachedValues >> pos) & 0xFF);
+        }
+
+        public void SetCacheBit(int pos, bool value)
+        {
+            if (value)
+            {
+                cachedValues = cachedValues | ((ulong)(1) << pos);
+            }
+            else
+            {
+                cachedValues = cachedValues & (~(((ulong)(1) << pos)));
+            }
+        }
+
+        public bool GetCacheBit(int pos)
+        {
+            return (((ulong)(1) << pos) & cachedValues) != 0;
+        }
+
+
+        LoggingNode loggingNodea;
+        LoggingNode loggingNodeb;
+
+        /// <summary>
+        /// Gets some info about the movement. Returns true if the movement is valid, false if not
+        /// Falling is always allowed, allowFalling is only used for recursive calls if prev hasn't had MeetsFitCriteria called on it yet (to determine if it is touching land)
+        /// </summary>
+        /// <param name="x">local x position in pathing chunk</param>
+        /// <param name="y">local y position in pathing chunk</param>
+        /// <param name="z">local z position in pathing chunk</param>
+        /// <param name="prev">position we were previously in, null is okay to pass in here if unknown.
+        /// If null is passed in and we are not on land, jumping and falling are false and all of the heights are 0.
+        /// Otherwise, jumping and falling will be set to true and all of the heights will be set to 1.</param>
+        /// <param name="jumping">Whether or not we are jumping</param>
+        /// <param name="jumpHeight">How high we are jumping (if jumping = true), 0 otherwise</param>
+        /// <param name="falling">Whether or not we are falling</param>
+        /// <param name="fallHeight">How far we have fallen (if falling = true, or falling = false and we have just landed), 0 otherwise</param>
+        /// <returns>true if the movement can be done, false if not</returns>
+        public bool GetInfoAboutJumpingOrFalling(bool onLand, SpreadNode prev, out bool jumping, out int heightJumped, out bool falling, out int heightFallen, bool allowFalling)
+        {
+            SpreadNode node = this;
+            //this.onLand = node.parentNode.OnLand(node.localX, node.localY, node.localZ);
+            //onLand = this.onLand;
+            this.onLand = onLand;
+            this.cachedOnLand = true;
+            if (onLand)
+            {
+
+                if (!cachedValuesOnLand)
+                {
+                    bool onLandJumpingTmp, onLandFallingTmp;
+                    int onLandHeightFallenTmp, onLandHeightJumpedTmp;
+                    onLandIsValid = GetInfoAboutJumpingOrFallingHelper(onLand, prev, out onLandJumpingTmp, out onLandHeightJumpedTmp, out onLandFallingTmp, out onLandHeightFallenTmp, allowFalling);
+                    cachedValuesOnLand = true;
+                    onLandJumping = onLandJumpingTmp;
+                    onLandFalling = onLandFallingTmp;
+                    if (onLandHeightFallenTmp > 255) { onLandHeightFallenTmp = 255; }
+                    onLandHeightFallen = (byte)onLandHeightFallenTmp;
+                    if (onLandHeightJumpedTmp > 255) { onLandHeightJumpedTmp = 255; }
+                    onLandHeightJumped = (byte)onLandHeightJumpedTmp;
+                }
+                jumping = onLandJumping;
+                heightJumped = onLandHeightJumped;
+                falling = onLandFalling;
+                heightFallen = onLandHeightFallen;
+                if (onLandIsValid && loggingNodea == null)
+                {
+                    //loggingNodea = World.mainWorld.MakeLoggingNode(node + "", "prev " + prev + " onLand " + onLand + " jumping " + jumping + " heightJumped " + heightJumped + " falling " + falling + " heightFallen " + heightFallen, Color.cyan, node.wx, node.wy, node.wz).GetComponent<LoggingNode>();
+                    //loggingNodea.transform.localScale *= 0.5f;
+                    //loggingNodea.transform.position += new Vector3(0.5f, 0.5f, 0.5f);
+                }
+                return onLandIsValid;
+            }
+            else
+            {
+                if (!cachedValuesOffLand)
+                {
+                    bool offLandJumpingTmp, offLandFallingTmp;
+                    int offLandHeightFallenTmp, offLandHeightJumpedTmp;
+                    offLandIsValid = GetInfoAboutJumpingOrFallingHelper(onLand, prev, out offLandJumpingTmp, out offLandHeightJumpedTmp, out offLandFallingTmp, out offLandHeightFallenTmp, allowFalling);
+                    cachedValuesOffLand = true;
+                    offLandJumping = offLandJumpingTmp;
+                    offLandFalling = offLandFallingTmp;
+                    // cap at 255 because if you fall more than that then whatever that is sprucy enough
+                    if (offLandHeightFallenTmp > 255) { offLandHeightFallenTmp = 255; }
+                    offLandHeightFallen = (byte)offLandHeightFallenTmp;
+                    if (offLandHeightJumpedTmp > 255) { offLandHeightJumpedTmp = 255; }
+                    offLandHeightJumped = (byte)offLandHeightJumpedTmp;
+                }
+                jumping = offLandJumping;
+                heightJumped = offLandHeightJumped;
+                falling = offLandFalling;
+                heightFallen = offLandHeightFallen;
+
+                if (offLandIsValid && loggingNodeb == null)
+                {
+                    //loggingNodeb = World.mainWorld.MakeLoggingNode(node + "", "prev " + prev + "onLand " + onLand + " jumping " + jumping + " heightJumped " + heightJumped + " falling " + falling + " heightFallen " + heightFallen, Color.cyan, node.wx, node.wy, node.wz).GetComponent<LoggingNode>();
+                    //loggingNodeb.transform.localScale *= 0.5f;
+                    //loggingNodeb.transform.position -= new Vector3(0.5f, 0.5f, 0.5f);
+                }
+
+                return offLandIsValid;
+            }
+        }
+
+        // The max depth thing is just to prevent this from recursing always as deep as possible (since that isn't actually needed)
+        bool GetInfoAboutJumpingOrFallingHelper(bool onLand,  SpreadNode prev, out bool jumping, out int heightJumped, out bool falling, out int heightFallen, bool allowFalling)
+        {
+            SpreadNode node = this;
+            heightJumped = 0;
+            heightFallen = 0;
+            jumping = false;
+            falling = false;
+            int x = node.localX;
+            int y = node.localY;
+            int z = node.localZ;
+            if (prev == null)
+            {
+                // not much info to go off of, assume jumping and falling if not on land, otherwise assume neither
+                jumping = !onLand;
+                falling = !onLand;
+                if (jumping)
+                {
+                    heightJumped = 1;
+                }
+                if (falling)
+                {
+                    heightFallen = 1;
+                }
+
+                return true;
+            }
+            else
+            {
+                bool prevOnLand = prev.onLand;
+
+                if (!prev.cachedOnLand)
+                {
+                    // this is just to get if they are on land or not
+                    parentNode.MeetsFitCriteria(prev, prev.prev, allowFalling: allowFalling);
+                    prevOnLand = prev.onLand;
+                }
+
+                // we were falling or jumping
+                if (!prevOnLand)
+                {
+                    bool prevJumping, prevFalling;
+                    int prevHeightJumped, prevHeightFallen;
+
+                    // if prev is not valid, we aren't valid, this can happen when we are doing reverse
+                    if (!prev.GetInfoAboutJumpingOrFalling(prevOnLand, prev.prev, out prevJumping, out prevHeightJumped, out prevFalling, out prevHeightFallen, allowFalling))
+                    {
+                        //Debug.LogWarning("Warning: In OnLandOrJumpingOrFalling got invalid prev of " + prev + ", we should not have branched from it why are we here (local here position of " + x + " " + y + " " + z + ")");
+                        return false;
+                    }
+
+                    // on same y column
+                    if (x == prev.localX && z == prev.localZ)
+                    {
+                        // going up
+                        if (y > prev.localY)
+                        {
+                            // we are jumping, this is ok
+                            if (prevJumping)
+                            {
+                                jumping = true;
+                                heightJumped = prevHeightJumped + (y - prev.localY);
+                                return true;
+                            }
+                            // we aren't jumping, we can't go up, this is invalid
+                            else
+                            {
+                                return false;
+                            }
+                        }
+                        // same position, what are you doing?
+                        else if (y == prev.localY)
+                        {
+                            Debug.LogWarning("Warning: Same position as prev, why? prev and us is " + prev);
+                            return false;
+                        }
+                        // going down
+                        else
+                        {
+                            // we are falling, that is fine
+                            if (prevFalling)
+                            {
+                                // we hit ground, we aren't falling anymore, still we should record the fall height if needed elsewhere
+                                if (onLand)
+                                {
+                                    falling = false;
+                                    heightFallen = prevHeightFallen + (prev.localY - y);
+                                }
+                                // we are still falling
+                                else
+                                {
+                                    falling = true;
+                                    heightFallen = prevHeightFallen + (prev.localY - y);
+                                }
+                                return true;
+                            }
+                            // we aren't falling so we shouldn't be going down, this is invalid
+                            else
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                    // on different y column
+                    else
+                    {
+                        // we just jumped up onto a block (up a staircase type thing)
+                        if (onLand)
+                        {
+                            // that is too high, this is invalid
+                            if (prevHeightJumped > this.parentNode.jumpHeight)
+                            {
+                                return false;
+                            }
+                            // we are on land now so this is valid
+                            else
+                            {
+                                return true;
+                            }
+                        }
+                        // don't allow moving around in the air for pathing, except up and down and over one if we are going up a staircase type thing
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                }
+                // we came from being on land
+                else
+                {
+                    // we are still on land, this is good
+                    if (onLand)
+                    {
+                        return true;
+                    }
+                    // we are no longer on land, we are either jumping or falling
+                    else
+                    {
+                        // same y column, we must be jumping
+                        if (prev.localX == x && prev.localZ == z)
+                        {
+                            // we are jumping
+                            if (prev.localY < y)
+                            {
+                                jumping = true;
+                                heightJumped = y - prev.localY;
+                                return true;
+                            }
+                            // same block? why u do this
+                            else if (prev.localY == y)
+                            {
+                                Debug.LogWarning("Warning: Same position as prev, why? prev and us is " + prev);
+                                return false;
+                            }
+                            // we have just fallen through a block somehow? This is invalid
+                            else
+                            {
+                                return false;
+                            }
+                        }
+                        // we have moved horizontally, we must be falling
+                        // TODO: allow jumping over gaps
+                        else
+                        {
+                            // we have walked over a hole, begin falling
+                            if (prev.localY == y)
+                            {
+                                falling = true;
+                                heightFallen = 0;
+                                return true;
+                            }
+                            // we are not allowed to do jump over gaps yet
+                            else
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         public SpreadNode(int x, int y, int z, SpreadNode prev, PathingNode parentNode)
         {
             this.localX = x;
@@ -191,7 +611,7 @@ namespace Blocks
             }
          }
 
-        public SpreadNode InvertPath()
+        public SpreadNode GetInvertedPath()
         {
 
             SpreadNode cur = this;
@@ -279,6 +699,7 @@ namespace Blocks
 
         public long visited = -1;
         public long connectedToExit = -1;
+        public int distToExitIfConected = 0;
 
         public PathingNodeExit(PathingNode parentNode, Tuple<int, int, int>[] localPositions)
         {
@@ -346,14 +767,14 @@ namespace Blocks
 
 
 
-        bool MeetsFitCriteria(int x, int y, int z, SpreadNode prev=null, bool allowFalling=true)
+        public bool MeetsFitCriteria(SpreadNode node, SpreadNode prev = null, bool allowFalling = true)
         {
             bool onLand;
-            return MeetsFitCriteria(x, y, z, out onLand, prev, allowFalling);
+            return MeetsFitCriteria(node, out onLand, prev, allowFalling);
         }
 
-
-        bool OnLand(int x, int y, int z)
+        /*
+        public bool OnLand(int x, int y, int z)
         {
             for (int curX = x; curX >= 0 && curX > x - neededSizeSide; curX--)
             {
@@ -399,12 +820,201 @@ namespace Blocks
             }
             return false;
         }
+        */
 
-        bool MeetsFitCriteria(int x, int y, int z, out bool onLand, SpreadNode prev = null, bool allowFalling=true)
+
+        bool TestJumpingOrFallingConditions(bool onLand, SpreadNode node, SpreadNode prev, bool allowFalling)
         {
+            bool jumping, falling;
+            int heightJumped, heightFallen;
+
+            if (node.GetInfoAboutJumpingOrFalling(onLand, prev, out jumping, out heightJumped, out falling, out heightFallen, allowFalling))
+            {
+                if (heightJumped > this.jumpHeight)
+                {
+                    return false;
+                }
+                else
+                {
+                    if (falling)
+                    {
+                        if (allowFalling)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+                /*
+
+
+                    // we are jumping, we can go up jumpHeight blocks than over 1
+                    if (y > prev.localY)
+                    {
+
+                    }
+                    // we are falling
+                    else
+                    {
+
+                    }
+                    if (x == prev.localX && z == prev.localZ)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                // we just came from something on land
+                else
+                {
+                    // we are still on land, we are fine
+                    if (onLand)
+                    {
+                        return true;
+                    }
+                    // we are no longer on land
+                    else
+                    {
+                        
+                    }
+                }
+            }
+
+
+            if (!onLand && prev != null)
+            {
+                // check if we were falling so we can't float around
+                if (!prevOnLand)
+                {
+                    if (allowFalling && x == prev.localX && z == prev.localZ && y == prev.localY-1)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                // we are just falling or about to fall, that is fine
+                if (prev.localY == y + 1 || (prev.localY == y && OnLand(prev.localX, prev.localY, prev.localZ)))
+                {
+                    if (allowFalling)
+                    {
+                        return true;
+                    }
+                }
+                // we aren't falling, are we jumping?
+                else if (prev.localX == x && prev.localZ == z)
+                {
+                    int effectiveJumpDist = jumpHeight;
+                    SpreadNode effectivePrev = prev;
+                    // we are allowed to travel jumpHeight steps in the air without touching ground
+                    while (effectiveJumpDist > 0 && effectivePrev != null)
+                    {
+                        bool eprevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
+                        if (eprevOnLand)
+                        {
+                            return true;
+                        }
+                        // step back one more
+                        else
+                        {
+                            effectiveJumpDist -= 1;
+                            effectivePrev = effectivePrev.prev;
+                        }
+                    }
+
+                }
+            }
+        }
+
+            */
+
+
+        bool MeetsFitCriteria(SpreadNode node, out bool onLand, SpreadNode prev = null, bool allowFalling=true)
+        {
+            int x = node.localX;
+            int y = node.localY;
+            int z = node.localZ;
+
             // try 2 rotations of us
             bool failed = false;
             onLand = false;
+
+
+            if (neededSizeSide == 1 && neededSizeForward == 1)
+            {
+                for (int curY = y;  curY < y + neededSizeUp; curY++)
+                {
+                    if (curY >= locationSpec.yWidth)
+                    {
+                        if (this.locationSpec.GetBlockOutsideRange(x, curY, z) != BlockValue.Air)
+                        {
+                            failed = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (this.locationSpec[x, curY, z] != BlockValue.Air)
+                        {
+                            failed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (y > 0)
+                {
+                    if (this.locationSpec[x, y - 1, z] != BlockValue.Air)
+                    {
+                        onLand = true;
+                    }
+                }
+                else
+                {
+                    if (this.locationSpec.GetBlockOutsideRange(x, y - 1, z) != BlockValue.Air)
+                    {
+                        onLand = true;
+                    }
+                }
+
+                node.onLand = onLand;
+                node.cachedOnLand = true;
+
+                if (failed)
+                {
+                    return false;
+                }
+                else
+                {
+                    return TestJumpingOrFallingConditions(onLand, node, prev, allowFalling);
+                }
+
+                
+            }
+
+
+
+
             for (int curX = x; curX >= 0 && curX > x - neededSizeSide; curX--)
             {
                 for (int curZ = z; curZ >= 0 && curZ > z - neededSizeForward; curZ--)
@@ -453,42 +1063,7 @@ namespace Blocks
                 if (failed) break;
             }
 
-
-            bool onLandOrJumpingOrFalling = onLand;
-            if (!onLand && prev != null)
-            {
-                // we are just falling, that is fine
-                if (prev.localY == y+1)
-                {
-                    if (allowFalling)
-                    {
-                        onLandOrJumpingOrFalling = true;
-                    }
-                }
-                // we aren't falling, are we jumping?
-                else
-                {
-                    int effectiveJumpDist = jumpHeight;
-                    SpreadNode effectivePrev = prev;
-                    // we are allowed to travel jumpHeight steps in the air without touching ground
-                    while (effectiveJumpDist > 0 && effectivePrev != null)
-                    {
-                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
-                        if (prevOnLand)
-                        {
-                            onLandOrJumpingOrFalling = true;
-                            break;
-                        }
-                        // step back one more
-                        else
-                        {
-                            effectiveJumpDist -= 1;
-                            effectivePrev = effectivePrev.prev;
-                        }
-                    }
-                }
-            }
-
+            bool onLandOrJumpingOrFalling = TestJumpingOrFallingConditions(onLand, node, prev, allowFalling);
 
             // good
             if (!failed && onLandOrJumpingOrFalling)
@@ -531,44 +1106,14 @@ namespace Blocks
                 }
                 if (failed) break;
             }
+            
+            onLandOrJumpingOrFalling = TestJumpingOrFallingConditions(onLand, node, prev, allowFalling);
 
-            onLandOrJumpingOrFalling = onLand;
-            if (!onLand && prev != null)
+            // good
+            if (!failed && onLandOrJumpingOrFalling)
             {
-                // we are just falling, that is fine
-                if (prev.localY == y + 1)
-                {
-                    if (allowFalling)
-                    {
-                        onLandOrJumpingOrFalling = true;
-                    }
-                }
-                // we aren't falling, are we jumping?
-                else
-                {
-                    int effectiveJumpDist = jumpHeight;
-                    SpreadNode effectivePrev = prev;
-                    // we are allowed to travel jumpHeight steps in the air without touching ground
-                    while (effectiveJumpDist > 0 && effectivePrev != null)
-                    {
-                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
-                        if (prevOnLand)
-                        {
-                            onLandOrJumpingOrFalling = true;
-                            break;
-                        }
-                        // step back one more
-                        else
-                        {
-                            effectiveJumpDist -= 1;
-                            effectivePrev = effectivePrev.prev;
-                        }
-                    }
-                }
+                return true;
             }
-
-
-
 
 
 
@@ -644,49 +1189,13 @@ namespace Blocks
                 if (failed) break;
             }
 
-
-            onLandOrJumpingOrFalling = onLand;
-            if (!onLand && prev != null)
-            {
-                // we are just falling, that is fine
-                if (prev.localY == y + 1)
-                {
-                    if (allowFalling)
-                    {
-                        onLandOrJumpingOrFalling = true;
-                    }
-                }
-                // we aren't falling, are we jumping?
-                else
-                {
-                    int effectiveJumpDist = jumpHeight;
-                    SpreadNode effectivePrev = prev;
-                    // we are allowed to travel jumpHeight steps in the air without touching ground
-                    while (effectiveJumpDist > 0 && effectivePrev != null)
-                    {
-                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
-                        if (prevOnLand)
-                        {
-                            onLandOrJumpingOrFalling = true;
-                            break;
-                        }
-                        // step back one more
-                        else
-                        {
-                            effectiveJumpDist -= 1;
-                            effectivePrev = effectivePrev.prev;
-                        }
-                    }
-                }
-            }
-
+            onLandOrJumpingOrFalling = TestJumpingOrFallingConditions(onLand, node, prev, allowFalling);
 
             // good
             if (!failed && onLandOrJumpingOrFalling)
             {
                 return true;
             }
-
             // not good, try rotated 90 degrees
 
             failed = false;
@@ -723,67 +1232,19 @@ namespace Blocks
                 if (failed) break;
             }
 
-            onLandOrJumpingOrFalling = onLand;
-            if (!onLand && prev != null)
+            onLandOrJumpingOrFalling = TestJumpingOrFallingConditions(onLand, node, prev, allowFalling);
+
+            // good
+            if (!failed && onLandOrJumpingOrFalling)
             {
-                // we are just falling, that is fine
-                if (prev.localY == y + 1)
-                {
-                    if (allowFalling)
-                    {
-                        onLandOrJumpingOrFalling = true;
-                    }
-                }
-                // we aren't falling, are we jumping?
-                else
-                {
-                    int effectiveJumpDist = jumpHeight;
-                    SpreadNode effectivePrev = prev;
-                    // we are allowed to travel jumpHeight steps in the air without touching ground
-                    while (effectiveJumpDist > 0 && effectivePrev != null)
-                    {
-                        bool prevOnLand = OnLand(effectivePrev.localX, effectivePrev.localY, effectivePrev.localZ);
-                        if (prevOnLand)
-                        {
-                            onLandOrJumpingOrFalling = true;
-                            break;
-                        }
-                        // step back one more
-                        else
-                        {
-                            effectiveJumpDist -= 1;
-                            effectivePrev = effectivePrev.prev;
-                        }
-                    }
-                }
+                return true;
             }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
             return !failed && onLandOrJumpingOrFalling;
         }
 
-        public void Refresh()
+        public void Refresh(bool verbose=false)
         {
             editNum = locationSpec.chunk.chunkData.editNum;
             cachedConnectedExits = null;
@@ -805,7 +1266,7 @@ namespace Blocks
                 }
             }
 
-            GetExits();
+            GetExits(verbose);
             ConnectExits();
 
 
@@ -1000,7 +1461,7 @@ namespace Blocks
                 for (int curZ = z + 1; curZ < locationSpec.zWidth; curZ++)
                 {
                     bool fitsShiftedColumn = ColumnHeight(x, y, curZ, neededSizeUp) >= neededSizeUp;
-                    if (fitsShiftedColumn)
+                    if (fithsShiftedColumn)
                     {
                         curNeededWidth -= 1;
                         if (curNeededWidth <= 0)
@@ -1040,7 +1501,7 @@ namespace Blocks
             
             for (int x = 0; x < locationSpec.xWidth; x++)
             {
-                for (int y = 0; y < locationSpec.yWidth; y++)
+                for (int y = (int)(locationSpec.yWidth-1); y >= 0; y--)
                 {
                     callback(x, y, 0);
                     /*
@@ -1082,7 +1543,7 @@ namespace Blocks
             }
 
 
-            for (int y = 0; y < locationSpec.yWidth; y++)
+            for (int y = (int)(locationSpec.yWidth - 1); y >= 0; y--)
             {
                 for (int z = 0; z < locationSpec.zWidth; z++)
                 {
@@ -1114,7 +1575,7 @@ namespace Blocks
                 int maxZ = (int)(locationSpec.zWidth)-1;
                 for (int x = 0; x < locationSpec.xWidth; x++)
                 {
-                    for (int y = 0; y < locationSpec.yWidth; y++)
+                    for (int y = (int)(locationSpec.yWidth - 1); y >= 0; y--)
                     {
                         callback(x, y, maxZ);
                     }
@@ -1140,7 +1601,7 @@ namespace Blocks
                 int maxX = (int)(locationSpec.xWidth) - 1;
                 for (int z = 0; z < locationSpec.zWidth; z++)
                 {
-                    for (int y = 0; y < locationSpec.yWidth; y++)
+                    for (int y = (int)(locationSpec.yWidth - 1); y >= 0; y--)
                     {
                         callback(maxX, y, z);
                     }
@@ -1172,7 +1633,7 @@ namespace Blocks
 
         void DoSpread(Tuple<int, int, int>[] startPoints, MeetsCriteria meetsSpreadCriteria)
         {
-            Queue<SpreadNode> needToBeProcessed = new Queue<SpreadNode>(Math.Max(10, startPoints.Length*2));
+            Queue<SpreadNode> needToBeProcessed = new Queue<SpreadNode>();
             foreach (Tuple<int, int, int> startPoint in startPoints)
             {
                 SpreadNode startNode = new SpreadNode(startPoint.a, startPoint.b, startPoint.c, null, this);
@@ -1204,63 +1665,206 @@ namespace Blocks
 
 
 
-        List<Tuple<PathingNodeExit, SpreadNode>> FindConnectedExits(long startX, long startY, long startZ, bool allowFalling, bool reversed=false)
+        List<Tuple<PathingNodeExit, SpreadNode, int>> FindConnectedExits(long startX, long startY, long startZ, bool allowFalling, bool reversed=false, bool verbose=false, bool allowAlmostThere=false)
         {
-            ClearVisited();
-
-            int localStartX = (int)(startX - locationSpec.minX);
-            int localStartY = (int)(startY - locationSpec.minY);
-            int localStartZ = (int)(startZ - locationSpec.minZ);
-
-
-
-            List<PathingNodeExit> exits = GetExits();
-            List<Tuple<PathingNodeExit, SpreadNode>> res = new List<Tuple<PathingNodeExit, SpreadNode>>();
-            HashSet<int> foundExits = new HashSet<int>();
-
-
-
-            DoSpread(localStartX, localStartY, localStartZ, (n) =>
+            // reversed, we need to go from the exits and look for the start pos
+            if (reversed)
             {
-                if (data[n.localX,n.localY,n.localZ,PathingFlags.Visited])
+                int localStartX = (int)(startX - locationSpec.minX);
+                int localStartY = (int)(startY - locationSpec.minY);
+                int localStartZ = (int)(startZ - locationSpec.minZ);
+                List<Tuple<PathingNodeExit, SpreadNode, int>> res = new List<Tuple<PathingNodeExit, SpreadNode, int>>();
+                List<PathingNodeExit> exits = GetExits();
+
+
+                for (int i = 0; i < exits.Count; i++)
                 {
-                    return false;
+                    PathingNodeExit curExit = exits[i];
+                    SpreadNode closest = null;
+                    int closestDist = int.MaxValue;
+                    ClearVisited();
+
+                    Priority_Queue.SimplePriorityQueue<SpreadNode, int> pQueue = new Priority_Queue.SimplePriorityQueue<SpreadNode, int>();
+
+                    bool foundConnectionForThisExit = false;
+                    for (int j = 0; j < curExit.localPositions.Length; j++)
+                    {
+                        int curLocalX = curExit.localPositions[j].a;
+                        int curLocalY = curExit.localPositions[j].b;
+                        int curLocalZ = curExit.localPositions[j].c;
+                        int estimatedDistFromExit =
+                            System.Math.Abs(localStartX - curLocalX) +
+                            System.Math.Abs(localStartY - curLocalY) +
+                            System.Math.Abs(localStartZ - curLocalZ);
+
+
+                        // mark as visited (so we don't spread there again) and add to pqueue
+                        data[curLocalX, curLocalY, curLocalZ, PathingFlags.Visited] = true;
+                        // use A*, so cost = dist from start + estimated dist from end
+                        // in this case, dist from start = 0 since our path just started
+                        SpreadNode n = new SpreadNode(curLocalX, curLocalY, curLocalZ, null, this);
+
+                        if (estimatedDistFromExit < closestDist)
+                        {
+                            closestDist = estimatedDistFromExit;
+                            closest = n;
+                        }
+
+                        pQueue.Enqueue(n, estimatedDistFromExit);
+                        if(verbose) Debug.Log("adding new spooker from initial set " + n + " with  estimatedDistFromExit " + estimatedDistFromExit + " and goal pos " + startX + " " + startY + " " + startZ);
+
+                        if (verbose) world.MakeLoggingNode("resPos", "(0)+" +  estimatedDistFromExit + "=" + estimatedDistFromExit, Color.blue, n.wx, n.wy, n.wz);
+                        // see if it is the pos we are looking for
+                        if (n.localX == localStartX && n.localY == localStartY && n.localZ == localStartZ)
+                        {
+                            if (verbose) Debug.Log("found connection to pos for exit " + i + " from initial set of positions");
+                            res.Add(new Tuple<PathingNodeExit, SpreadNode, int>(curExit, n, 0));
+                            foundConnectionForThisExit = true;
+                            break;
+                        }
+
+
+                    }
+                    if (verbose) Debug.Log("pqueue initially is of size " + pQueue.Count);
+
+                    int iff = 0;
+                    while (pQueue.Count > 0 && !foundConnectionForThisExit)
+                    {
+                        SpreadNode n = pQueue.Dequeue();
+
+                        if (verbose) Debug.Log("got node in pqueue " + n);
+                        LoopThroughNeighbors(n.localX, n.localY, n.localZ, (nx, ny, nz) =>
+                        {
+                            // only spread if we haven't been there yet
+                            if(!data[nx, ny, nz, PathingFlags.Visited])
+                            {
+                                SpreadNode neighborNode = new SpreadNode(nx, ny, nz, n, this);
+                                //Debug.Log("trying neighbor in pqueue " + neighborNode);
+                                bool meetsCriteria = MeetsFitCriteria(neighborNode, neighborNode.prev, allowFalling: allowFalling);
+
+                                if (meetsCriteria)
+                                {
+                                    int estimatedDistFromExit =
+                                        System.Math.Abs(localStartX - nx) +
+                                        System.Math.Abs(localStartY - ny) +
+                                        System.Math.Abs(localStartZ - nz);
+                                    // use A*, so cost = dist from start + estimated dist from end
+                                    int distFromStart = neighborNode.pathLen;
+                                    int totalCost = estimatedDistFromExit + distFromStart;
+
+
+                                    // mark as visited (so we don't spread there agian) and add to pqueue
+                                    data[nx, ny, nz, PathingFlags.Visited] = true;
+                                    pQueue.Enqueue(neighborNode, totalCost);
+
+                                    if (estimatedDistFromExit < closestDist)
+                                    {
+                                        closestDist = estimatedDistFromExit;
+                                        closest = n;
+                                    }
+
+                                    if (verbose) world.MakeLoggingNode("resPos", distFromStart + "+" + estimatedDistFromExit + "=" + totalCost, Color.blue, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                    if (verbose) Debug.Log("adding new spooker " + neighborNode + " with prev " + n + " and dist from start " + distFromStart + " and totalCost " + totalCost + " and goal pos " + startX + " " + startY + " " + startZ);
+                                    // see if it is the pos we are looking for
+                                    if (neighborNode.localX == localStartX && neighborNode.localY == localStartY && neighborNode.localZ == localStartZ)
+                                    {
+                                        res.Add(new Tuple<PathingNodeExit, SpreadNode, int>(curExit, neighborNode, 0));
+                                        foundConnectionForThisExit = true;
+                                        if (verbose) Debug.Log("found connection to pos for exit " + i + " from spread to neighbors");
+                                    }
+                                }
+                                else
+                                {
+                                    if (neighborNode.localX == localStartX && neighborNode.localY == localStartY && neighborNode.localZ == localStartZ)
+                                    {
+                                        Debug.Log(" also, " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand + " "  + n.cachedOnLand);
+                                        Debug.Log("n meets fit criteria: " + MeetsFitCriteria(n, n.prev, allowFalling) + " also i meet fit criteria " + MeetsFitCriteria(neighborNode, neighborNode.prev, allowFalling) + " " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand);
+                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                        if (verbose) iff++;
+                                        if (verbose) Debug.Log("neighbor of " + n + " failed in pqueue " + neighborNode);
+                                    }
+                                    else
+                                    {
+                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                        if (verbose) iff++;
+                                        if (verbose) Debug.Log("neighbor of " + n + " failed in pqueue " + neighborNode);
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    if (!foundConnectionForThisExit && allowAlmostThere)
+                    {
+                        Debug.Log("failed to find connection to pos for exit " + i + " returning closest thing found");
+                        if (closest != null)
+                        {
+                            res.Add(new Tuple<PathingNodeExit, SpreadNode, int>(curExit, closest, closestDist));
+                        }
+                    }
                 }
 
+                return res;
+            }
+            // not reversed, we need to go from the start pos and look for the exits
+            else
+            {
+                ClearVisited();
 
-                ushort exitNum = data[n.localX, n.localY, n.localZ];
+                int localStartX = (int)(startX - locationSpec.minX);
+                int localStartY = (int)(startY - locationSpec.minY);
+                int localStartZ = (int)(startZ - locationSpec.minZ);
 
-                bool canWeFit;
-                if (reversed && n.prev != null)
+
+
+                List<PathingNodeExit> exits = GetExits();
+                List<Tuple<PathingNodeExit, SpreadNode, int>> res = new List<Tuple<PathingNodeExit, SpreadNode, int>>();
+                HashSet<int> foundExits = new HashSet<int>();
+
+
+
+                DoSpread(localStartX, localStartY, localStartZ, (n) =>
                 {
-                    canWeFit = MeetsFitCriteria(n.prev.localX, n.prev.localY, n.prev.localZ, n, allowFalling: allowFalling);
-                }
-                else
-                {
-                    canWeFit = MeetsFitCriteria(n.localX, n.localY, n.localZ, n.prev, allowFalling: allowFalling);
-                }
-                // if we found an exit node (non-zero means exit node) and we haven't seen it yet, record the path
-                if (exitNum != 0 && !foundExits.Contains(exitNum) && canWeFit)
-                {
-                    foundExits.Add(exitNum);
-                    int exitNumI = exitNum - 1;
-                    res.Add(new Tuple<PathingNodeExit, SpreadNode>(exits[exitNumI], n));
+                    if (data[n.localX, n.localY, n.localZ, PathingFlags.Visited])
+                    {
+                        return false;
+                    }
 
-                }
-                //GameObject spook = world.MakeLoggingNode("resPos", "connected to pos " + startX + " " + startY + " " + startZ, Color.blue, n.wx, n.wy, n.wz);
-                //spook.transform.localScale *= 0.5f;
-                //spook.transform.position += new Vector3(0.5f, 0, 0.5f);
 
-                if (canWeFit)
-                {
-                    data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
-                }
+                    ushort exitNum = data[n.localX, n.localY, n.localZ];
 
-                // only trickle if we can actually move through here
-                return canWeFit;
-            });
+                    bool canWeFit;
+                    //if (reversed && n.prev != null)
+                    //{
+                    //    canWeFit = MeetsFitCriteria(n.prev, n, allowFalling: allowFalling);
+                    //}
+                    //else
+                    //{
+                    canWeFit = MeetsFitCriteria(n, n.prev, allowFalling: allowFalling);
+                    //}
+                    // if we found an exit node (non-zero means exit node) and we haven't seen it yet, record the path
+                    if (exitNum != 0 && !foundExits.Contains(exitNum) && canWeFit)
+                    {
+                        foundExits.Add(exitNum);
+                        int exitNumI = exitNum - 1;
+                        res.Add(new Tuple<PathingNodeExit, SpreadNode, int>(exits[exitNumI], n, 0));
 
-            return res;
+                    }
+                    //GameObject spook = world.MakeLoggingNode("resPos", "connected to pos " + startX + " " + startY + " " + startZ, Color.blue, n.wx, n.wy, n.wz);
+                    //spook.transform.localScale *= 0.5f;
+                    //spook.transform.position += new Vector3(0.5f, 0, 0.5f);
+
+                    if (canWeFit)
+                    {
+                        data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
+                    }
+
+                    // only trickle if we can actually move through here
+                    return canWeFit;
+                });
+
+                return res;
+            }
         }
 
 
@@ -1280,7 +1884,47 @@ namespace Blocks
 
         List<Tuple<PathingNode, List<Tuple<Tuple<int, int, int>, Tuple<int, int, int>>>[,]>> cachedConnectedExits = new List<Tuple<PathingNode, List<Tuple<Tuple<int, int, int>, Tuple<int, int, int>>>[,]>>();
 
+        public SpreadNode FindPathThroughSingleNode(int localStartX, int localStartY, int localStartZ, int localEndX, int localEndY, int localEndZ, bool allowFalling=false)
+        {
+            ClearVisited();
 
+            SpreadNode pathToEnd = null;
+
+            data[localStartX, localStartY, localStartZ, PathingFlags.Visited] = true;
+            // connect current position in exit to place where we are leaving exit
+            DoSpread(localStartX, localStartY, localStartZ, (n) =>
+            {
+                // if we found the location, we are good, we don't need to spread anymore
+                if (pathToEnd != null)
+                {
+                    return false;
+                }
+                // only spread through non visited
+
+                if (data[n.localX, n.localY, n.localZ, PathingFlags.Visited])
+                {
+                    return false;
+                }
+                if (n.localX == localEndX && n.localY == localEndY && n.localZ == localEndZ)
+                {
+                    pathToEnd = n;
+                    return false;
+                }
+                else
+                {
+                    bool canWalkThrough = MeetsFitCriteria(n, n.prev, allowFalling);
+
+                    if (canWalkThrough)
+                    {
+                        data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
+                    }
+
+                    return canWalkThrough;
+                }
+            });
+
+            return pathToEnd;
+        }
 
 
         public SpreadNode FindPathThroughExit(int localStartX, int localStartY, int localStartZ, int localEndX, int localEndY, int localEndZ, ushort exitNum, bool verbose=false)
@@ -1319,7 +1963,13 @@ namespace Blocks
                     return false;
                 }
 
-                if (data[n.localX, n.localY, n.localZ] == exitNum)
+
+                // we still need to test criteria because if exit spreads from the ground on the edge of a chunk it'll fill all the spots above it as well as exit nodes since you can jump to them,
+                // but if you only went along those nodes then you would be floating so that's invalid
+                // TODO: I'm not sure if this is worth the efficiency loss of having to call MeetsFitCriteria? an alternate option is in that floating case, just go on the position below them instead. But idk
+                bool meetsCriteria = MeetsFitCriteria(n, n.prev, allowFalling: true);
+
+                if (meetsCriteria && data[n.localX, n.localY, n.localZ] == exitNum)
                 {
                     data[n.localX, n.localY, n.localZ, PathingFlags.Visited] = true;
                     // if we found the location, we are good, we don't need to spread anymore
@@ -1349,8 +1999,11 @@ namespace Blocks
 
         List<GameObject> myLoggingNodes = new List<GameObject>();
 
+
+
+        // TODO: fastest path through an exit might not actually be going through that exit (with a U shape, you want to cross across the middle)
         public static long curRunId = 0;
-        public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success)
+        public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
         {
             long startTime = PhysicsUtils.millis();
             success = false;
@@ -1369,34 +2022,40 @@ namespace Blocks
             PathingNode endNode = endChunk.GetPathingNode(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
 
 
-            if (startNode == endNode)
-            {
-                Debug.LogWarning("need to pathfind in same pathing node, use something else?");
-                return null;
-            }
 
             Priority_Queue.SimplePriorityQueue<PathingSpreadNode, long> pQueue = new Priority_Queue.SimplePriorityQueue<PathingSpreadNode, long>();
 
 
 
             long midTime = PhysicsUtils.millis();
-            List<Tuple<PathingNodeExit, SpreadNode>> connectedExitsToStart = startNode.FindConnectedExits(startPos.x, startPos.y, startPos.z, true);
+            List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExitsToStart = startNode.FindConnectedExits(startPos.x, startPos.y, startPos.z, true);
             // the issue right now is this traverses from the end node out to the exits, but we need to traverse from the exits to the end node to have the code that checks "can you walk there" do it properly
-            List<Tuple<PathingNodeExit, SpreadNode>> connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, true, reversed:true);
+            List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling:true, reversed:true);
 
-            world.MakeLoggingNode("resPos", "start", Color.gray, startPos.x, startPos.y, startPos.z);
-            world.MakeLoggingNode("resPos", "end", Color.gray, endPos.x, endPos.y, endPos.z);
+            if (connectedExitsToEnd.Count == 0)
+            {
+                Debug.Log("could not find any way to get to player from the exits of the players chunk, using closest we can find");
+            }
 
-            foreach (Tuple<PathingNodeExit, SpreadNode> connectedExit in connectedExitsToEnd)
+            connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling: true, reversed: true, allowAlmostThere: true);
+
+            if (verbose)
+            {
+                world.MakeLoggingNode("resPos", "start", Color.gray, startPos.x, startPos.y, startPos.z);
+                world.MakeLoggingNode("resPos", "end", Color.gray, endPos.x, endPos.y, endPos.z);
+            }
+
+            foreach (Tuple<PathingNodeExit, SpreadNode, int> connectedExit in connectedExitsToEnd)
             {
                 // set the values of the exits connected to the end pos to be equal to curRunId, this lets us easily test if we are connected to end in constant time in the logic below
                 connectedExit.a.connectedToExit = curRunId;
+                connectedExit.a.distToExitIfConected = connectedExit.c;
             }
 
             PathingSpreadNode closest = null;
             long closestEstimatedDistToEnd = long.MaxValue;
 
-            foreach (Tuple<PathingNodeExit, SpreadNode> connectedExit in connectedExitsToStart)
+            foreach (Tuple<PathingNodeExit, SpreadNode, int> connectedExit in connectedExitsToStart)
             {
                 PathingNodeExit exit = connectedExit.a;
                 SpreadNode pathFromStartToExit = connectedExit.b;
@@ -1417,7 +2076,10 @@ namespace Blocks
             long loopTime = PhysicsUtils.millis();
             int numSteps = 0;
             bool foundCompletePath = false;
-            while (pQueue.Count > 0 && (numSteps < 20 || PhysicsUtils.millis() - loopTime < 5000))
+
+            bool foundCloseExit = false;
+
+            while (pQueue.Count > 0 && (numSteps < 20 || PhysicsUtils.millis() - loopTime < 1000))
             {
                 numSteps += 1;
                 PathingSpreadNode curNode = pQueue.Dequeue();
@@ -1428,9 +2090,25 @@ namespace Blocks
                 // if we set connectedToExit to curRunId above, that means we found a node that is connected to the exit! We are done
                 if (curNode.curExit.connectedToExit == curRunId)
                 {
-                    closest = curNode;
-                    foundCompletePath = true;
-                    break;
+                    // actually connected, we are actually done
+                    if (curNode.curExit.distToExitIfConected == 0)
+                    {
+                        closest = curNode;
+                        foundCompletePath = true;
+                        break;
+                    }
+                    // not actually connected, just close. This means there are no exits that actually reach the player so we will just get as close as possible, but that we technically aren't done yet cause there might be a closer one
+                    else
+                    {
+                        foundCloseExit = true;
+
+                        int distToEnd = curNode.curExit.distToExitIfConected;
+                        if (distToEnd < closestEstimatedDistToEnd)
+                        {
+                            closestEstimatedDistToEnd = distToEnd;
+                            closest = curNode;
+                        }
+                    }
                 }
 
 
@@ -1475,8 +2153,11 @@ namespace Blocks
                                 
                                 if (pathThroughExit == null)
                                 {
-                                    Debug.Log("failed to connect exit pieces, pos leaving exit " + posLeavingExit + " pos of cur node in exit " + posOfCurNodeInExit + " with exit value " + exitValue + " and leaving exit value " +  otherExitValue);
-                                    curNodeParent.FindPathThroughExit(posOfCurNodeInExit.localX, posOfCurNodeInExit.localY, posOfCurNodeInExit.localZ, posLeavingExit.localX, posLeavingExit.localY, posLeavingExit.localZ, exitValue, verbose: true);
+                                    if (verbose)
+                                    {
+                                        Debug.Log("failed to connect exit pieces, pos leaving exit " + posLeavingExit + " pos of cur node in exit " + posOfCurNodeInExit + " with exit value " + exitValue + " and leaving exit value " + otherExitValue);
+                                    }
+                                    curNodeParent.FindPathThroughExit(posOfCurNodeInExit.localX, posOfCurNodeInExit.localY, posOfCurNodeInExit.localZ, posLeavingExit.localX, posLeavingExit.localY, posLeavingExit.localZ, exitValue, verbose: false);
 
                                     continue;
                                 }
@@ -1516,32 +2197,35 @@ namespace Blocks
             curRunId += 1;
 
             // we found one! Now lookup the final path and then we are done
-            if (foundCompletePath)
+            if (foundCompletePath || foundCloseExit)
             {
                 PathingSpreadNode actualRes = null;
-                foreach (Tuple<PathingNodeExit, SpreadNode> connectedExit in connectedExitsToEnd)
+                foreach (Tuple<PathingNodeExit, SpreadNode, int> connectedExit in connectedExitsToEnd)
                 {
                     if (connectedExit.a == closest.curExit)
                     {
-                        SpreadNode pathToGoal = connectedExit.b.InvertPath();
+                        SpreadNode pathToGoal = connectedExit.b;
 
-                        SpreadNode startOfPathToExit = connectedExit.b;
                         SpreadNode currentPos = closest.pathToPrevNode;
+                        SpreadNode startOfPathToGoal = connectedExit.b.Root;
 
-                        ushort exitNum1 = startOfPathToExit.parentNode.data[startOfPathToExit.localX, startOfPathToExit.localY, startOfPathToExit.localZ];
-                        ushort exitNum2 = startOfPathToExit.parentNode.data[currentPos.localX, currentPos.localY, currentPos.localZ];
+                        ushort exitNumCurPos = startOfPathToGoal.parentNode.data[currentPos.localX, currentPos.localY, currentPos.localZ];
+                        ushort exitNumGoal = startOfPathToGoal.parentNode.data[startOfPathToGoal.localX, startOfPathToGoal.localY, startOfPathToGoal.localZ];
 
-                        if (startOfPathToExit.wx != currentPos.wx || startOfPathToExit.wy != currentPos.wy || startOfPathToExit.wz != currentPos.wz)
+                        if (startOfPathToGoal.wx != currentPos.wx || startOfPathToGoal.wy != currentPos.wy || startOfPathToGoal.wz != currentPos.wz)
                         {
-                            Debug.Log("current pos " + currentPos + " start of path to exit " + startOfPathToExit + " trying to find path between with exit nums " + exitNum1 + " " + exitNum2);
-                            SpreadNode pathThroughExit = startOfPathToExit.parentNode.FindPathThroughExit(startOfPathToExit.localX, startOfPathToExit.localY, startOfPathToExit.localZ, currentPos.localX, currentPos.localY, currentPos.localZ, exitNum1);
+                            if (verbose)
+                            {
+                                Debug.Log("current pos " + currentPos + " start of path to exit " + startOfPathToGoal + " trying to find path between with exit nums " + exitNumGoal + " " + exitNumCurPos);
+                            }
+                            SpreadNode pathThroughExit = startOfPathToGoal.parentNode.FindPathThroughExit(currentPos.localX, currentPos.localY, currentPos.localZ, startOfPathToGoal.localX, startOfPathToGoal.localY, startOfPathToGoal.localZ, exitNumCurPos);
                             if (pathThroughExit != null)
                             {
                                 closest = new PathingSpreadNode(connectedExit.a, closest, pathThroughExit);
                             }
                             else
                             {
-                                startOfPathToExit.parentNode.FindPathThroughExit(startOfPathToExit.localX, startOfPathToExit.localY, startOfPathToExit.localZ, currentPos.localX, currentPos.localY, currentPos.localZ, exitNum1, verbose: true);
+                                startOfPathToGoal.parentNode.FindPathThroughExit(currentPos.localX, currentPos.localY, currentPos.localZ, startOfPathToGoal.localX, startOfPathToGoal.localY, startOfPathToGoal.localZ, exitNumCurPos, verbose: true);
 
                             }
                         }
@@ -1560,6 +2244,43 @@ namespace Blocks
             {
 
             }
+
+
+
+            if (startNode == endNode)
+            {
+
+                SpreadNode pathThroughNode = startNode.FindPathThroughSingleNode(
+                    (int)(startPos.x - startNode.locationSpec.minX),
+                    (int)(startPos.y - startNode.locationSpec.minY),
+                    (int)(startPos.z - startNode.locationSpec.minZ),
+                    (int)(endPos.x - startNode.locationSpec.minX),
+                    (int)(endPos.y - endNode.locationSpec.minY),
+                    (int)(endPos.z - endNode.locationSpec.minZ),
+                    allowFalling: true);
+
+
+                if (pathThroughNode == null)
+                {
+                    return closest;
+                }
+                else
+                {
+                    int totalLenComplexPathing = closest.distFromStart;
+                    int totalLenSimplePathing = pathThroughNode.pathLen;
+
+                    if (totalLenComplexPathing < totalLenSimplePathing)
+                    {
+                        return closest;
+                    }
+                    else
+                    {
+                        return new PathingSpreadNode(null, null, pathThroughNode);
+                    }
+                }
+
+            }
+
 
             return closest;
         }
@@ -1824,7 +2545,7 @@ namespace Blocks
                     int spreadExitI = spreadExitVal - 1;
                     // we reached an exit that is distinct from ours that we haven't reached before, mark that path
                     // since we are doing breadth first search, the first result will be optimal (or tied for optimal)
-                    bool weCanFit = MeetsFitCriteria(n.localX, n.localY, n.localZ, n.prev);
+                    bool weCanFit = MeetsFitCriteria(n, n.prev);
                     if (spreadExitVal != 0 && spreadExitVal != curExitVal && pathsBetween[curExitI, spreadExitI] == null && weCanFit)
                     {
 
@@ -1851,8 +2572,11 @@ namespace Blocks
 
         List<PathingNodeExit> cachedExits;
 
-        public List<PathingNodeExit> GetExits()
+        public const int MAX_EXIT_SIZE = 16;
+
+        public List<PathingNodeExit> GetExits(bool verbose=false)
         {
+            //verbose = true;
             if (cachedExits != null)
             {
                 return cachedExits;
@@ -1864,13 +2588,21 @@ namespace Blocks
             });
 
 
+            foreach (GameObject node in myLoggingNodes)
+            {
+                GameObject.Destroy(node);
+            }
+            myLoggingNodes.Clear();
+
+
             List<PathingNodeExit> exits = new List<PathingNodeExit>();
             ushort exitI = 1;
             // go through all places on the border
             LoopThroughBorder((x, y, z) =>
             {
+                SpreadNode firstNode = new SpreadNode(x, y, z, null, this);
                 // if we haven't been visited yet (no one else has spread into us) and can fit there, we are part of a new exit segment
-                if (!data[x,y,z, PathingFlags.Visited] && MeetsFitCriteria(x,y,z, allowFalling: false))
+                if (!data[x,y,z, PathingFlags.Visited] && MeetsFitCriteria(firstNode, allowFalling: false))
                 {
                     List<Tuple<int, int, int>> curExit = new List<Tuple<int, int, int>>();
 
@@ -1881,14 +2613,24 @@ namespace Blocks
                     
                     DoSpread(x, y, z, (n) =>
                     {
+
+                        // don't spread if we have reached the max exit size
+                        // if MAX_EXIT_SIZE is around the size of all wall, this prevents U shapes forming where all the walls of a pathing chunk are a single exit
+                        // while that is valid, that has the downside of the fastest path through an exit is no longer staying in that exit. If the exits stay relatively small that isn't as big of an issue
+                        // this comes at the cost of performance (more nodes in the meta graph), but we'll have to see how much of a difference that makes cause idk
+                        if (curExit.Count > MAX_EXIT_SIZE)
+                        {
+                            return false;
+                        }
                         int sx = n.localX;
                         int sy = n.localY;
                         int sz = n.localZ;
-                        //Debug.Log("checking neighbor " + sx + " " + sy + " " + sz + " of node " + x + " " + y + " " + z);
+                        //if (verbose) Debug.Log("get exits checking neighbor " + sx + " " + sy + " " + sz + " of node " + x + " " + y + " " + z);
                         // spread out through all positions on the border that we can fit in
-                        if (!data[sx,sy,sz,PathingFlags.Visited] && IsBorder(sx,sy,sz) && MeetsFitCriteria(sx, sy, sz, n.prev, allowFalling: false))
+                        if (!data[sx,sy,sz,PathingFlags.Visited] && IsBorder(sx,sy,sz) && MeetsFitCriteria(n, n.prev, allowFalling: false))
                         {
-                            //Debug.Log("spreading at " + sx + " " + sy + " " + sz);
+                            if (verbose) Debug.Log("get exits spreading at " + sx + " " + sy + " " + sz);
+                            if (verbose) myLoggingNodes.Add(world.MakeLoggingNode("resPos", "spreading " + n + " " + n.prev, Color.cyan, n.wx, n.wy, n.wz));
                             // mark as visited. We do this before we check if we can fit there so we only need to check if we can fit there once
                             data[sx, sy, sz, PathingFlags.Visited] = true;
                             // add to current exit group, this is good
@@ -1915,25 +2657,21 @@ namespace Blocks
             });
 
             cachedExits = exits;
-
-            foreach (GameObject node in myLoggingNodes)
+            //verbose = true;
+            if (verbose)
             {
-                GameObject.Destroy(node);
-            }
-            myLoggingNodes.Clear();
-            //Debug.Log("got " + exits.Count + " exits with location spec " + locationSpec);
-            for (int i = 0; i < exits.Count; i++)
-            {
-                Color exitColor = UnityEngine.Random.ColorHSV();
-                string locationString = this.locationSpec.ToString();
-
-                foreach (Tuple<int, int, int> pos in exits[i].localPositions)
+                for (int i = 0; i < exits.Count; i++)
                 {
-                    break;
-                    GameObject exitNode = world.MakeLoggingNode(locationString, "exit " + i + " for " + locationSpec, exitColor, pos.a + locationSpec.minX, pos.b + locationSpec.minY, pos.c + locationSpec.minZ);
-                    exitNode.transform.localScale *= 0.5f;
-                    exitNode.transform.localPosition += new Vector3(0.5f, 0.5f, 0.5f);
-                    myLoggingNodes.Add(exitNode);
+                    Color exitColor = UnityEngine.Random.ColorHSV();
+                    string locationString = this.locationSpec.ToString();
+
+                    foreach (Tuple<int, int, int> pos in exits[i].localPositions)
+                    {
+                        GameObject exitNode = world.MakeLoggingNode(locationString, "exit " + i + " for " + locationSpec, exitColor, pos.a + locationSpec.minX, pos.b + locationSpec.minY, pos.c + locationSpec.minZ);
+                        exitNode.transform.localScale *= 0.5f;
+                        exitNode.transform.localPosition += new Vector3(0.5f, 0.5f, 0.5f);
+                        myLoggingNodes.Add(exitNode);
+                    }
                 }
             }
 
@@ -1945,9 +2683,15 @@ namespace Blocks
 
         public bool IsBorder(int x, int y, int z)
         {
+            /*
             return x == neededSizeForward-1 || x == neededSizeSide - 1 || x == (locationSpec.xWidth - 1) ||
                 y == 0 || y == (locationSpec.yWidth - 1) ||
                 z == neededSizeForward-1 || z == neededSizeSide - 1 || z == (locationSpec.zWidth - 1);
+             */
+
+            return x == 0 || x == (int)(locationSpec.xWidth - 1) ||
+                y == 0 || y == (int)(locationSpec.yWidth - 1) ||
+                z == 0 || z == (int)(locationSpec.zWidth - 1);
         }
 
 

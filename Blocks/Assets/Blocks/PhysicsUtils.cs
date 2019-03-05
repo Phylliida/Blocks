@@ -76,6 +76,80 @@ namespace Blocks
         public PathNode prevNode;
         public PathNode nextNode;
 
+
+        public PathNode GetCurNode(Vector3 myPos, out bool shouldJump, out Vector3 directionToMove, out bool pushedOffPath)
+        {
+            LVector3 myLPos = LVector3.FromUnityVector3(myPos);
+            PathNode curNode = this;
+            PathNode posMovingTo;
+            pushedOffPath = false;
+            // at current position
+            if (pos == myLPos)
+            {
+                posMovingTo = nextNode; 
+            }
+            else
+            {
+                // try moving back, find closest
+                PathNode tmp = this;
+                PathNode closest = tmp;
+                float closestDist = Vector3.Distance(tmp.pos.BlockCentertoUnityVector3(),myPos);
+                while (tmp.pos != myLPos && tmp.prevNode != null)
+                {
+                    tmp = tmp.prevNode;
+                    float curDist = Vector3.Distance(tmp.pos.BlockCentertoUnityVector3(),myPos);
+                    if (curDist < closestDist)
+                    {
+                        closestDist = curDist;
+                        closest = tmp;
+                    }
+                }
+                while (tmp.pos != myLPos && tmp.nextNode != null)
+                {
+                    tmp = tmp.nextNode;
+                    float curDist = Vector3.Distance(tmp.pos.BlockCentertoUnityVector3(), myPos);
+                    if (curDist < closestDist)
+                    {
+                        closestDist = curDist;
+                        closest = tmp;
+                    }
+                }
+
+                if (closest != myLPos)
+                {
+                    pushedOffPath = true;
+                }
+                else
+                {
+                    pushedOffPath = false;
+                }
+                curNode = closest;
+                posMovingTo = closest.nextNode;
+            }
+
+            shouldJump = false;
+
+            if (posMovingTo == null)
+            {
+                directionToMove = Vector3.zero;
+            }
+            else
+            {
+                if (posMovingTo.pos.y > curNode.pos.y)
+                {
+                    shouldJump = true;
+                }
+                else
+                {
+                    shouldJump = false;
+                }
+                Vector3 dirToMove = posMovingTo.pos.BlockCentertoUnityVector3() - myPos;
+                directionToMove = new Vector3(dirToMove.x, 0, dirToMove.z).normalized;
+            }
+
+            return curNode;
+        }
+
         public PathNode(LVector3 pos, PathNode prevNode)
         {
             this.pos = pos;

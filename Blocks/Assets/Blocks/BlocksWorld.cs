@@ -1896,7 +1896,7 @@ namespace Blocks
         long lastWorldNumChunks;
 
 
-        public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight)
+        public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose=false)
         {
             // see if we have already made one for the right body specs
             foreach (PathingNode pathingNode in pathingNodes)
@@ -1921,7 +1921,7 @@ namespace Blocks
 
             pathingNodes.Add(res);
 
-            res.Refresh();
+            res.Refresh(verbose);
 
             res.editNum = editNum;
 
@@ -5560,6 +5560,11 @@ namespace Blocks
             chunkPos = new LVector3(chunkX, chunkY, chunkZ);
         }
 
+        public Chunk GetChunkAtPos(LVector3 pos)
+        {
+            return GetChunkAtPos(pos.x, pos.y, pos.z);
+        }
+
         public Chunk GetChunkAtPos(long x, long y, long z)
         {
             long chunkX = divWithFloorForChunkSize(x);
@@ -6696,6 +6701,7 @@ namespace Blocks
             loggingNode.GetComponent<LoggingNode>().logTag = tag;
             loggingNode.GetComponent<LoggingNode>().text.text = text;
             loggingNode.transform.position = unityPos;
+            loggingNode.transform.name = text;
 
             return loggingNode;
         }

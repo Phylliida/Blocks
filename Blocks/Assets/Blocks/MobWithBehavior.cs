@@ -272,12 +272,28 @@ namespace Blocks
         public static int frameUpdatedLast = 0;
         public void UpdatePathing()
         {
+
+            ////// new temp stuff
             MovingEntity body = GetComponent<MovingEntity>();
+            pathingTarget = LVector3.FromUnityVector3(FindObjectOfType<BlocksPlayer>().transform.position);
+
+            /*
+            // find position on ground below player and path to that instead
+            int goDownAmount = 10; // don't get into infinite loop, give up eventually
+            while (pathingTarget.BlockV == BlockValue.Air && goDownAmount > 0)
+            {
+                pathingTarget = pathingTarget - new LVector3(0, 1, 0);
+                goDownAmount--;
+            }
+            pathingTarget += new LVector3(0, 2, 0);
+            */
+            //////
+
             if (pathingTarget == LVector3.Invalid)
             {
                 body.desiredMove = Vector3.zero;
             }
-            if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount) // offset so everyone isn't aligned on the same frame
+            if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount && Input.GetKeyDown(KeyCode.H)) // offset so everyone isn't aligned on the same frame
             {
                 LVector3 myPos = LVector3.FromUnityVector3(transform.position);
                 LVector3 foundThing;
@@ -318,7 +334,37 @@ namespace Blocks
                         }
                         else
                         {
-                            PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, pathingTarget+new LVector3(0,1,0), 100);
+                            //// new stuff
+                            bool pathingSuccess = false;
+                            PathingSpreadNode resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, pathingTarget, 1, 1, blocksHeight, 1, out pathingSuccess, verbose: true);
+                            iShouldJump = false;
+                            if (resPath != null)
+                            {
+                                curPath = (new PathingResult(resPath)).GetPathNode();
+
+
+                                //Debug.Log("got path with next pos " + curPath.pos + " also, my pos is " + myPos + " and pathing target is " + pathingTarget);
+                                if (curPath.nextNode != null && curPath.nextNode.pos.y > curPath.pos.y)
+                                {
+                                    iShouldJump = true;
+                                }
+
+                                if (curPath.nextNode != null)
+                                {
+                                    //curPath = curPath.nextNode;
+                                }
+                            }
+                            else
+                            {
+                                curPath = null;
+                            }
+
+                            
+                            /////
+                            ///
+
+                            // old thing:
+                            //PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, pathingTarget+new LVector3(0,1,0), 100);
                         }
                         if (curPath != null)
                         {
@@ -348,6 +394,7 @@ namespace Blocks
             Vector3 targetPos = transform.position;
             if (curPath != null && pathingTarget != LVector3.Invalid)
             {
+                /* // dani commented this out recently
                 LVector3 myPos = LVector3.FromUnityVector3(transform.position);
                 RaycastResults blockStandingOn;
                 if (PhysicsUtils.RayCastAlsoHitWater(body.transform.position, -Vector3.up, 20.0f, out blockStandingOn))
@@ -357,6 +404,9 @@ namespace Blocks
                 }
                 LVector3 myPosBeforeJump = myPos - new LVector3(0, 1, 0);
                 LVector3 myPosBeforeFall = myPos + new LVector3(0, 1, 0);
+                */
+
+
 
 
 
@@ -410,9 +460,9 @@ namespace Blocks
                 {
                     curPath = closest;
                 }*/
-                
 
-                
+
+                /* // dani commented this out recently
                 if (curPath.nextNode != null && (myPos == curPath.nextNode.pos || myPosBeforeJump == curPath.nextNode.pos || myPosBeforeFall == curPath.nextNode.pos))
                 {
                     curPath = curPath.nextNode;
@@ -446,16 +496,32 @@ namespace Blocks
                 }
                 targetPos = targetBlock.BlockCentertoUnityVector3();
                 body.SetAbsoluteDesiredMove((targetPos - transform.position).normalized);
+                */
 
 
-                if (pathingTarget.BlockV != Example.FlowerWithNectar)
+                Vector3 dirToMove;
+                bool pushedOffPath;
+                curPath = curPath.GetCurNode(transform.position, out body.jumping, out dirToMove, out pushedOffPath);
+                body.SetAbsoluteDesiredMove(dirToMove);
+
+                if (curPath.nextNode != null)
+                {
+                    //Debug.Log("got cur path " + curPath.pos + " with jumping " + body.jumping + " and dir to move " + dirToMove + " and next " + curPath.nextNode.pos + " and pushed off path " + pushedOffPath);
+                }
+                else
+                {
+                    //Debug.Log("got cur path " + curPath.pos + " with jumping " + body.jumping + " and dir to move " + dirToMove + " and no next and pushed off path " + pushedOffPath);
+                }
+
+
+                if (pathingTarget.BlockV != Example.FlowerWithNectar && false)
                 {
                     this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
                     //Debug.Log("rip someone already ate my nectar, my block is " + World.BlockToString(pathingTarget.BlockV));
                     curPath = null;
                     pathingTarget = LVector3.Invalid;
                 }
-                else
+                else if(false)
                 {
                     float myDist = LVector3.CityBlockDistance(LVector3.FromUnityVector3(transform.position), pathingTarget);
                     // found it, eat it
@@ -466,7 +532,7 @@ namespace Blocks
                         DidEatObject(pathingTarget, 1.0f);
                         world[pathingTarget] = (int)Example.Flower;
                         */
-                        this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
+                this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
                         curPath = null;
                         pathingTarget = LVector3.Invalid;
                         body.jumping = false;
@@ -680,6 +746,9 @@ namespace Blocks
             }
 
 
+            // temp dani thing
+            thingDoing.typeOfThing = TypeOfThingDoing.GettingFood;
+            // end temp dani thing
             if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood || thingDoing.typeOfThing == TypeOfThingDoing.RunningAway)
             {
                 UpdatePathing();

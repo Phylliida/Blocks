@@ -73,6 +73,11 @@ namespace Blocks
                 Debug.Log("did pathing");
             }
 
+            if (Input.GetKeyDown(KeyCode.G))
+            {
+                PathingNode node = World.mainWorld.GetChunkAtPos(LVector3.FromUnityVector3(transform.position)).GetPathingNode(1, 1, 2, 1, verbose: true);
+            }
+
             LVector3 curChunkPos;
             World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out curChunkPos);
             if (curChunkPos != chunkPos && Time.frameCount > 100)
