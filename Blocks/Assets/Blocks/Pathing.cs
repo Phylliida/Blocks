@@ -1084,6 +1084,14 @@ namespace Blocks
                         {
                             MakeFallingRegionStartingAtPos(nx, ny, nz, new PathingRegionPos(x, y, z, null, this), fromRegion);
                         }
+                        else if(neighborRegionNum != 0 && CanWeFitAbove(nx, ny, nz) && !PhysicsUtils.IsBlockSolid(locationSpec[nx, ny, nz]))
+                        {
+                            PathingRegion neighborRegion = GetRegion(nx, ny, nz);
+                            if (neighborRegion.RegionTypeIsFalling())
+                            {
+                                fromRegion.AddRegionWeCanGoTo(new PathingRegionConnection(fromRegion, neighborRegion, new PathingRegionPos(x, y, z, null, this), new PathingRegionPos(nx, ny, nz, null, this)));
+                            }
+                        }
                     });
                 }
             });
@@ -1091,10 +1099,10 @@ namespace Blocks
         }
 
 
-        bool ValidPositionForAFallingRegion(int startX, int startY, int startZ)
+        bool ValidPositionForAFallingRegion(int startX, int startY, int startZ, bool allowExistingRegion=false)
         {
             ushort fallingRegionNum = data[startX, startY, startZ];
-            return (fallingRegionNum == 0 && CanWeFitAbove(startX, startY, startZ) && !PhysicsUtils.IsBlockSolid(locationSpec[startX, startY, startZ])); // && startY > 0 && data[nx, ny - 1, nz] != regionNum)
+            return ((allowExistingRegion || fallingRegionNum == 0) && CanWeFitAbove(startX, startY, startZ) && !PhysicsUtils.IsBlockSolid(locationSpec[startX, startY, startZ])); // && startY > 0 && data[nx, ny - 1, nz] != regionNum)
         }
 
         public delegate void LoopThroughNeighboringPositionsCallback(long wx, long wy, long wz);
@@ -1439,10 +1447,12 @@ namespace Blocks
                         myRegion.AddRegionWeCanGoTo(new PathingRegionConnection(myRegion, theirRegion, myPos, theirPos));
                     }
                     // sparse staircases maybe, look down one to see if we can traverse
-                    else if(theirRegion != null && myRegion != null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular && myRegion.RegionTypeIsFalling())
+                    // alternatively, they want to make a falling region but there is already one here, in that case, just connect them to it
+                    else if(theirRegion != null && myRegion != null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular && myRegion.RegionTypeIsFalling() && ValidPositionForAFallingRegion(myX, myY, myZ, allowExistingRegion: true))
                     {
-
+                        theirRegion.AddRegionWeCanGoTo(new PathingRegionConnection(theirRegion, myRegion, theirPos, myPos));
                     }
+                    // will be covered by them in the above else if
                     else if (theirRegion != null && myRegion != null && myRegion.regionType == PathingRegion.PathingRegionType.Regular && theirRegion.RegionTypeIsFalling())
                     {
 
