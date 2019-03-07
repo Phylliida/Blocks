@@ -63,10 +63,11 @@ namespace Blocks
                 //////
 
 
-                bool iShouldJump;
+                bool iShouldJump = true;
 
 
                 //// new stuff
+                /*
                 bool pathingSuccess = false;
                 PathingSpreadNode resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, playerPos, 1, 1, blocksHeight, 1, out pathingSuccess);
                 iShouldJump = true;
@@ -74,6 +75,7 @@ namespace Blocks
                 {
                     curPath = (new PathingResult(resPath)).GetPathNode();
                 }
+                */
                 /////
 
                 //PhysicsUtils.Pathfind(blocksHeight, ref curPath, out iShouldJump, myPos, playerPos, 200);

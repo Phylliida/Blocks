@@ -65,7 +65,7 @@ public class Lava : Block
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = false;
-        block.lightingState = block.lightingState | 15;
+        block.lightingState = block.lightingState | 15 | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT;
         /*
         using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
         {

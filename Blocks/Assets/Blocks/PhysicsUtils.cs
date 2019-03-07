@@ -147,6 +147,13 @@ namespace Blocks
                 directionToMove = new Vector3(dirToMove.x, 0, dirToMove.z).normalized;
             }
 
+
+
+            if (pushedOffPath && curNode.pos.y > myLPos.y)
+            {
+                shouldJump = true;
+            }
+
             return curNode;
         }
 
@@ -626,9 +633,13 @@ namespace Blocks
             return a - b * Mathf.Floor(a / b);
         }
 
+        public static bool IsBlockLiquid(int block)
+        {
+            return block == Example.Water || block == Example.WaterNoFlow;
+        }
         public static bool IsBlockSolid(int block)
         {
-            return block != (int)BlockValue.Air && block != (int)Example.Water && block != (int)Example.WaterNoFlow;
+            return block != (int)BlockValue.Air && block != (int)Example.Water && block != (int)Example.WaterNoFlow && block != BlockValue.Wildcard;
         }
 
         public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)

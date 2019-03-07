@@ -550,8 +550,18 @@ namespace Blocks
 
         public bool needToFinishSync = false;
         bool needToFinishSyncAsParent = false;
+
+        public void RenderLogging()
+        {
+            if (chunk.pathingChunk != null)
+            {
+                chunk.pathingChunk.Draw();
+            }
+        }
+
         public bool RenderAsync(bool onlyTransparent, Chunk chunk, ref int numAllowedToDoFullRender)
         {
+
             // this object was made on a seperate thread, init stuff
             if (drawDataNotTransparent == null)
             {
@@ -696,7 +706,10 @@ namespace Blocks
                 }
             }
 
+
             return needToFinishSync;
+
+
         }
 
         public void CombineAndRenderChildrenDrawData()
@@ -1895,6 +1908,17 @@ namespace Blocks
         public List<Tuple<long, long, long, int>> distancesOfPlacesToExpand;
         long lastWorldNumChunks;
 
+        public PathingChunk pathingChunk = null;
+
+        public PathingChunk GetPathingChunk(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose = false)
+        {
+            if (pathingChunk == null)
+            {
+                pathingChunk = new PathingChunk(this, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+            }
+            pathingChunk.UpdateIfNeeded();
+            return pathingChunk;
+        }
 
         public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose=false)
         {
@@ -5743,6 +5767,14 @@ namespace Blocks
                 chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
             }
             chunksNotFinished.Clear();
+
+            if (blocksWorld.verbosePathing)
+            {
+                for (int i = 0; i < chunksToRender.Count; i++)
+                {
+                    chunksToRender[i].a.chunkRenderer.RenderLogging();
+                }
+            }
             return;
             // render transparent
             foreach (Chunk chunk in allChunks)
@@ -6633,9 +6665,12 @@ namespace Blocks
     public class BlocksWorld : MonoBehaviour
     {
         public int chunkRenderDist = 3;
+        [HideInInspector]
+        public Material debugLineMaterial;
         public float skyLightLevel = 1.0f;
         public ComputeShader cullBlocksShader;
         public bool creativeMode = false;
+        public bool verbosePathing = false;
         public bool optimize = false;
         ComputeBuffer cubeNormals;
         ComputeBuffer cubeOffsets;
@@ -7234,6 +7269,8 @@ namespace Blocks
 
             }
 
+
+
             if (!triMaterialWithTransparency)
             {
                 // Unity has a built-in shader that is useful for drawing
@@ -7261,6 +7298,13 @@ namespace Blocks
                 Shader shader = Shader.Find("Unlit/SandLineDrawer");
                 outlineMaterial = new Material(shader);
                 outlineMaterial.hideFlags = HideFlags.HideAndDontSave;
+            }
+
+            if (!debugLineMaterial)
+            {
+                Shader shader = Shader.Find("Lines/Colored Blended");
+                debugLineMaterial = new Material(shader);
+                debugLineMaterial.hideFlags = HideFlags.HideAndDontSave;
             }
         }
 

@@ -8,14 +8,17 @@ namespace Blocks
 {
     public enum PathingFlags
     {
-        Visited = (1 << 30)
-
+        Visited = (1 << 30),
+        CanWeFitAbove = (1 << 29),
+        CachedIfWeCanFitAbove = (1 << 28),
+        CachedCanWeStandOn = (1 << 27),
+        CanWeStandOn = (1 << 26)
     }
 
     public class PathingResult
     {
 
-        public PathingSpreadNode result;
+        public PathingRegionPos result;
 
         public List<LVector3> positions = new List<LVector3>();
         public PathNode pathNode;
@@ -25,25 +28,27 @@ namespace Blocks
             return pathNode;
         }
 
-        public PathingResult(PathingSpreadNode result)
+        public PathingResult(PathingRegionPos result)
         {
             this.result = result;
 
             int length = 0;
 
-            result.LoopThroughPositions((wx, wy, wz, segment, pathingNode) =>
+            PathingRegionPos tmp = result;
+            while (tmp != null)
             {
-                LVector3 curPos = new LVector3(wx, wy, wz);
+                LVector3 curPos = new LVector3(tmp.wx, tmp.emptyBlockAboveY, tmp.wz);
                 // don't add duplicate positions (this sometimes happens due to pathing stuffs)
                 if (positions.Count > 0 && positions[positions.Count - 1] == curPos)
                 {
-                    Debug.Log(curPos + " duplicate with " + positions[positions.Count - 1]);
+                    //Debug.Log(curPos + " duplicate with " + positions[positions.Count - 1]);
                 }
                 else
                 {
                     positions.Add(curPos);
                 }
-            });
+                tmp = tmp.prev;
+            }
 
             // path normally goes from finish to start
             positions.Reverse();
@@ -69,23 +74,1398 @@ namespace Blocks
     }
 
 
-    public class BlocksPathing
-    {
-        public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
-        {
 
-            if (verbose)
+
+    // For a chunk:
+    //     for each non-air block in the chunk:
+    //          if not in a region already and can be stood on/inside
+    //             grow region to all blocks that can be reached from that block in a reversable way (so you can get back, i.e., no falling)
+    //               ways to move:
+    //                  sideways (spread immediately to blocks that also have air above them or can be stood on/inside)
+    //                  up stairs (spread jump height (regular jump height is 1) below any block with air above it)
+    //                  jump: TODO
+    //             connect region to all blocks that can be reached from that block in an irreversable way (falling)
+    //               we'll just make a "falling region": vertical column of air
+    // For neighboring chunks:
+    //   mark as "linked" any regions that can be reached in a reversable way
+    //   mark as "linked" any regions that can be reached through the "falling regions"
+
+    public class PathingRegionConnection
+    {
+        public PathingRegion from;
+        public PathingRegion to;
+
+        // used as a "visited"
+        public long pathingCounter = -1;
+
+        public PathingRegionPos posInFrom;
+        public PathingRegionPos posInTo;
+
+        public PathingRegionPos ConnectPathToConection(PathingRegionPos startPosInFrom)
+        {
+            PathingRegionPos pathToStartOfConnection = from.TraverseThroughRegion(startPosInFrom, posInFrom);
+            PathingRegionPos pathToEndOfConnection = new PathingRegionPos(posInTo.localX, posInTo.localY, posInTo.localZ, pathToStartOfConnection, to.parentChunk);
+            return pathToEndOfConnection;
+        }
+
+        public PathingRegionConnection(PathingRegion from, PathingRegion to, PathingRegionPos posInFrom, PathingRegionPos posInTo)
+        {
+            this.from = from;
+            this.to = to;
+            this.posInFrom = posInFrom;
+            this.posInTo = posInTo;
+        }
+    }
+
+    public class PathingRegionPos
+    {
+        public PathingChunk parentRegion;
+        public PathingRegionPos prev;
+        public int pathLen;
+        public int localX, localY, localZ;
+        public long wx { get { return parentRegion.locationSpec.minX + localX; } private set { } }
+        public long wy { get { return parentRegion.locationSpec.minY + localY; } private set { } }
+        public long wz { get { return parentRegion.locationSpec.minZ + localZ; } private set { } }
+
+
+        public PathingRegionPos CopyPath()
+        {
+            if (prev != null)
             {
-                foreach (LoggingNode node in GameObject.FindObjectsOfType<LoggingNode>())
+                return new PathingRegionPos(localX, localY, localZ, prev.CopyPath(), parentRegion);
+            }
+            else
+            {
+                return new PathingRegionPos(localX, localY, localZ, null, parentRegion);
+            }
+        }
+
+        public void RemoveDuplicatePositionsInPath()
+        {
+            while (prev != null && prev.prev != null && PathingRegionPos.PositionsAreEqual(this, prev))
+            {
+                prev = prev.prev;
+            }
+
+            if (prev != null)
+            {
+                prev.RemoveDuplicatePositionsInPath();
+            }
+        }
+
+
+        public long emptyBlockAboveY
+        {
+            get
+            {
+                for (long curY = wy; curY < wy + parentRegion.jumpHeight+parentRegion.neededSizeUp; curY++)
                 {
-                    if (node.logTag == "resPos")
+                    bool canBreathe = true;
+
+                    for (long curY2 = curY; curY2 < curY + parentRegion.neededSizeUp; curY2++)
                     {
-                        GameObject.Destroy(node.gameObject);
+                        if (parentRegion.world[wx, curY2, wz] != BlockValue.Air)
+                        {
+                            canBreathe = false;
+                        }
+                    }
+
+                    if (canBreathe)
+                    {
+                        return curY;
+                    }
+                }
+                return wy;
+            }
+            set
+            {
+
+            }
+        }
+
+        Vector3 unityVec;
+        bool gotUnityVec = false;
+        public Vector3 UnityVector3()
+        {
+            if (!gotUnityVec)
+            {
+                unityVec = (new LVector3(wx, wy, wz)).BlockCentertoUnityVector3();
+                gotUnityVec = true;
+            }
+            return unityVec;
+        }
+
+        public static long Dist(PathingRegionPos a, PathingRegionPos b)
+        {
+            return Math.Abs(a.wx - b.wx) + Math.Abs(a.wy - b.wy) + Math.Abs(a.wz - b.wz);
+        }
+
+
+        public static long Dist(PathingRegionPos a, LVector3 b)
+        {
+            return Math.Abs(a.wx - b.x) + Math.Abs(a.wy - b.y) + Math.Abs(a.wz - b.z);
+        }
+
+
+
+        public static long Dist(LVector3 a, PathingRegionPos b)
+        {
+            return Dist(b, a);
+        }
+
+        public static bool PositionsAreEqual(PathingRegionPos a, PathingRegionPos b)
+        {
+            return a.wx == b.wx && a.wy == b.wy && a.wz == b.wz;
+        }
+
+        public PathingRegionPos(int localX, int localY, int localZ, PathingRegionPos prev, PathingChunk parentRegion)
+        {
+            this.localX = localX;
+            this.localY = localY;
+            this.localZ = localZ;
+            this.prev = prev;
+            this.parentRegion = parentRegion;
+            if (prev != null)
+            {
+                if (PositionsAreEqual(this, prev))
+                {
+                    pathLen = prev.pathLen;
+                }
+                else
+                {
+                    pathLen = prev.pathLen + 1;
+                }
+            }
+            else
+            {
+                pathLen = 0;
+            }
+        }
+    }
+
+    public class PathingRegion
+    {
+        public int index;
+        public long pathingVisited = -1;
+        public enum PathingRegionType
+        {
+            Regular,
+            Falling,
+            FallingFromAnotherChunk,
+        }
+
+        public bool RegionTypeIsFalling()
+        {
+            return regionType == PathingRegionType.Falling || regionType == PathingRegionType.FallingFromAnotherChunk;
+        }
+
+        public PathingRegionType regionType;
+
+        public List<PathingRegionPos> positions;
+
+        public List<PathingRegionConnection> thingsWeCanGoTo = new List<PathingRegionConnection>();
+
+        public PathingRegionPos BottomPosition
+        {
+            get
+            {
+                return positions[positions.Count - 1];
+            }
+            set
+            {
+
+            }
+        }
+
+        public bool CanWeFitHere(long wx, long wy, long wz)
+        {
+            for (long curY = wy; curY < wy+parentChunk.neededSizeUp; curY++)
+            {
+                if (PhysicsUtils.IsBlockSolid(parentChunk.world[wx, wy, wz]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public void ExpandBottomToAccountForJump()
+        {
+            PathingRegionPos bottomPos = BottomPosition;
+            PathingRegionPos belowBottomPos;
+            PathingRegion regionBelowBottomPos = parentChunk.GetRegionNotUsingLocalCoordinates(bottomPos.wx, bottomPos.wy - 1, bottomPos.wz, out belowBottomPos);
+
+            // we fall onto a regular region, see if we can jump up this chunk and get to other regular regions. If so, connect them
+            if (regionBelowBottomPos != null && !regionBelowBottomPos.RegionTypeIsFalling())
+            {
+                for (long curY = bottomPos.wy; curY < bottomPos.wy+parentChunk.jumpHeight; curY++)
+                {
+                    // can be here + 1 by jumping?
+
+                    // no, we can't jump any higher then, be done
+                    if (!CanWeFitHere(bottomPos.wx, curY+1, bottomPos.wz))
+                    {
+                        break;
+                    }
+                    // yes, see if any neighbor stairs go up so we can jump on them
+                    else
+                    {
+                        parentChunk.LoopThroughNeighboringPositionsOnlyHorizontal(bottomPos.wx, curY, bottomPos.wz, (wnx, wny, wnz) =>
+                        {
+                            PathingRegionPos posInNeighborRegion;
+                            PathingRegion neighborRegion = parentChunk.GetRegionNotUsingLocalCoordinates(wnx, wny, wnz, out posInNeighborRegion);
+
+                            // we found a sparse stair, connect (connection from neighbor region to below is already made by going through us, we only need the below to them)
+                            if (neighborRegion != null && !neighborRegion.RegionTypeIsFalling() && posInNeighborRegion.parentRegion.CanWeStandOn(posInNeighborRegion.localX, posInNeighborRegion.localY, posInNeighborRegion.localZ))
+                            {
+                                regionBelowBottomPos.AddRegionWeCanGoTo(new PathingRegionConnection(regionBelowBottomPos, neighborRegion, belowBottomPos, posInNeighborRegion));
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// Note: this will attach start pos to the path (using the prev link), so choose params accordingly
+        /// </summary>
+        /// <param name="startPos"></param>
+        /// <param name="endPos"></param>
+        /// <returns></returns>
+        public PathingRegionPos TraverseThroughRegion(PathingRegionPos startPos, PathingRegionPos endPos)
+        {
+            if (startPos.localX == endPos.localX && startPos.localY == endPos.localY && startPos.localZ == endPos.localZ)
+            {
+                return startPos;
+            }
+
+
+            // clear visited (we only need to do this for the positions in the region)
+            foreach (PathingRegionPos position in this.positions)
+            {
+                parentChunk.data[position.localX, position.localY, position.localZ, PathingFlags.Visited] = false;
+            }
+            Priority_Queue.SimplePriorityQueue<PathingRegionPos, long> pqueue = new Priority_Queue.SimplePriorityQueue<PathingRegionPos, long>();
+            long distToEnd = PathingRegionPos.Dist(startPos, endPos);
+            pqueue.Enqueue(startPos, distToEnd);
+            ushort regionNum = (ushort)(this.index + 1);
+            PathingRegionPos result = null;
+            while (pqueue.Count > 0 && result == null)
+            {
+                PathingRegionPos curPos = pqueue.Dequeue();
+
+                parentChunk.LoopThroughNeighborsInChunk(curPos.localX, curPos.localY, curPos.localZ, (nx, ny, nz) =>
+                {
+                    if (result != null)
+                    {
+                        return;
+                    }
+                    if (!parentChunk.data[nx, ny, nz, PathingFlags.Visited] && parentChunk.data[nx, ny, nz] == regionNum)
+                    {
+                        parentChunk.data[nx, ny, nz, PathingFlags.Visited] = true;
+                        PathingRegionPos neighborNode = new PathingRegionPos(nx, ny, nz, curPos, parentChunk);
+                        pqueue.Enqueue(neighborNode, PathingRegionPos.Dist(neighborNode, endPos) + neighborNode.pathLen);
+
+                        if (PathingRegionPos.PositionsAreEqual(neighborNode, endPos))
+                        {
+                            result = neighborNode;
+                        }
+                    }
+                });
+
+
+            }
+            return result;
+        }
+
+        public void Draw()
+        {
+            if (RegionTypeIsFalling())
+            {
+                if (regionType == PathingRegionType.FallingFromAnotherChunk)
+                {
+                    GL.Color(Color.magenta);
+                }
+                else
+                {
+                    GL.Color(Color.red);
+                }
+                bool first = true;
+                for (int i = 0; i < positions.Count; i++)
+                {
+                    GL.Vertex(positions[i].UnityVector3());
+                    // lines need two points, so we get two vertices per pos unless we are the endpoints
+                    if (i != 0 && i != positions.Count-1)
+                    {
+                        GL.Vertex(positions[i].UnityVector3());
+                    }
+                    if (positions.Count == 1)
+                    {
+                        GL.Vertex(positions[i].UnityVector3() - new Vector3(0, 0.5f, 0));
+                    }
+                }
+            }
+            else
+            {
+                GL.Color(Color.blue);
+                bool first = true;
+                for (int i = 0; i < positions.Count; i++)
+                {
+                    if (positions[i].prev != null)
+                    {
+                        GL.Vertex(positions[i].UnityVector3());
+                        GL.Vertex(positions[i].prev.UnityVector3());
+                    }
+                    else
+                    {
+                        GL.Vertex(positions[i].UnityVector3() - new Vector3(0, 0.5f, 0));
+                        GL.Vertex(positions[i].UnityVector3() + new Vector3(0, 0.5f, 0));
                     }
                 }
             }
 
-            PathingSpreadNode res = PathingNode.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success, verbose: verbose);
+            foreach (PathingRegionConnection connection in thingsWeCanGoTo)
+            {
+                GL.Color(Color.cyan);
+                GL.Vertex(connection.posInFrom.UnityVector3() + UnityEngine.Random.onUnitSphere * 0.01f);
+                GL.Color(Color.green);
+                GL.Vertex(connection.posInTo.UnityVector3() + UnityEngine.Random.onUnitSphere * 0.01f);
+
+            }
+        }
+
+        /// <summary>
+        /// Will also add connection in the other way if connection is regular -> falling and a jump can go the other way
+        /// </summary>
+        /// <param name="connection"></param>
+        public void AddRegionWeCanGoTo(PathingRegionConnection connection)
+        {
+            thingsWeCanGoTo.Add(connection);
+        }
+
+        public PathingChunk parentChunk;
+
+        public PathingRegion(int index, List<PathingRegionPos> positions, PathingRegionType regionType, PathingChunk parentChunk)
+        {
+            this.index = index;
+            this.positions = positions;
+            this.regionType = regionType;
+            this.parentChunk = parentChunk;
+        }
+    }
+
+    public class PathingChunk
+    {
+        long editId;
+        public PathingNodeBlockChunk locationSpec;
+        public PatchingNodeBlockChunkData data;
+        Chunk chunk;
+        public World world;
+        public int jumpHeight;
+        public int neededSizeForward, neededSizeSide, neededSizeUp;
+        public List<Tuple<long, PathingChunk>> chunksDependingOn = new List<Tuple<long, PathingChunk>>();
+        public HashSet<PathingChunk> chunksDependingOnQuickDupCheck = new HashSet<PathingChunk>();
+        List<PathingRegion> regions = new List<PathingRegion>();
+
+        public PathingChunk(Chunk chunk, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight)
+        {
+            this.locationSpec = new PathingNodeBlockChunk(chunk.world,
+                chunk.cx * chunk.world.chunkSize,
+                chunk.cy * chunk.world.chunkSize,
+                chunk.cz * chunk.world.chunkSize,
+                chunk.cx * chunk.world.chunkSize + chunk.world.chunkSize - 1,
+                chunk.cy * chunk.world.chunkSize + chunk.world.chunkSize - 1,
+                chunk.cz * chunk.world.chunkSize + chunk.world.chunkSize - 1);
+            this.chunk = chunk;
+            this.world = chunk.world;
+            this.data = new PatchingNodeBlockChunkData(locationSpec);
+            this.jumpHeight = jumpHeight;
+            this.neededSizeForward = neededSizeForward;
+            this.neededSizeSide = neededSizeSide;
+            this.neededSizeUp = neededSizeUp;
+
+            this.Refresh();
+        }
+
+        public void UpdateIfNeeded()
+        {
+            bool needToRefresh = false;
+            if (chunk.chunkData.editNum != editId)
+            {
+                needToRefresh = true;
+            }
+
+            // check chunks we are depending on (usually the chunk above us, see if it has been 
+            // modified cause that might modify some of our region data based on if air blocks were
+            // removed above us so blocks that were regions may no longer be or vice versa)
+            foreach (Tuple<long, PathingChunk> chunkDependingOn in chunksDependingOn)
+            {
+                if (chunkDependingOn.b.chunk.chunkData.editNum != chunkDependingOn.a)
+                {
+                    needToRefresh = true;
+                }
+            }
+            if (needToRefresh)
+            {
+                Refresh();
+            }
+        }
+
+        public void Draw()
+        {
+            world.blocksWorld.debugLineMaterial.SetPass(0);
+            GL.Begin(GL.LINES);
+            foreach (PathingRegion region in regions)
+            {
+                region.Draw();
+            }
+            GL.End();
+        }
+
+        public delegate void PositionCallback(int localX, int localY, int localZ);
+
+
+        public void ResetData()
+        {
+            // disconnect us from our neighbors
+            foreach (PathingChunk neighborConnectedTo in neighborsConnectedTo)
+            {
+                foreach (PathingRegion region in neighborConnectedTo.regions)
+                {
+                    List<PathingRegionConnection> connectionsWithoutMe = new List<PathingRegionConnection>();
+                    foreach (PathingRegionConnection connection in region.thingsWeCanGoTo)
+                    {
+                        if (connection.to.parentChunk != this)
+                        {
+                            connectionsWithoutMe.Add(connection);
+                        }
+                    }
+                    region.thingsWeCanGoTo = connectionsWithoutMe;
+                }
+
+                if (neighborConnectedTo.neighborsConnectedTo.Contains(this))
+                {
+                    neighborConnectedTo.neighborsConnectedTo.Remove(this);
+                }
+            }
+
+
+            LoopThroughAllPositions((x, y, z) =>
+            {
+                data[x, y, z] = 0;
+                data[x, y, z, PathingFlags.Visited] = false;
+                data[x, y, z, PathingFlags.CachedIfWeCanFitAbove] = false;
+                data[x, y, z, PathingFlags.CanWeFitAbove] = false;
+                data[x, y, z, PathingFlags.CachedCanWeStandOn] = false;
+                data[x, y, z, PathingFlags.CanWeStandOn] = false;
+            });
+
+            chunksDependingOn.Clear();
+            chunksDependingOnQuickDupCheck.Clear();
+            regions.Clear();
+            neighborsConnectedTo.Clear();
+            wallsExpanded = false;
+        }
+
+        // starts at top y position and goes down
+        void LoopThroughAllPositions(PositionCallback callback)
+        {
+            for (int y = (int)(locationSpec.yWidth - 1); y >= 0; y--)
+            {
+                for (int x = 0; x < locationSpec.xWidth; x++)
+                {
+                    for (int z = 0; z < locationSpec.zWidth; z++)
+                    {
+                        callback(x, y, z);
+                    }
+                }
+            }
+        }
+
+        public void LoopThroughNeighborsInChunk(int x, int y, int z, PositionCallback callback)
+        {
+            if (x > 0) callback(x - 1, y, z);
+            if (y > 0) callback(x, y - 1, z);
+            if (z > 0) callback(x, y, z - 1);
+
+            if (x < locationSpec.xWidth - 1) callback(x + 1, y, z);
+            if (y < locationSpec.yWidth - 1) callback(x, y + 1, z);
+            if (z < locationSpec.zWidth - 1) callback(x, y, z + 1);
+        }
+
+
+        // x and z neighbors only
+        void LoopThroughNonVerticalNeighborsInChunk(int x, int y, int z, PositionCallback callback)
+        {
+            if (x > 0) callback(x - 1, y, z);
+            if (z > 0) callback(x, y, z - 1);
+
+            if (x < locationSpec.xWidth - 1) callback(x + 1, y, z);
+            if (z < locationSpec.zWidth - 1) callback(x, y, z + 1);
+        }
+
+        public bool CanWeStandOn(int x, int y, int z, int additionalSpaceNeeded=0)
+        {
+            // only cache if we don't need additional space
+            if (additionalSpaceNeeded == 0)
+            {
+                if (data[x, y, z, PathingFlags.CachedCanWeStandOn])
+                {
+                    return data[x, y, z, PathingFlags.CanWeStandOn];
+                }
+                data[x, y, z, PathingFlags.CachedCanWeStandOn] = true;
+            }
+            BlockValue block = locationSpec[x, y, z];
+            bool res = (PhysicsUtils.IsBlockSolid(block) || PhysicsUtils.IsBlockLiquid(block)) && CanWeFitAbove(x, y, z, additionalSpaceNeeded: additionalSpaceNeeded);
+
+            //Debug.Log("got can we stand on " + res + " for block " + x + " " + y + " " + z + " with can we fit above " + CanWeFitAbove(x, y, z));
+            if (additionalSpaceNeeded == 0)
+            {
+                data[x, y, z, PathingFlags.CanWeStandOn] = res;
+            }
+            return res;
+        }
+
+        public bool CanWeFitAbove(int x, int y, int z, int additionalSpaceNeeded=0)
+        {
+            if (additionalSpaceNeeded == 0)
+            {
+                if (data[x, y, z, PathingFlags.CachedIfWeCanFitAbove])
+                {
+                    return data[x, y, z, PathingFlags.CanWeFitAbove];
+                }
+                data[x, y, z, PathingFlags.CachedIfWeCanFitAbove] = true;
+            }
+            for (int curY = y+1; curY < y+1+neededSizeUp+ additionalSpaceNeeded; curY++)
+            {
+                BlockValue blockAtPos;
+                if (curY >= locationSpec.yWidth)
+                {
+                    blockAtPos = GetBlockOutsideRange(x, curY, z);
+                }
+                else
+                {
+                    blockAtPos = locationSpec[x, curY, z];
+                }
+                if (PhysicsUtils.IsBlockSolid(blockAtPos))
+                {
+                    if (additionalSpaceNeeded == 0)
+                    {
+                        data[x, y, z, PathingFlags.CanWeFitAbove] = false;
+                    }
+                    return false;
+                }
+            }
+            if (additionalSpaceNeeded == 0)
+            {
+                data[x, y, z, PathingFlags.CanWeFitAbove] = true;
+            }
+            return true;
+        }
+
+        BlockValue GetBlockOutsideRange(int localX, int localY, int localZ)
+        {
+            long wx = localX + locationSpec.minX;
+            long wy = localY + locationSpec.minY;
+            long wz = localZ + locationSpec.minZ;
+            Chunk thatChunk = world.GetChunkAtPos(wx, wy, wz);
+            if (thatChunk == null)
+            {
+                return BlockValue.Wildcard;
+            }
+            else
+            {
+                PathingChunk newDep = thatChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                if (!chunksDependingOnQuickDupCheck.Contains(newDep))
+                {
+                    chunksDependingOnQuickDupCheck.Add(newDep);
+                    chunksDependingOn.Add(new Tuple<long, PathingChunk>(newDep.editId, newDep));
+                }
+                return thatChunk[wx, wy, wz];
+            }
+        }
+        
+        delegate bool ShouldSpreadCallback(PathingRegionPos pos);
+        delegate bool ShouldBeDoneCallback(PathingRegionPos pos);
+
+        /// <summary>
+        /// Spreads out from start pos
+        /// Note that shouldSpread and shouldBeDone will be called on start pos first
+        /// shouldSpread and shouldBeDone will always either both be called on a point, or neither be called on a point.
+        /// shouldSpread will always be called on a point before shouldBeDone.
+        /// </summary>
+        /// <param name="startX">local x position to start</param>
+        /// <param name="startY">local y position to start</param>
+        /// <param name="startZ">local z position to start</param>
+        /// <param name="shouldSpread">should return true if we should spread out from that node</param>
+        /// <param name="shouldBeDone">should return true if we found what we are looking for (if relevant), once this returns true, no more spreading will occur</param>
+        void Spread(int startX, int startY, int startZ, ShouldSpreadCallback shouldSpread, ShouldBeDoneCallback shouldBeDone)
+        {
+            PathingRegionPos curPos = new PathingRegionPos(startX, startY, startZ, null, this);
+
+            Queue<PathingRegionPos> stuffToExpand = new Queue<PathingRegionPos>();
+            // first call stuff on the start pos
+            bool startShouldSpread = shouldSpread(curPos);
+            bool startShouldBeDone = shouldBeDone(curPos);
+            if (startShouldSpread && !startShouldBeDone)
+            {
+                stuffToExpand.Enqueue(curPos);
+            }
+
+            bool weAreDone = false;
+            while (stuffToExpand.Count > 0 && !weAreDone)
+            {
+                PathingRegionPos curToExpand = stuffToExpand.Dequeue();
+
+                LoopThroughNeighborsInChunk(curToExpand.localX, curToExpand.localY, curToExpand.localZ, (nx, ny, nz) => {
+                    if (!weAreDone)
+                    {
+                        PathingRegionPos next = new PathingRegionPos(nx, ny, nz, curToExpand, this);
+                        bool spread = shouldSpread(next);
+                        bool done = shouldBeDone(next);
+                        if (done)
+                        {
+                            weAreDone = true;
+                        }
+                        if (spread)
+                        {
+                            if (!weAreDone)
+                            {
+                                stuffToExpand.Enqueue(next);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        delegate void SpreadReversableTraversableCallback(PathingRegionPos pos);
+
+
+        void ClearVisited()
+        {
+            LoopThroughAllPositions((x, y, z) =>
+            {
+                data[x, y, z, PathingFlags.Visited] = false;
+            });
+        }
+
+        /// <summary>
+        /// The first thing called back is the start pos (if we can stand on it)
+        /// </summary>
+        /// <param name="startX"></param>
+        /// <param name="startY"></param>
+        /// <param name="startZ"></param>
+        /// <param name="callback"></param>
+        /// <param name="clearVisited"></param>
+        void SpreadReversableTraversable(int startX, int startY, int startZ, SpreadReversableTraversableCallback callback, bool clearVisited=true)
+        {
+            if (clearVisited)
+            {
+                ClearVisited();
+            }
+
+            if (data[startX,startY,startZ,PathingFlags.Visited])
+            {
+                return;
+            }
+
+            if (CanWeStandOn(startX, startY, startZ))
+            {
+                PathingRegionPos curPos = new PathingRegionPos(startX, startY, startZ, null, this);
+
+                Queue<PathingRegionPos> nextStuff = new Queue<PathingRegionPos>();
+
+                nextStuff.Enqueue(curPos);
+
+                while (nextStuff.Count > 0)
+                {
+                    curPos = nextStuff.Dequeue();
+
+                    callback(curPos);
+
+                    LoopThroughNeighborsInChunk(curPos.localX, curPos.localY, curPos.localZ, (nx, ny, nz) =>
+                    {
+                        // if we have not visited it in our search yet
+                        if (!data[nx, ny, nz, PathingFlags.Visited])
+                        {
+                            bool reversableTraversable = false;
+                            // if neighbor can be stood on, that is good we can spread
+                            if (CanWeStandOn(nx, ny, nz))
+                            {
+                                reversableTraversable = true;
+                            }
+                            // otherwise, if neighbor has a block above it jumpHeight number of blocks (usually 1) that can be stood on, we can still spread
+                            else if(PhysicsUtils.IsBlockSolid(locationSpec[nx, ny, nz]) || PhysicsUtils.IsBlockLiquid(locationSpec[nx, ny, nz]))
+                            {
+                                for (int curY = ny + 1; curY < ny + 1 + jumpHeight && curY < locationSpec.yWidth; curY++)
+                                {
+                                    if (CanWeStandOn(nx, curY, nz))
+                                    {
+                                        // check if we can get from them to us
+                                        // they are below us, make sure they have that many extra spaces above them
+                                        // this is to prevent situations like this:
+                                        // g x
+                                        // x o
+                                        // x x
+                                        // o is trying to get to g, x is in the way above (x is a solid block, o and g are air)
+                                        if (curY < curPos.localY)
+                                        {
+                                            if (CanWeFitAbove(nx, curY, nz, additionalSpaceNeeded: (curPos.localY - curY)))
+                                            {
+                                                reversableTraversable = true;
+                                            }
+                                        }
+                                        // we are below them, make sure we have that many extra spaces above us to get to them
+                                        else
+                                        {
+                                            if (CanWeFitAbove(curPos.localX, curPos.localY, curPos.localZ, additionalSpaceNeeded: (curY - curPos.localY)))
+                                            {
+                                                reversableTraversable = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // if we can get to it reversably, mark it as visited
+                            if (reversableTraversable)
+                            {
+                                data[nx, ny, nz, PathingFlags.Visited] = true;
+                                PathingRegionPos nextPos = new PathingRegionPos(nx, ny, nz, curPos, this);
+                                nextStuff.Enqueue(nextPos);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        public PathingRegion GetRegionStandingOn(LVector3 worldPos, out PathingRegionPos posInRegion)
+        {
+            posInRegion = null;
+            int localX = (int)(worldPos.x - locationSpec.minX);
+            int localY = (int)(worldPos.y - locationSpec.minY);
+            int localZ = (int)(worldPos.z - locationSpec.minZ);
+
+            ushort regionNum = data[localX, localY, localZ];
+
+            Chunk chunkBelowUs = null;
+            for (int curY = localY; curY >= 0; curY--)
+            {
+                regionNum = data[localX, curY, localZ];
+                if (PhysicsUtils.IsBlockSolid(locationSpec[localX, curY, localZ]) && regionNum != 0)
+                {
+                    int regionIndex = regionNum - 1;
+                    posInRegion = new PathingRegionPos(localX, curY, localZ, null, this);
+                    PathingRegion regionRes = regions[regionIndex];
+                    if (regionRes.RegionTypeIsFalling())
+                    {
+                        Debug.LogWarning("somehow hit falling region as region we are in? pathfinding to this may be difficult");
+                    }
+                    return regionRes;
+                }
+
+                if (PhysicsUtils.IsBlockSolid(locationSpec[localX, curY, localZ]))
+                {
+                    Debug.LogWarning("went down and hit solid block and we still couldn't find region, maybe the player is suffocating?");
+                    return null;
+                }
+            }
+            // look a chunk below, maybe we are falling or our head is just poking into this chunk at the bottom?
+            chunkBelowUs = world.GetChunk(chunk.cx, chunk.cy - 1, chunk.cz);
+            if (chunkBelowUs != null)
+            {
+                PathingChunk pathingChunkBelowUs = chunkBelowUs.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                return pathingChunkBelowUs.GetRegionStandingOn(new LVector3(worldPos.x, pathingChunkBelowUs.locationSpec.maxY, worldPos.z), out posInRegion);
+            }
+            // couldn't find any, sorry
+            return null;
+        }
+
+
+        public static long pathingCounter = 0;
+
+        public static PathingRegionPos Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose = false)
+        {
+            // TODO: sparse staircase, fix chunk connectings in sparse staircase too
+
+            foreach (LoggingNode loggingNode in GameObject.FindObjectsOfType<LoggingNode>())
+            {
+                if (loggingNode.logTag == "resPath")
+                {
+                    GameObject.Destroy(loggingNode.gameObject);
+                }
+            }
+
+            pathingCounter += 1;
+            success = false;
+
+            Chunk startChunk = world.GetChunkAtPos(startPos);
+            Chunk endChunk = world.GetChunkAtPos(endPos);
+            if (startChunk == null || endChunk == null)
+            {
+                Debug.LogWarning("either start chunk " + startChunk + " for startPos " + startPos + " or end chunk " + endChunk + " for endPos " + endPos + " was null (not generated yet), cannot pathfind");
+                return null;
+            }
+
+
+            PathingChunk startPathingChunk = startChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+            PathingChunk endPathingChunk = endChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+
+            PathingRegionPos startPosInRegion;
+            PathingRegion startRegion = startPathingChunk.GetRegionStandingOn(startPos, out startPosInRegion);
+            PathingRegionPos endPosInRegion;
+            PathingRegion endRegion = endPathingChunk.GetRegionStandingOn(endPos, out endPosInRegion);
+            if (startRegion == null || endRegion == null)
+            {
+                Debug.LogWarning("either start region " + startRegion + " for startPos " + startPos + " or end region " + endRegion + " for endPos " + endPos + " was null (not generated yet), cannot pathfind");
+                return null;
+            }
+
+            world.MakeLoggingNode("resPath", "start air", Color.gray, startPosInRegion.wx, startPosInRegion.emptyBlockAboveY, startPosInRegion.wz);
+            world.MakeLoggingNode("resPath", "end air", Color.gray, endPosInRegion.wx, endPosInRegion.emptyBlockAboveY, endPosInRegion.wz);
+            world.MakeLoggingNode("resPath", "start", Color.gray, startPosInRegion.wx, startPosInRegion.wy, startPosInRegion.wz);
+            world.MakeLoggingNode("resPath", "end", Color.gray, endPosInRegion.wx, endPosInRegion.wy, endPosInRegion.wz);
+
+            startRegion.parentChunk.ExpandWalls();
+            endRegion.parentChunk.ExpandWalls();
+
+            Debug.Log("end region has " + endRegion.thingsWeCanGoTo.Count + " connections");
+
+
+            PathingRegionPos res = null;
+
+            if (startRegion == endRegion)
+            {
+                Debug.Log("in same region, ez");
+                res = startRegion.TraverseThroughRegion(startPosInRegion, endPosInRegion);
+            }
+
+
+            Priority_Queue.SimplePriorityQueue<Tuple<PathingRegionPos, PathingRegionConnection>, long> regionConnectionsToConsider = new Priority_Queue.SimplePriorityQueue<Tuple<PathingRegionPos, PathingRegionConnection>, long>();
+
+            Debug.Log("start region has " + startRegion.thingsWeCanGoTo.Count + " connections");
+
+            foreach (PathingRegionConnection connection in startRegion.thingsWeCanGoTo)
+            {
+                if (res != null)
+                {
+                    break;
+                }
+                PathingRegionPos pathThroughConnection = connection.ConnectPathToConection(startPosInRegion);
+                long cost = PathingRegionPos.Dist(pathThroughConnection, endPos)+ pathThroughConnection.pathLen;
+                regionConnectionsToConsider.Enqueue(new Tuple<PathingRegionPos, PathingRegionConnection>(pathThroughConnection, connection), cost);
+
+
+                if (connection.to == endRegion)
+                {
+                    if (verbose) Debug.Log("found exit region in initial set!");
+                    res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
+                    break;
+                }
+            }
+
+
+            long startTime = PhysicsUtils.millis();
+            int jj = 0;
+            while (regionConnectionsToConsider.Count > 0 && res == null)
+            {
+                if ((PhysicsUtils.millis() - startTime) > 1000)
+                {
+                    Debug.Log("bailing, took too long");
+                    break;
+                }
+                jj++;
+                Tuple<PathingRegionPos, PathingRegionConnection> curConnection = regionConnectionsToConsider.Dequeue();
+                PathingRegionPos curPosInRegion = curConnection.a;
+                curConnection.b.to.parentChunk.ExpandWalls();
+                if (verbose) world.MakeLoggingNode("resPath", "considered " + jj + " " + curConnection.b.to.thingsWeCanGoTo.Count, Color.blue, curPosInRegion.wx, curPosInRegion.emptyBlockAboveY, curPosInRegion.wz);
+                foreach (PathingRegionConnection connection in curConnection.b.to.thingsWeCanGoTo)
+                {
+                    // this is our "visited" marker, doing this lets us not have to clear it each time
+                    if (connection.to.pathingVisited != pathingCounter)
+                    {
+                        connection.to.pathingVisited = pathingCounter;
+                        PathingRegionPos pathThroughConnection = connection.ConnectPathToConection(curPosInRegion);
+                        long cost = PathingRegionPos.Dist(pathThroughConnection, endPos) + pathThroughConnection.pathLen;
+                        regionConnectionsToConsider.Enqueue(new Tuple<PathingRegionPos, PathingRegionConnection>(pathThroughConnection, connection), cost);
+
+                        if (connection.to == endRegion)
+                        {
+                            res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
+                            if (verbose) Debug.Log("found exit region!");
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            if (res != null)
+            {
+                success = true;
+
+                res.RemoveDuplicatePositionsInPath();
+
+
+
+
+
+                Debug.Log("successfully pathfound with len = " + res.pathLen);
+                int i = 0;
+                PathingRegionPos tmp = res;
+                PathingRegionPos prev = null;
+                while (tmp != null)
+                {
+                    i += 1;
+                    if (prev != null && !PathingRegionPos.PositionsAreEqual(tmp, prev))
+                    {
+                        world.MakeLoggingNode("resPath", "path " + i, Color.green, tmp.wx, tmp.emptyBlockAboveY, tmp.wz);
+                    }
+                    prev = tmp;
+                    tmp = tmp.prev;
+                }
+            }
+            else
+            {
+                Debug.Log("failed to pathfind");
+            }
+
+            return res;
+        }
+        
+
+
+        public void Refresh()
+        {
+            // clears visited, regions, region numbers, and CanWeStandOn and CanWeFitAbove caches
+            ResetData();
+
+            this.editId = chunk.chunkData.editNum;
+            ushort regionI = 1;
+            regions = new List<PathingRegion>();
+
+            // get regular regions
+            LoopThroughAllPositions((x, y, z) =>
+            {
+                if (data[x,y,z] == 0 && CanWeStandOn(x, y, z))
+                {
+                    List<PathingRegionPos> positions = new List<PathingRegionPos>();
+                    SpreadReversableTraversable(x, y, z, (n) =>
+                    {
+                        data[n.localX, n.localY, n.localZ] = regionI;
+                        positions.Add(n);
+                    },
+                    clearVisited: false);
+                    PathingRegion region = new PathingRegion(regionI - 1, positions, PathingRegion.PathingRegionType.Regular, this);
+                    regionI += 1;
+                    regions.Add(region);
+                    //Debug.Log("added region at pos " + x + " " + y + " " + z);
+                }
+            });
+
+            // get drop regions
+            LoopThroughAllPositions((x, y, z) =>
+            {
+                ushort regionNum = data[x, y, z];
+                int regionIndex = regionNum - 1;
+                // if we are a region and we have a neighbor that is not, test to see if it is a drop possability
+                if (regionNum != 0 && CanWeStandOn(x, y, z))
+                {
+                    LoopThroughNonVerticalNeighborsInChunk(x, y, z, (nx, ny, nz) =>
+                    {
+                        PathingRegion fromRegion = regions[regionIndex];
+                        ushort neighborRegionNum = data[nx, ny, nz];
+                        // if it is empty, not a region, and we can fit above it, we can drop into it, and below it is not the same region we came from (this also includes being not a region), mark it and the stuff below as a drop region
+                        if (neighborRegionNum == 0 && CanWeFitAbove(nx, ny, nz) && !PhysicsUtils.IsBlockSolid(locationSpec[nx, ny, nz]) && 
+                            ((ny > 0 && data[nx, ny-1, nz] != regionNum) || (ny == 0)))
+                        {
+                            MakeFallingRegionStartingAtPos(nx, ny, nz, new PathingRegionPos(x, y, z, null, this), fromRegion);
+                        }
+                    });
+                }
+            });
+
+        }
+
+
+        bool ValidPositionForAFallingRegion(int startX, int startY, int startZ)
+        {
+            ushort fallingRegionNum = data[startX, startY, startZ];
+            return (fallingRegionNum == 0 && CanWeFitAbove(startX, startY, startZ) && !PhysicsUtils.IsBlockSolid(locationSpec[startX, startY, startZ])); // && startY > 0 && data[nx, ny - 1, nz] != regionNum)
+        }
+
+        public delegate void LoopThroughNeighboringPositionsCallback(long wx, long wy, long wz);
+
+        public void LoopThroughNeighboringPositionsOnlyHorizontal(long wx, long wy, long wz, LoopThroughNeighboringPositionsCallback callback)
+        {
+            callback(wx - 1, wy, wz);
+            callback(wx + 1, wy, wz);
+            callback(wx, wy, wz - 1);
+            callback(wx, wy, wz + 1);
+        }
+
+
+        /// <summary>
+        /// Also adds connections
+        /// </summary>
+        /// <param name="startX"></param>
+        /// <param name="startY"></param>
+        /// <param name="startZ"></param>
+        /// <param name="fromPos"></param>
+        /// <param name="fromRegion"></param>
+        void MakeFallingRegionStartingAtPos(int startX, int startY, int startZ, PathingRegionPos fromPos, PathingRegion fromRegion, bool lookOutsideChunk=false)
+        {
+            bool intraChunk = this != fromRegion.parentChunk;
+            //Debug.Log("adding drop region at " + x + " " + y + " " + z + " with drop " + nx + " " + ny + " " + nz);
+            List<PathingRegionPos> positions = new List<PathingRegionPos>();
+            ushort regionNum = (ushort)(regions.Count+1);
+            PathingRegion region;
+            if (!intraChunk)
+            {
+                region = new PathingRegion(regionNum - 1, positions, PathingRegion.PathingRegionType.Falling, this);
+            }
+            else
+            {
+                region = new PathingRegion(regionNum - 1, positions, PathingRegion.PathingRegionType.FallingFromAnotherChunk, this);
+            }
+            
+            regions.Add(region);
+            PathingRegionPos curPos = null;
+            // this goes through nx, ny, nz first so we don't have to duplicate code
+            for (int curY = startY; curY >= 0; curY--)
+            {
+                if (!PhysicsUtils.IsBlockSolid(locationSpec[startX, curY, startZ]) && data[startX, curY, startZ] == 0)
+                {
+                    data[startX, curY, startZ, PathingFlags.Visited] = true;
+                    data[startX, curY, startZ] = regionNum;
+                    curPos = new PathingRegionPos(startX, curY, startZ, curPos, this);
+                    positions.Add(curPos);
+                }
+                else
+                {
+                    // we passed another region, connect us
+                    if (data[startX, curY, startZ] != 0)
+                    {
+                        int toRegionIndex = data[startX, curY, startZ] - 1;
+                        PathingRegion toRegion = regions[toRegionIndex];
+                        region.AddRegionWeCanGoTo(new PathingRegionConnection(region, toRegion, curPos, new PathingRegionPos(startX, curY, startZ, null, this)));
+                        
+                        // if we landed on a non falling region, see if to our side is anything that we can connect to (disconnected stairs)
+                        if (curPos != null && CanWeFitAbove(startX, curY, startZ, additionalSpaceNeeded: jumpHeight))
+                        {
+                            PathingRegionPos prevPos = curPos;
+                            if (!toRegion.RegionTypeIsFalling())
+                            {
+                                List<Tuple<PathingRegionPos, PathingRegion>> connectedRegionsMaybe = new List<Tuple<PathingRegionPos, PathingRegion>>();
+
+                            }
+                        }
+                        
+                    }
+                    break;
+                }
+            }
+
+            fromRegion.AddRegionWeCanGoTo(new PathingRegionConnection(fromRegion, region, fromPos, new PathingRegionPos(startX, startY, startZ, null, this)));
+        }
+
+
+        bool wallsExpanded = false;
+
+        public void ExpandWalls()
+        {
+            if (wallsExpanded)
+            {
+                return;
+            }
+            wallsExpanded = true;
+            Chunk myChunk = locationSpec.chunk;
+            List<Chunk> neighboringChunks = new List<Chunk>();
+            neighboringChunks.Add(world.GetChunk(myChunk.cx - 1, myChunk.cy, myChunk.cz));
+            neighboringChunks.Add(world.GetChunk(myChunk.cx + 1, myChunk.cy, myChunk.cz));
+            ///// IT IS IMPORTANT WE DO THESE TWO IN THIS ORDER SO WE TRICKLE FALLING REGIONS FROM THE CHUNK ABOVE US TO THE ONE BELOW /////
+            neighboringChunks.Add(world.GetChunk(myChunk.cx, myChunk.cy + 1, myChunk.cz));
+            neighboringChunks.Add(world.GetChunk(myChunk.cx, myChunk.cy - 1, myChunk.cz));
+            ////// 
+           
+            neighboringChunks.Add(world.GetChunk(myChunk.cx, myChunk.cy, myChunk.cz - 1));
+            neighboringChunks.Add(world.GetChunk(myChunk.cx, myChunk.cy, myChunk.cz + 1));
+
+            foreach (Chunk neighborChunk in neighboringChunks)
+            {
+                if (neighborChunk != null)
+                {
+                    PathingChunk neighborNode = neighborChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                    ConnectExitsToNeighbor(neighborNode);
+                    neighborNode.ConnectExitsToNeighbor(this);
+                }
+            }
+
+            // expand to account for sparse stairs
+            foreach (PathingRegion region in regions)
+            {
+                if (region.RegionTypeIsFalling())
+                {
+                    region.ExpandBottomToAccountForJump();
+                }
+            }
+
+        }
+
+        public delegate void ProcessNeighboringCells(int myX, int myY, int myZ, int theirX, int theirY, int theirZ);
+        public void LoopThroughNeighboringCells(PathingChunk neighbor, ProcessNeighboringCells callback)
+        {
+            if (neighbor.locationSpec.minX - 1 == locationSpec.maxX)
+            {
+                int myX = (int)(locationSpec.xWidth - 1);
+                //int theirX = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int theirX = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                {
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    {
+                        int myY = (int)(y - locationSpec.minY);
+                        int theirY = (int)(y - neighbor.locationSpec.minY);
+                        int myZ = (int)(z - locationSpec.minZ);
+                        int theirZ = (int)(z - neighbor.locationSpec.minZ);
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+            if (neighbor.locationSpec.minY - 1 == locationSpec.maxY)
+            {
+                int myY = (int)(locationSpec.yWidth - 1);
+                int theirY = 0;
+                for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                {
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    {
+                        int myX = (int)(x - locationSpec.minX);
+                        int theirX = (int)(x - neighbor.locationSpec.minX);
+                        int myZ = (int)(z - locationSpec.minZ);
+                        int theirZ = (int)(z - neighbor.locationSpec.minZ);
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+            if (neighbor.locationSpec.minZ - 1 == locationSpec.maxZ)
+            {
+                int myZ = (int)(locationSpec.zWidth - 1);
+                //int theirZ = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int theirZ = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                {
+                    for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                    {
+                        int myY = (int)(y - locationSpec.minY);
+                        int theirY = (int)(y - neighbor.locationSpec.minY);
+                        int myX = (int)(x - locationSpec.minX);
+                        int theirX = (int)(x - neighbor.locationSpec.minX);
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+            if (locationSpec.minX - 1 == neighbor.locationSpec.maxX)
+            {
+                int theirX = (int)(neighbor.locationSpec.xWidth - 1);
+                //int myX = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int myX = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                {
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    {
+                        int myY = (int)(y - locationSpec.minY);
+                        int theirY = (int)(y - neighbor.locationSpec.minY);
+                        int myZ = (int)(z - locationSpec.minZ);
+                        int theirZ = (int)(z - neighbor.locationSpec.minZ);
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+            if (locationSpec.minY - 1 == neighbor.locationSpec.maxY)
+            {
+
+                int theirY = (int)(neighbor.locationSpec.yWidth - 1);
+                int myY = 0; // todo: double check this
+                for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                {
+                    for (long z = Math.Max(locationSpec.minZ, neighbor.locationSpec.minZ); z <= locationSpec.maxZ && z <= neighbor.locationSpec.maxZ; z++)
+                    {
+                        int myX = (int)(x - locationSpec.minX);
+                        int theirX = (int)(x - neighbor.locationSpec.minX);
+                        int myZ = (int)(z - locationSpec.minZ);
+                        int theirZ = (int)(z - neighbor.locationSpec.minZ);
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+            if (locationSpec.minZ - 1 == neighbor.locationSpec.maxZ)
+            {
+                int theirZ = (int)(neighbor.locationSpec.zWidth - 1);
+                //int myZ = Math.Min(neededSizeForward, neededSizeSide) - 1; // todo: double check this
+                int myZ = 0;
+                for (long y = Math.Max(locationSpec.minY, neighbor.locationSpec.minY); y <= locationSpec.maxY && y <= neighbor.locationSpec.maxY; y++)
+                {
+                    for (long x = Math.Max(locationSpec.minX, neighbor.locationSpec.minX); x <= locationSpec.maxX && x <= neighbor.locationSpec.maxX; x++)
+                    {
+                        int myY = (int)(y - locationSpec.minY);
+                        int theirY = (int)(y - neighbor.locationSpec.minY);
+                        int myX = (int)(x - locationSpec.minX);
+                        int theirX = (int)(x - neighbor.locationSpec.minX);
+
+                        callback(myX, myY, myZ, theirX, theirY, theirZ);
+
+                    }
+                }
+            }
+        }
+
+        public static PathingRegion GetRegion(World world, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, long wx, long wy, long wz, out PathingRegionPos posInRegion)
+        {
+            posInRegion = null;
+            Chunk worldChunk = World.mainWorld.GetChunkAtPos(wx, wy, wz);
+            if (worldChunk != null)
+            {
+                PathingChunk worldPathingChunk = worldChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                return worldPathingChunk.GetRegionNotUsingLocalCoordinates(wx, wy, wz, out posInRegion);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        // if outside bounds, this will look around at other chunks to get the region
+        public PathingRegion GetRegionNotUsingLocalCoordinates(long wx, long wy, long wz, out PathingRegionPos posInRegion)
+        {
+            posInRegion = null;
+            if (!locationSpec.ContainsPosition(wx, wy, wz))
+            {
+                return PathingChunk.GetRegion(world, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, wx, wy, wz, out posInRegion);
+            }
+            int localX = (int)(wx - locationSpec.minX);
+            int localY = (int)(wy - locationSpec.minY);
+            int localZ = (int)(wz - locationSpec.minZ);
+
+            PathingRegion res = GetRegion(localX, localY, localZ);
+            posInRegion = new PathingRegionPos(localX, localY, localZ, null, this);
+            return res;
+        }
+
+        PathingRegion GetRegion(int localX, int localY, int localZ)
+        {
+            ushort regionVal = data[localX, localY, localZ];
+            int regionIndex = regionVal - 1;
+            if (regionVal == 0)
+            {
+                return null;
+            }
+            else
+            {
+                return regions[regionIndex];
+            }
+        }
+
+        HashSet<PathingChunk> neighborsConnectedTo = new HashSet<PathingChunk>();
+
+        public void ConnectExitsToNeighbor(PathingChunk neighbor)
+        {
+            if (neighborsConnectedTo.Contains(neighbor))
+            {
+                return;
+            }
+
+            neighborsConnectedTo.Add(neighbor);
+
+            LoopThroughNeighboringCells(neighbor, (myX, myY, myZ, theirX, theirY, theirZ) =>
+            {
+                PathingRegion myRegion = GetRegion(myX, myY, myZ);
+                PathingRegion theirRegion = neighbor.GetRegion(theirX, theirY, theirZ);
+
+                PathingRegionPos myPos = new PathingRegionPos(myX, myY, myZ, null, this);
+                PathingRegionPos theirPos = new PathingRegionPos(theirX, theirY, theirZ, null, neighbor);
+                // if they are directly above us, consider fall regions falling into a spot where we don't currently have a region
+                if (neighbor.chunk.cy == chunk.cy+1)
+                {
+                    // they are falling into us, we need to make a new region
+                    if (theirRegion != null && myRegion == null && theirRegion.RegionTypeIsFalling())
+                    {
+                        MakeFallingRegionStartingAtPos(myX, myY, myZ, theirPos, theirRegion);
+                    }
+                    // they are falling into us but we already have a region, connect us to them
+                    else if (theirRegion != null && myRegion != null && theirRegion.RegionTypeIsFalling())
+                    {
+                        theirRegion.AddRegionWeCanGoTo(new PathingRegionConnection(theirRegion, myRegion, theirPos, myPos));
+                    }
+                    // they are just a block up, this is a stairs thing probably
+                    else if(theirRegion != null && myRegion == null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular)
+                    {
+                        LoopThroughNonVerticalNeighborsInChunk(myX, myY, myZ, (nx, ny, nz) =>
+                        {
+                            PathingRegion neighborRegion = GetRegion(nx, ny, nz);
+                            if (neighborRegion != null && neighborRegion.regionType == PathingRegion.PathingRegionType.Regular)
+                            {
+                                myRegion = neighborRegion;
+                            }
+                        });
+
+                        if (myRegion != null)
+                        {
+                            data[myX, myY, myZ] = (ushort)(myRegion.index + 1);
+                            myRegion.positions.Add(new PathingRegionPos(myX, myY, myZ, null, myRegion.parentChunk));
+                            theirRegion.AddRegionWeCanGoTo(new PathingRegionConnection(theirRegion, myRegion, theirPos, myPos));
+                            myRegion.AddRegionWeCanGoTo(new PathingRegionConnection(myRegion, theirRegion, myPos, theirPos));
+                        }
+                    }
+                }
+                // if they are to the side of us, they might make a falling region into us
+                else if(neighbor.chunk.cy == chunk.cy)
+                {
+                    if (theirRegion != null && myRegion == null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular && ValidPositionForAFallingRegion(myX, myY, myZ))
+                    {
+                        MakeFallingRegionStartingAtPos(myX, myY, myZ, theirPos, theirRegion, lookOutsideChunk: true);
+                    }
+                    else if(theirRegion != null && myRegion != null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular && myRegion.regionType == PathingRegion.PathingRegionType.Regular)
+                    {
+                        theirRegion.AddRegionWeCanGoTo(new PathingRegionConnection(theirRegion, myRegion, theirPos, myPos));
+                        myRegion.AddRegionWeCanGoTo(new PathingRegionConnection(myRegion, theirRegion, myPos, theirPos));
+                    }
+                    // sparse staircases maybe, look down one to see if we can traverse
+                    else if(theirRegion != null && myRegion != null && theirRegion.regionType == PathingRegion.PathingRegionType.Regular && myRegion.RegionTypeIsFalling())
+                    {
+
+                    }
+                    else if (theirRegion != null && myRegion != null && myRegion.regionType == PathingRegion.PathingRegionType.Regular && theirRegion.RegionTypeIsFalling())
+                    {
+
+                    }
+                }
+                // they are below us, that logic will be handled by them (see the  if (neighbor.chunk.cy == chunk.cy+1)  piece of logic above)
+                
+
+            });
+        }
+    }
+
+
+    public class BlocksPathing
+    {
+        public static PathingRegionPos Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
+        {
+
+
+            PathingRegionPos res = PathingChunk.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success, verbose: verbose);
+
+
+
 
             if (res == null)
             {
@@ -98,18 +1478,22 @@ namespace Blocks
             {
                 if (verbose)
                 {
-                    Debug.Log("got pathing result with path of length: " + res.distFromStart + " and success=" + success);
+                    Debug.Log("got pathing result with path of length: " + res.pathLen + " and success=" + success);
                 }
 
 
                 if (verbose)
                 {
+                    /*
+
+
                     int pos = 0;
                     res.LoopThroughPositions((wx, wy, wz, segment, pathingNode) =>
                     {
                             world.MakeLoggingNode("resPos", "Path pos " + pos, Color.green, wx, wy, wz).transform.position -= new Vector3(0, 0.5f, 0);
                         pos += 1;
                     });
+                    */
                 }
             }
 
@@ -275,7 +1659,28 @@ namespace Blocks
         bool offLandIsValid;
 
         public bool cachedOnLand = false;
-        public bool onLand;
+        public bool OnLand
+        {
+            get
+            {
+                if (cachedOnLand)
+                {
+                    return onLand_;
+                }
+                else
+                {
+                    parentNode.MeetsFitCriteria(this, prev, allowFalling: false);
+                    return onLand_;
+                }
+            }
+            set
+            {
+                onLand_ = value;
+                cachedOnLand = true;
+            }
+        }
+
+        bool onLand_;
 
         ulong cachedValues;
 
@@ -332,8 +1737,7 @@ namespace Blocks
             SpreadNode node = this;
             //this.onLand = node.parentNode.OnLand(node.localX, node.localY, node.localZ);
             //onLand = this.onLand;
-            this.onLand = onLand;
-            this.cachedOnLand = true;
+            this.OnLand = onLand;
             if (onLand)
             {
 
@@ -394,6 +1798,19 @@ namespace Blocks
             }
         }
 
+
+        public static bool VERBOSE_PATHING
+        {
+            get
+            {
+                return World.mainWorld.blocksWorld.verbosePathing;
+            }
+            set
+            {
+
+            }
+        }
+
         // The max depth thing is just to prevent this from recursing always as deep as possible (since that isn't actually needed)
         bool GetInfoAboutJumpingOrFallingHelper(bool onLand,  SpreadNode prev, out bool jumping, out int heightJumped, out bool falling, out int heightFallen, bool allowFalling)
         {
@@ -402,9 +1819,9 @@ namespace Blocks
             heightFallen = 0;
             jumping = false;
             falling = false;
-            int x = node.localX;
-            int y = node.localY;
-            int z = node.localZ;
+            long wx = node.wx;
+            long wy = node.wy;
+            long wz = node.wz;
             if (prev == null)
             {
                 // not much info to go off of, assume jumping and falling if not on land, otherwise assume neither
@@ -423,14 +1840,7 @@ namespace Blocks
             }
             else
             {
-                bool prevOnLand = prev.onLand;
-
-                if (!prev.cachedOnLand)
-                {
-                    // this is just to get if they are on land or not
-                    parentNode.MeetsFitCriteria(prev, prev.prev, allowFalling: allowFalling);
-                    prevOnLand = prev.onLand;
-                }
+                bool prevOnLand = prev.OnLand;
 
                 // we were falling or jumping
                 if (!prevOnLand)
@@ -446,16 +1856,16 @@ namespace Blocks
                     }
 
                     // on same y column
-                    if (x == prev.localX && z == prev.localZ)
+                    if (wx == prev.wx && wz == prev.wz)
                     {
                         // going up
-                        if (y > prev.localY)
+                        if (wy > prev.wy)
                         {
                             // we are jumping, this is ok
                             if (prevJumping)
                             {
                                 jumping = true;
-                                heightJumped = prevHeightJumped + (y - prev.localY);
+                                heightJumped = prevHeightJumped + (int)(wy - prev.wy);
                                 return true;
                             }
                             // we aren't jumping, we can't go up, this is invalid
@@ -465,7 +1875,7 @@ namespace Blocks
                             }
                         }
                         // same position, what are you doing?
-                        else if (y == prev.localY)
+                        else if (wy == prev.wy)
                         {
                             Debug.LogWarning("Warning: Same position as prev, why? prev and us is " + prev);
                             return false;
@@ -480,13 +1890,13 @@ namespace Blocks
                                 if (onLand)
                                 {
                                     falling = false;
-                                    heightFallen = prevHeightFallen + (prev.localY - y);
+                                    heightFallen = prevHeightFallen + (int)(prev.wy - wy);
                                 }
                                 // we are still falling
                                 else
                                 {
                                     falling = true;
-                                    heightFallen = prevHeightFallen + (prev.localY - y);
+                                    heightFallen = prevHeightFallen + (int)(prev.wy - wy);
                                 }
                                 return true;
                             }
@@ -501,7 +1911,7 @@ namespace Blocks
                     else
                     {
                         // we just jumped up onto a block (up a staircase type thing)
-                        if (onLand)
+                        if (onLand && prevJumping)
                         {
                             // that is too high, this is invalid
                             if (prevHeightJumped > this.parentNode.jumpHeight)
@@ -514,11 +1924,33 @@ namespace Blocks
                                 return true;
                             }
                         }
-                        // don't allow moving around in the air for pathing, except up and down and over one if we are going up a staircase type thing
                         else
                         {
                             return false;
                         }
+                        /*
+                        // jumping over a hole
+                        else if(prevJumping && prev.prev != null && prev.prev.OnLand)
+                        {
+                            jumping = true;
+                            heightJumped = prevHeightJumped;
+                            return true;
+                        }
+                        // done jumping, now we are falling since we made our jump
+                        else if(prevJumping && prev.prev != null && !prev.prev.OnLand && prev.prev.prev != null && prev.prev.prev.OnLand && 
+                            ((prev.wx == wx && prev.prev.wx == wx) ||
+                            (prev.wz == wz && prev.prev.wz == wz)))
+                        {
+                            falling = true;
+                            heightFallen = 0;
+                            return true;
+                        }
+                        // don't allow moving around in the air for pathing, except up and down and over one if we are going up a staircase type thing and jumping over a hole
+                        else
+                        {
+                            return false;
+                        }
+                        */
                     }
                 }
                 // we came from being on land
@@ -533,17 +1965,17 @@ namespace Blocks
                     else
                     {
                         // same y column, we must be jumping
-                        if (prev.localX == x && prev.localZ == z)
+                        if (prev.wx == wx && prev.wz == wz)
                         {
                             // we are jumping
-                            if (prev.localY < y)
+                            if (prev.wy < wy)
                             {
                                 jumping = true;
-                                heightJumped = y - prev.localY;
+                                heightJumped = (int)(wy - prev.wy);
                                 return true;
                             }
                             // same block? why u do this
-                            else if (prev.localY == y)
+                            else if (prev.wy == wy)
                             {
                                 Debug.LogWarning("Warning: Same position as prev, why? prev and us is " + prev);
                                 return false;
@@ -559,7 +1991,7 @@ namespace Blocks
                         else
                         {
                             // we have walked over a hole, begin falling
-                            if (prev.localY == y)
+                            if (prev.wy == wy)
                             {
                                 falling = true;
                                 heightFallen = 0;
@@ -696,13 +2128,14 @@ namespace Blocks
         public List<PathingNodeExitConnection> connectedExits = new List<PathingNodeExitConnection>();
         public PathingNode parentNode;
         public Tuple<int, int, int>[] localPositions;
-
+        public int index;
         public long visited = -1;
         public long connectedToExit = -1;
         public int distToExitIfConected = 0;
 
-        public PathingNodeExit(PathingNode parentNode, Tuple<int, int, int>[] localPositions)
+        public PathingNodeExit(int index, PathingNode parentNode, Tuple<int, int, int>[] localPositions)
         {
+            this.index = index;
             this.parentNode = parentNode;
             this.localPositions = localPositions;
         }
@@ -966,7 +2399,7 @@ namespace Blocks
                 {
                     if (curY >= locationSpec.yWidth)
                     {
-                        if (this.locationSpec.GetBlockOutsideRange(x, curY, z) != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(x, curY, z)))
                         {
                             failed = true;
                             break;
@@ -974,7 +2407,7 @@ namespace Blocks
                     }
                     else
                     {
-                        if (this.locationSpec[x, curY, z] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec[x, curY, z]))
                         {
                             failed = true;
                             break;
@@ -984,21 +2417,20 @@ namespace Blocks
 
                 if (y > 0)
                 {
-                    if (this.locationSpec[x, y - 1, z] != BlockValue.Air)
+                    if (PhysicsUtils.IsBlockSolid(this.locationSpec[x, y - 1, z]))
                     {
                         onLand = true;
                     }
                 }
                 else
                 {
-                    if (this.locationSpec.GetBlockOutsideRange(x, y - 1, z) != BlockValue.Air)
+                    if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(x, y - 1, z)))
                     {
                         onLand = true;
                     }
                 }
 
-                node.onLand = onLand;
-                node.cachedOnLand = true;
+                node.OnLand = onLand;
 
                 if (failed)
                 {
@@ -1022,7 +2454,7 @@ namespace Blocks
                     bool failedFirst = false;
                     for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failedFirst = true;
                             break;
@@ -1031,7 +2463,7 @@ namespace Blocks
                     bool failedSecond = false;
                     for (int curY = y; curY >= 0 && curY > y - neededSizeUp; curY--)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failedSecond = true;
                             break;
@@ -1046,14 +2478,14 @@ namespace Blocks
 
                     if (y > 0)
                     {
-                        if (this[curX, y-1, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, y-1, curZ]))
                         {
                             onLand = true;
                         }
                     }
                     else
                     {
-                        if (this.locationSpec.GetBlockOutsideRange(curX, y-1, curZ) != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(curX, y-1, curZ)))
                         {
                             onLand = true;
                         }
@@ -1081,7 +2513,7 @@ namespace Blocks
                 {
                     for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failed = true;
                             break;
@@ -1090,14 +2522,14 @@ namespace Blocks
 
                     if (y > 0)
                     {
-                        if (this[curX, y - 1, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, y - 1, curZ]))
                         {
                             onLand = true;
                         }
                     }
                     else
                     {
-                        if (this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ) != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ)))
                         {
                             onLand = true;
                         }
@@ -1148,7 +2580,7 @@ namespace Blocks
                     bool failedFirst = false;
                     for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failedFirst = true;
                             break;
@@ -1157,7 +2589,7 @@ namespace Blocks
                     bool failedSecond = false;
                     for (int curY = y; curY >= 0 && curY > y - neededSizeUp; curY--)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failedSecond = true;
                             break;
@@ -1172,14 +2604,14 @@ namespace Blocks
 
                     if (y > 0)
                     {
-                        if (this[curX, y - 1, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, y - 1, curZ]))
                         {
                             onLand = true;
                         }
                     }
                     else
                     {
-                        if (this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ) != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ)))
                         {
                             onLand = true;
                         }
@@ -1206,7 +2638,7 @@ namespace Blocks
                 {
                     for (int curY = y; curY < locationSpec.yWidth && curY < y + neededSizeUp; curY++)
                     {
-                        if (this[curX, curY, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, curY, curZ]))
                         {
                             failed = true;
                             break;
@@ -1215,14 +2647,14 @@ namespace Blocks
 
                     if (y > 0)
                     {
-                        if (this[curX, y - 1, curZ] != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this[curX, y - 1, curZ]))
                         {
                             onLand = true;
                         }
                     }
                     else
                     {
-                        if (this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ) != BlockValue.Air)
+                        if (PhysicsUtils.IsBlockSolid(this.locationSpec.GetBlockOutsideRange(curX, y - 1, curZ)))
                         {
                             onLand = true;
                         }
@@ -1272,24 +2704,12 @@ namespace Blocks
 
             if (neighborsConnectedTo.Count > 0)
             {
-                List<PathingNode> needToExpand = new List<PathingNode>();
                 foreach (PathingNode node in neighborsConnectedTo)
                 {
                     node.DisconnectExitsFromNeighbor(this);
-                    if (node.wallsExpanded)
-                    {
-                        needToExpand.Add(node);
-                    }
                 }
                 wallsExpanded = false;
                 neighborsConnectedTo.Clear();
-
-                foreach (PathingNode node in needToExpand)
-                {
-                    node.wallsExpanded = false;
-                    node.ExpandWalls();
-                }
-                
 
                 if (wallsWereExpanded)
                 {
@@ -1620,7 +3040,6 @@ namespace Blocks
             if (z < locationSpec.zWidth - 1) callback(x, y, z + 1);
         }
 
-
         delegate bool MeetsCriteria(SpreadNode n);
 
         void DoSpread(int startX, int startY, int startZ, MeetsCriteria meetsSpreadCriteria)
@@ -1762,8 +3181,9 @@ namespace Blocks
                                         closestDist = estimatedDistFromExit;
                                         closest = n;
                                     }
-
-                                    if (verbose) world.MakeLoggingNode("resPos", distFromStart + "+" + estimatedDistFromExit + "=" + totalCost, Color.blue, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                    if (verbose) world.MakeLoggingNode("resPos", distFromStart + "+" + estimatedDistFromExit + "=" + totalCost + " :: " + iff + " " + neighborNode + " " + neighborNode.OnLand + " : " + neighborNode.prev + " " + n.OnLand, Color.blue, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                    if (verbose) iff++;
+                                    //if (verbose) world.MakeLoggingNode("resPos", , Color.blue, neighborNode.wx, neighborNode.wy, neighborNode.wz);
                                     if (verbose) Debug.Log("adding new spooker " + neighborNode + " with prev " + n + " and dist from start " + distFromStart + " and totalCost " + totalCost + " and goal pos " + startX + " " + startY + " " + startZ);
                                     // see if it is the pos we are looking for
                                     if (neighborNode.localX == localStartX && neighborNode.localY == localStartY && neighborNode.localZ == localStartZ)
@@ -1777,15 +3197,15 @@ namespace Blocks
                                 {
                                     if (neighborNode.localX == localStartX && neighborNode.localY == localStartY && neighborNode.localZ == localStartZ)
                                     {
-                                        Debug.Log(" also, " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand + " "  + n.cachedOnLand);
-                                        Debug.Log("n meets fit criteria: " + MeetsFitCriteria(n, n.prev, allowFalling) + " also i meet fit criteria " + MeetsFitCriteria(neighborNode, neighborNode.prev, allowFalling) + " " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand);
-                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                        if (verbose) Debug.Log(" also, " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.OnLand + " : " + n + " " + n.OnLand + " "  + n.cachedOnLand);
+                                        if (verbose) Debug.Log("n meets fit criteria: " + MeetsFitCriteria(n, n.prev, allowFalling) + " also i meet fit criteria " + MeetsFitCriteria(neighborNode, neighborNode.prev, allowFalling) + " " + i + " rip " + iff + " " + neighborNode + " " + neighborNode.OnLand + " : " + n + " " + n.OnLand);
+                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.OnLand + " : " + n + " " + n.OnLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
                                         if (verbose) iff++;
                                         if (verbose) Debug.Log("neighbor of " + n + " failed in pqueue " + neighborNode);
                                     }
                                     else
                                     {
-                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.onLand + " : " + n + " " + n.onLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
+                                        if (verbose) world.MakeLoggingNode("resPos", i + " rip " + iff + " " + neighborNode + " " + neighborNode.OnLand + " : " + n + " " + n.OnLand, Color.red, neighborNode.wx, neighborNode.wy, neighborNode.wz);
                                         if (verbose) iff++;
                                         if (verbose) Debug.Log("neighbor of " + n + " failed in pqueue " + neighborNode);
                                     }
@@ -1796,7 +3216,7 @@ namespace Blocks
 
                     if (!foundConnectionForThisExit && allowAlmostThere)
                     {
-                        Debug.Log("failed to find connection to pos for exit " + i + " returning closest thing found");
+                        //Debug.Log("failed to find connection to pos for exit " + i + " returning closest thing found");
                         if (closest != null)
                         {
                             res.Add(new Tuple<PathingNodeExit, SpreadNode, int>(curExit, closest, closestDist));
@@ -2005,6 +3425,25 @@ namespace Blocks
         public static long curRunId = 0;
         public static PathingSpreadNode Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
         {
+            int goDownAmount = neededSizeUp-1;
+            // go down until we hit the ground
+            while (!PhysicsUtils.IsBlockSolid(world[startPos-new LVector3(0,1,0)]) && goDownAmount > 0)
+            {
+                goDownAmount -= 1;
+                startPos = startPos - new LVector3(0, 1, 0);
+            }
+
+
+            goDownAmount = neededSizeUp - 1;
+            // go down until we hit the ground
+            while (!PhysicsUtils.IsBlockSolid(world[endPos - new LVector3(0, 1, 0)]) && goDownAmount > 0)
+            {
+                goDownAmount -= 1;
+                endPos = endPos - new LVector3(0, 1, 0);
+            }
+
+
+
             long startTime = PhysicsUtils.millis();
             success = false;
             Chunk startChunk = world.GetChunkAtPos(startPos.x, startPos.y, startPos.z);
@@ -2030,14 +3469,14 @@ namespace Blocks
             long midTime = PhysicsUtils.millis();
             List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExitsToStart = startNode.FindConnectedExits(startPos.x, startPos.y, startPos.z, true);
             // the issue right now is this traverses from the end node out to the exits, but we need to traverse from the exits to the end node to have the code that checks "can you walk there" do it properly
-            List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling:true, reversed:true);
+            List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling:true, reversed:true, verbose: SpreadNode.VERBOSE_PATHING);
 
             if (connectedExitsToEnd.Count == 0)
             {
-                Debug.Log("could not find any way to get to player from the exits of the players chunk, using closest we can find");
+                Debug.LogWarning("could not find any way to get to player from the exits of the players chunk, using closest we can find");
+                connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling: true, reversed: true, allowAlmostThere: true);
             }
 
-            connectedExitsToEnd = endNode.FindConnectedExits(endPos.x, endPos.y, endPos.z, allowFalling: true, reversed: true, allowAlmostThere: true);
 
             if (verbose)
             {
@@ -2079,10 +3518,16 @@ namespace Blocks
 
             bool foundCloseExit = false;
 
-            while (pQueue.Count > 0 && (numSteps < 20 || PhysicsUtils.millis() - loopTime < 1000))
+            while (pQueue.Count > 0)
             {
+                if (numSteps > 20 && PhysicsUtils.millis() - loopTime > 1000)
+                {
+                    Debug.Log("bailing, failed, with steps " + numSteps + " and millis " + (PhysicsUtils.millis() - loopTime));
+                    break;
+                }
                 numSteps += 1;
                 PathingSpreadNode curNode = pQueue.Dequeue();
+                Debug.Log("has cur node " + curNode + " with dist from start " + curNode.distFromStart + " and estimated dist from end = " + curNode.curExit.Dist(endPos.x, endPos.y, endPos.z) + " for total of " + (curNode.curExit.Dist(endPos.x, endPos.y, endPos.z) + curNode.distFromStart));
 
                 //world.MakeLoggingNode("resPos", "considered step " + numSteps, UnityEngine.Random.ColorHSV(), curNode.wx, curNode.wy, curNode.wz);
 
@@ -2260,7 +3705,7 @@ namespace Blocks
                     allowFalling: true);
 
 
-                if (pathThroughNode == null)
+                if (pathThroughNode == null || closest == null)
                 {
                     return closest;
                 }
@@ -2453,6 +3898,7 @@ namespace Blocks
         {
             if (neighborsConnectedTo.Contains(neighbor))
             {
+                Debug.Log("removing neighbor");
                 foreach (PathingNodeExit exit in GetExits())
                 {
                     exit.RemoveExitConnectionsFromPathingNode(neighbor);
@@ -2485,7 +3931,7 @@ namespace Blocks
             {
                 ushort myExitVal = data[myX, myY, myZ];
                 ushort theirExitVal = neighbor.data[theirX, theirY, theirZ];
-
+ 
                 if (myExitVal != 0 && theirExitVal != 0)
                 {
                     int myExitI = myExitVal - 1;
@@ -2494,22 +3940,65 @@ namespace Blocks
                     PathingNodeExit theirExit = neighborExits[theirExitI];
                     SpreadNode startPathToThem = new SpreadNode(myX, myY, myZ, null, this);
                     SpreadNode endPathToThem = new SpreadNode(theirX, theirY, theirZ, startPathToThem, neighbor);
-                    //SpreadNode startPathToUs = new SpreadNode(theirX, theirY, theirZ, null, neighbor);
-                    //SpreadNode endPathToUs = new SpreadNode(myX, myY, myZ, startPathToUs, this);
-                    if (myConnectionsToThem[myExitI, theirExitI] == null)
-                    {
-                        myConnectionsToThem[myExitI, theirExitI] = new PathingNodeExitConnection(myExit, theirExit);
-                        //theirConnectionsToUs[theirExitI, myExitI] = new PathingNodeExitConnection(theirExit, myExit);
 
-                        myExit.AddExitConnection(myConnectionsToThem[myExitI, theirExitI]);
-                        //theirExit.AddExitConnection(theirConnectionsToUs[theirExitI, myExitI]);
+                    bool canTraverse = MeetsFitCriteria(startPathToThem, endPathToThem, allowFalling: true);
+
+                    if (canTraverse || true)
+                    {
+                        //SpreadNode startPathToUs = new SpreadNode(theirX, theirY, theirZ, null, neighbor);
+                        //SpreadNode endPathToUs = new SpreadNode(myX, myY, myZ, startPathToUs, this);
+                        if (myConnectionsToThem[myExitI, theirExitI] == null)
+                        {
+                            myConnectionsToThem[myExitI, theirExitI] = new PathingNodeExitConnection(myExit, theirExit);
+                            //theirConnectionsToUs[theirExitI, myExitI] = new PathingNodeExitConnection(theirExit, myExit);
+
+                            myExit.AddExitConnection(myConnectionsToThem[myExitI, theirExitI]);
+                            //theirExit.AddExitConnection(theirConnectionsToUs[theirExitI, myExitI]);
+                        }
+
+                        PathingNodeExitConnection myConnectionToThem = myConnectionsToThem[myExitI, theirExitI];
+                        //PathingNodeExitConnection theirConnectionToUs = theirConnectionsToUs[theirExitI, myExitI];
+
+                        myConnectionToThem.AddPath(endPathToThem);
+                        //theirConnectionToUs.AddPath(endPathToUs);
                     }
 
-                    PathingNodeExitConnection myConnectionToThem = myConnectionsToThem[myExitI, theirExitI];
-                    //PathingNodeExitConnection theirConnectionToUs = theirConnectionsToUs[theirExitI, myExitI];
+                }
+                else if(myExitVal == 0 && theirExitVal != 0)
+                {
+                    List<Tuple<PathingNodeExit, SpreadNode, int>> connectedExits = FindConnectedExits(myX, myY, myZ, allowFalling: true, reversed: true);
+                    if (SpreadNode.VERBOSE_PATHING) world.MakeLoggingNode("spook", "check " + connectedExits.Count, Color.magenta, myX - locationSpec.minX, myY - locationSpec.minY, myZ - locationSpec.minZ);
+                    foreach (Tuple<PathingNodeExit, SpreadNode, int> connectedExit in connectedExits)
+                    {
+                        int myExitI = connectedExit.a.index;
+                        int theirExitI = theirExitVal - 1;
+                        PathingNodeExit myExit = connectedExit.a;
+                        PathingNodeExit theirExit = neighborExits[theirExitI];
+                        SpreadNode startPathToThem = connectedExit.b;
+                        SpreadNode endPathToThem = new SpreadNode(theirX, theirY, theirZ, startPathToThem, neighbor);
 
-                    myConnectionToThem.AddPath(endPathToThem);
-                    //theirConnectionToUs.AddPath(endPathToUs);
+                        bool canTraverse = MeetsFitCriteria(startPathToThem, endPathToThem, allowFalling: true);
+
+                        if (canTraverse || true)
+                        {
+                            //SpreadNode startPathToUs = new SpreadNode(theirX, theirY, theirZ, null, neighbor);
+                            //SpreadNode endPathToUs = new SpreadNode(myX, myY, myZ, startPathToUs, this);
+                            if (myConnectionsToThem[myExitI, theirExitI] == null)
+                            {
+                                myConnectionsToThem[myExitI, theirExitI] = new PathingNodeExitConnection(myExit, theirExit);
+                                //theirConnectionsToUs[theirExitI, myExitI] = new PathingNodeExitConnection(theirExit, myExit);
+
+                                myExit.AddExitConnection(myConnectionsToThem[myExitI, theirExitI]);
+                                //theirExit.AddExitConnection(theirConnectionsToUs[theirExitI, myExitI]);
+                            }
+
+                            PathingNodeExitConnection myConnectionToThem = myConnectionsToThem[myExitI, theirExitI];
+                            //PathingNodeExitConnection theirConnectionToUs = theirConnectionsToUs[theirExitI, myExitI];
+
+                            myConnectionToThem.AddPath(endPathToThem);
+                            //theirConnectionToUs.AddPath(endPathToUs);
+                        }
+                    }
                 }
             });
         }
@@ -2572,7 +4061,7 @@ namespace Blocks
 
         List<PathingNodeExit> cachedExits;
 
-        public const int MAX_EXIT_SIZE = 16;
+        public const int MAX_EXIT_SIZE = 100000;
 
         public List<PathingNodeExit> GetExits(bool verbose=false)
         {
@@ -2645,9 +4134,10 @@ namespace Blocks
                             return false;
                         }
                     });
-                    
 
-                    PathingNodeExit resCurExit = new PathingNodeExit(this, curExit.ToArray());
+
+                    int exitInd = (int)(exitI) - 1;
+                    PathingNodeExit resCurExit = new PathingNodeExit(exitInd, this, curExit.ToArray());
 
                     exits.Add(resCurExit);
                     // increment exit number since we just finished finding this one
@@ -2657,7 +4147,7 @@ namespace Blocks
             });
 
             cachedExits = exits;
-            //verbose = true;
+            verbose = SpreadNode.VERBOSE_PATHING;
             if (verbose)
             {
                 for (int i = 0; i < exits.Count; i++)
@@ -2713,6 +4203,9 @@ namespace Blocks
             rawData = new uint[locationSpec.xWidth,locationSpec.yWidth,locationSpec.zWidth];
         }
 
+        
+
+
         public ushort this[int x, int y, int z]
         {
             get
@@ -2758,6 +4251,10 @@ namespace Blocks
 
         public long xWidth, yWidth, zWidth;
 
+        public bool ContainsPosition(long wx, long wy, long wz)
+        {
+            return (wx >= minX && wx <= maxX && wy >= minY && wy <= maxY && wz >= minZ && wz <= maxZ);
+        }
 
         public override string ToString()
         {

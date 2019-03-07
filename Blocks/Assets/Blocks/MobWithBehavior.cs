@@ -336,7 +336,7 @@ namespace Blocks
                         {
                             //// new stuff
                             bool pathingSuccess = false;
-                            PathingSpreadNode resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, pathingTarget, 1, 1, blocksHeight, 1, out pathingSuccess, verbose: true);
+                            PathingRegionPos resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, pathingTarget, 1, 1, blocksHeight, 1, out pathingSuccess, verbose: true);
                             iShouldJump = false;
                             if (resPath != null)
                             {

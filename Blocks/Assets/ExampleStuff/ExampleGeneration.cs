@@ -12,15 +12,16 @@ public class ExampleGeneration : GenerationClass
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
-    bool isFlatland = true;
+    bool isFlatland = false;
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
         float minVal = 10.0f;
         float maxVal = 100.0f;
         //Simplex.Noise.Seed = 27;
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 10.0f, usesY: true);
-        lavaProp = new ChunkProperty("lavaElevation", -400.0f, 0.0f, usesY: true);
+        // scale 10 was what I used for pathing stuffs
+        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 20.0f, usesY: true);
+        lavaProp = new ChunkProperty("lavaElevation", bedrockMax-40, bedrockMin-30, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);
         world.AddChunkProperty(lavaProp);
@@ -32,9 +33,11 @@ public class ExampleGeneration : GenerationClass
         else
         {
             world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
-            world.AddChunkPropertyEvent(new ChunkPropertyEvent(3000.0f, OnLavaTube, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(2600.0f, OnLavaTube, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(1000.0f, OnRiver, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
-            world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2));
+            //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
+            world.AddWorldGenerationEvent(new WorldGenerationEvent(100.0f, OnCave, 2));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
         }
     }
@@ -181,7 +184,12 @@ public class ExampleGeneration : GenerationClass
     {
         //float caveLevelX = outBlock.GetChunkProperty(riverProp);
         long curX = x;
-        long curY = y + 20;
+        long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
+        if (System.Math.Abs(elevation - y) > 2)
+        {
+            return;
+        }
+        long curY = elevation;
         long curZ = z;
 
         int offsetX = 0;
@@ -204,7 +212,7 @@ public class ExampleGeneration : GenerationClass
                 curZ += Math.Sign(offsetX) * 3;
             }
 
-            curY = (long)Math.Round(GetChunkProperty(curX, 0, curZ, elevationProp));
+            curY = (long)Math.Round(GetChunkProperty(curX, curY, curZ, elevationProp));
             float caveWidth = 3.0f;
             int caveWidthI = (int)Math.Floor(caveWidth);
 
@@ -212,7 +220,7 @@ public class ExampleGeneration : GenerationClass
             {
                 for (int l = -caveWidthI; l <= caveWidthI; l++)
                 {
-                    curY = (int)Math.Round(GetChunkProperty(curX + j, 0, curZ + l, elevationProp));
+                    curY = (int)Math.Round(GetChunkProperty(curX + j, curY, curZ + l, elevationProp));
                     for (int k = -caveWidthI; k <= -1; k++)
                     {
                         if (Math.Sqrt(j * j + k * k + l * l) <= caveWidth)
@@ -406,12 +414,12 @@ public class ExampleGeneration : GenerationClass
     int bedrockMin = -80;
     int bedrockMax = -80 + 20;
 
-    int undergroundCaveHeight = 50;
+    int undergroundCaveHeight = 30;
     public override void OnGenerateBlock(long x, long y, long z, BlockData outBlock)
     {
         if (isFlatland)
         {
-            if (y < 0)
+            if (y < 1)
             {
                 outBlock.block = Example.Stone;
             }
@@ -469,7 +477,7 @@ public class ExampleGeneration : GenerationClass
             }
             else
             {
-                float lavaCaveDepth = outBlock.GetChunkProperty(lavaProp)-200.0f;
+                float lavaCaveDepth = outBlock.GetChunkProperty(lavaProp);
                 if (y > bedrockMax)
                 {
                     float rVal = Simplex.Noise.rand(x, y, z);
@@ -518,7 +526,7 @@ public class ExampleGeneration : GenerationClass
                             outBlock.block = Example.Bedrock;
                         }
                     }
-                    else if (y < bedrockMin - undergroundCaveHeight)
+                    else if (y < lavaCaveDepth)
                     {
                         outBlock.block = Example.Lava;
                     }

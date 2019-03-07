@@ -2480,9 +2480,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   chunkRenderDist: 10
+  debugLineMaterial: {fileID: 0}
   skyLightLevel: 1
   cullBlocksShader: {fileID: 7200000, guid: 535674d4758b900489a5b18ef9852efd, type: 3}
   creativeMode: 1
+  verbosePathing: 1
   optimize: 0
   blockEntityMaterial: {fileID: 2100000, guid: 3f3f062afba7ae14b9bbf1e87dbb0356, type: 2}
   blockIconMaterial: {fileID: 2100000, guid: 60241052db2432a4ca47530ca408da91, type: 2}

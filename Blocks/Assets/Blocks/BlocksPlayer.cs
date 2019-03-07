@@ -68,14 +68,47 @@ namespace Blocks
                 Debug.Log("trying to do pathing, starting from position " + startPathingPos + " and going to position " + endPathingPos);
 
                 bool pathingSuccess;
-                BlocksPathing.Pathfind(World.mainWorld, startPathingPos, endPathingPos, 1, 1, 2, 1, out pathingSuccess);
+                PathingChunk.Pathfind(World.mainWorld, startPathingPos, endPathingPos, 1, 1, 2, 1, out pathingSuccess, verbose: World.mainWorld.blocksWorld.verbosePathing);
 
-                Debug.Log("did pathing");
             }
 
             if (Input.GetKeyDown(KeyCode.G))
             {
-                PathingNode node = World.mainWorld.GetChunkAtPos(LVector3.FromUnityVector3(transform.position)).GetPathingNode(1, 1, 2, 1, verbose: true);
+                LVector3 chunkPos;
+                World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out chunkPos);
+                for (int x = -2; x <= 2; x++)
+                {
+                    for (int y = -2; y <= 2; y++)
+                    {
+                        for (int z = -2; z <= 2; z++)
+                        {
+                            Chunk spooker = World.mainWorld.GetChunk(chunkPos.x + x, chunkPos.y + y, chunkPos.z + z);
+                            if (spooker != null)
+                            {
+                                //spooker.GetPathingChunk(1, 1, 2, 1).ResetData();
+                            }
+                        }
+                    }
+                }
+
+                for (int x = -2; x <= 2; x++)
+                {
+                    for (int y = -2; y <= 2; y++)
+                    {
+                        for (int z = -2; z <= 2; z++)
+                        {
+                            Chunk spooker = World.mainWorld.GetChunk(chunkPos.x + x, chunkPos.y + y, chunkPos.z + z);
+                            if (spooker != null)
+                            {
+                                spooker.GetPathingChunk(1, 1, 2, 1).Refresh();
+                                spooker.GetPathingChunk(1, 1, 2, 1).ExpandWalls();
+                            }
+                        }
+                    }
+                }
+                //PathingNode node = World.mainWorld.GetChunkAtPos(LVector3.FromUnityVector3(transform.position)).GetPathingNode(1, 1, 2, 1, verbose: true);
+                //node.Refresh();
+                //node.ExpandWalls();
             }
 
             LVector3 curChunkPos;
