@@ -15,6 +15,57 @@ namespace Blocks
         CanWeStandOn = (1 << 26)
     }
 
+
+    public class MobilityCriteria
+    {
+        public int jumpHeight;
+        public int neededSizeForward, neededSizeSide, neededSizeUp;
+
+        public MobilityCriteria(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight)
+        {
+            this.neededSizeForward = neededSizeForward;
+            this.neededSizeSide = neededSizeSide;
+            this.neededSizeUp = neededSizeUp;
+            this.jumpHeight = jumpHeight;
+        }
+
+        // from https://stackoverflow.com/questions/2363143/whats-the-best-strategy-for-equals-and-gethashcode
+        public override bool Equals(object obj)
+        {
+            var myClass = obj as MobilityCriteria;
+
+            if (myClass != null)
+            {
+                // Order these by the most different first.
+                // That is, whatever value is most selective, and the fewest
+                // instances have the same value, put that first.
+                return this.neededSizeUp == myClass.neededSizeUp
+                   && this.jumpHeight == myClass.jumpHeight
+                   && this.neededSizeForward == myClass.neededSizeForward
+                   && this.neededSizeSide == myClass.neededSizeSide;
+            }
+            else
+            {
+                // This may not make sense unless GetHashCode refers to `base` as well!
+                return base.Equals(obj);
+            }
+        }
+
+        // from https://stackoverflow.com/questions/2363143/whats-the-best-strategy-for-equals-and-gethashcode
+        public override int GetHashCode()
+        {
+            int hash = 19;
+            unchecked
+            { // allow "wrap around" in the int
+                hash = hash * 31 + this.jumpHeight; // assuming integer
+                hash = hash * 31 + this.neededSizeForward;  // assuming integer
+                hash = hash * 31 + this.neededSizeSide; // assuming integer
+                hash = hash * 31 + this.neededSizeUp;  // assuming integer
+            }
+            return hash;
+        }
+    }
+
     public class PathingResult
     {
 
@@ -128,6 +179,19 @@ namespace Blocks
         public long wz { get { return parentRegion.locationSpec.minZ + localZ; } private set { } }
 
 
+
+        public BlockValue Block
+        {
+            get
+            {
+                return parentRegion.locationSpec[localX, localY, localZ];
+            }
+            private set
+            {
+
+            }
+        }
+
         public PathingRegionPos CopyPath()
         {
             if (prev != null)
@@ -158,11 +222,11 @@ namespace Blocks
         {
             get
             {
-                for (long curY = wy; curY < wy + parentRegion.jumpHeight+parentRegion.neededSizeUp; curY++)
+                for (long curY = wy; curY < wy + parentRegion.mobilityCriteria.jumpHeight + parentRegion.mobilityCriteria.neededSizeUp; curY++)
                 {
                     bool canBreathe = true;
 
-                    for (long curY2 = curY; curY2 < curY + parentRegion.neededSizeUp; curY2++)
+                    for (long curY2 = curY; curY2 < curY + parentRegion.mobilityCriteria.neededSizeUp; curY2++)
                     {
                         if (parentRegion.world[wx, curY2, wz] != BlockValue.Air)
                         {
@@ -206,6 +270,13 @@ namespace Blocks
             return Math.Abs(a.wx - b.x) + Math.Abs(a.wy - b.y) + Math.Abs(a.wz - b.z);
         }
 
+        public override string ToString()
+        {
+            return "[" +
+                localX + "(" + wx + ")" + "," +
+                localY + "(" + wy + ")" + "," +
+                localZ + "(" + wz + ")" + "]";
+        }
 
 
         public static long Dist(LVector3 a, PathingRegionPos b)
@@ -218,7 +289,20 @@ namespace Blocks
             return a.wx == b.wx && a.wy == b.wy && a.wz == b.wz;
         }
 
+        public PathingRegionPos(LVector3 pos, PathingRegionPos prev, PathingChunk parentRegion)
+        {
+            InitFields(
+                (int)(pos.x - parentRegion.locationSpec.minX),
+                (int)(pos.y - parentRegion.locationSpec.minY),
+                (int)(pos.z - parentRegion.locationSpec.minZ),
+                prev, parentRegion);
+        }
         public PathingRegionPos(int localX, int localY, int localZ, PathingRegionPos prev, PathingChunk parentRegion)
+        {
+            InitFields(localX, localY, localZ, prev, parentRegion);
+        }
+
+        void InitFields(int localX, int localY, int localZ, PathingRegionPos prev, PathingChunk parentRegion)
         {
             this.localX = localX;
             this.localY = localY;
@@ -254,10 +338,18 @@ namespace Blocks
             FallingFromAnotherChunk,
         }
 
+        public long cacheRunIndex = -1;
+        public LVector3 cacheTmpBlock = LVector3.Invalid;
+        public PathingRegionPos cacheTmpBlockVisibleFrom = null;
+        public bool canSeeResourcesFromHere = false;
+
         public bool RegionTypeIsFalling()
         {
             return regionType == PathingRegionType.Falling || regionType == PathingRegionType.FallingFromAnotherChunk;
         }
+
+
+        public Dictionary<int, int> blockCounts = new Dictionary<int, int>();
 
         public PathingRegionType regionType;
 
@@ -279,7 +371,7 @@ namespace Blocks
 
         public bool CanWeFitHere(long wx, long wy, long wz)
         {
-            for (long curY = wy; curY < wy+parentChunk.neededSizeUp; curY++)
+            for (long curY = wy; curY < wy+parentChunk.mobilityCriteria.neededSizeUp; curY++)
             {
                 if (PhysicsUtils.IsBlockSolid(parentChunk.world[wx, wy, wz]))
                 {
@@ -298,7 +390,7 @@ namespace Blocks
             // we fall onto a regular region, see if we can jump up this chunk and get to other regular regions. If so, connect them
             if (regionBelowBottomPos != null && !regionBelowBottomPos.RegionTypeIsFalling())
             {
-                for (long curY = bottomPos.wy; curY < bottomPos.wy+parentChunk.jumpHeight; curY++)
+                for (long curY = bottomPos.wy; curY < bottomPos.wy+parentChunk.mobilityCriteria.jumpHeight; curY++)
                 {
                     // can be here + 1 by jumping?
 
@@ -453,6 +545,19 @@ namespace Blocks
             this.regionType = regionType;
             this.parentChunk = parentChunk;
         }
+
+        public void Finish()
+        {
+            foreach (PathingRegionPos pos in positions)
+            {
+                BlockValue value = parentChunk.locationSpec[pos.localX, pos.localY, pos.localZ];
+                if (!blockCounts.ContainsKey(value))
+                {
+                    blockCounts[value] = 0;
+                }
+                blockCounts[value] += 1;
+            }
+        }
     }
 
     public class PathingChunk
@@ -462,13 +567,12 @@ namespace Blocks
         public PatchingNodeBlockChunkData data;
         Chunk chunk;
         public World world;
-        public int jumpHeight;
-        public int neededSizeForward, neededSizeSide, neededSizeUp;
+        public MobilityCriteria mobilityCriteria;
         public List<Tuple<long, PathingChunk>> chunksDependingOn = new List<Tuple<long, PathingChunk>>();
         public HashSet<PathingChunk> chunksDependingOnQuickDupCheck = new HashSet<PathingChunk>();
         List<PathingRegion> regions = new List<PathingRegion>();
 
-        public PathingChunk(Chunk chunk, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight)
+        public PathingChunk(Chunk chunk, MobilityCriteria mobilityCriteria)
         {
             this.locationSpec = new PathingNodeBlockChunk(chunk.world,
                 chunk.cx * chunk.world.chunkSize,
@@ -480,10 +584,7 @@ namespace Blocks
             this.chunk = chunk;
             this.world = chunk.world;
             this.data = new PatchingNodeBlockChunkData(locationSpec);
-            this.jumpHeight = jumpHeight;
-            this.neededSizeForward = neededSizeForward;
-            this.neededSizeSide = neededSizeSide;
-            this.neededSizeUp = neededSizeUp;
+            this.mobilityCriteria = mobilityCriteria;
 
             this.Refresh();
         }
@@ -637,7 +738,7 @@ namespace Blocks
                 }
                 data[x, y, z, PathingFlags.CachedIfWeCanFitAbove] = true;
             }
-            for (int curY = y+1; curY < y+1+neededSizeUp+ additionalSpaceNeeded; curY++)
+            for (int curY = y+1; curY < y+1+mobilityCriteria.neededSizeUp+ additionalSpaceNeeded; curY++)
             {
                 BlockValue blockAtPos;
                 if (curY >= locationSpec.yWidth)
@@ -676,7 +777,7 @@ namespace Blocks
             }
             else
             {
-                PathingChunk newDep = thatChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                PathingChunk newDep = thatChunk.GetPathingChunk(mobilityCriteria);
                 if (!chunksDependingOnQuickDupCheck.Contains(newDep))
                 {
                     chunksDependingOnQuickDupCheck.Add(newDep);
@@ -799,7 +900,7 @@ namespace Blocks
                             // otherwise, if neighbor has a block above it jumpHeight number of blocks (usually 1) that can be stood on, we can still spread
                             else if(PhysicsUtils.IsBlockSolid(locationSpec[nx, ny, nz]) || PhysicsUtils.IsBlockLiquid(locationSpec[nx, ny, nz]))
                             {
-                                for (int curY = ny + 1; curY < ny + 1 + jumpHeight && curY < locationSpec.yWidth; curY++)
+                                for (int curY = ny + 1; curY < ny + 1 + mobilityCriteria.jumpHeight && curY < locationSpec.yWidth; curY++)
                                 {
                                     if (CanWeStandOn(nx, curY, nz))
                                     {
@@ -842,14 +943,60 @@ namespace Blocks
             }
         }
 
-        public PathingRegion GetRegionStandingOn(LVector3 worldPos, out PathingRegionPos posInRegion)
+        public PathingRegion GetRegionStandingOn(LVector3 worldPos, out PathingRegionPos posInRegion, bool branchToSides=true)
         {
             posInRegion = null;
+
+            if (!locationSpec.ContainsPosition(worldPos.x, worldPos.y, worldPos.z))
+            {
+                Chunk worldChunk = world.GetChunkAtPos(worldPos);
+                if (worldChunk != null)
+                {
+                    return worldChunk.GetPathingChunk(mobilityCriteria).GetRegionStandingOn(worldPos, out posInRegion, branchToSides: branchToSides);
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
             int localX = (int)(worldPos.x - locationSpec.minX);
             int localY = (int)(worldPos.y - locationSpec.minY);
             int localZ = (int)(worldPos.z - locationSpec.minZ);
 
             ushort regionNum = data[localX, localY, localZ];
+
+            if (branchToSides && !PhysicsUtils.IsBlockSolid(chunk.world[worldPos.x, worldPos.y, worldPos.z]) && !PhysicsUtils.IsBlockSolid(chunk.world[worldPos.x, worldPos.y - 1, worldPos.z]) && !PhysicsUtils.IsBlockSolid(chunk.world[worldPos.x, worldPos.y - 2, worldPos.z]))
+            {
+                PathingRegionPos actuallyResPos = null;
+                PathingRegion actuallyResRegion = null;
+                LoopThroughNeighboringPositionsOnlyHorizontal(worldPos.x, worldPos.y, worldPos.z, (nwx, nwy, nwz) =>
+                {
+                    if (!PhysicsUtils.IsBlockSolid(chunk.world[nwx, nwy, nwz]))
+                    {
+                        PathingRegionPos tmpActuallyResPos = null;
+                        PathingRegion tmpActuallyResRegion = GetRegionStandingOn(new LVector3(nwx, nwy, nwz), out tmpActuallyResPos, branchToSides: false);
+                        if (tmpActuallyResRegion != null)
+                        {
+                            if (actuallyResRegion == null || actuallyResPos.wy < tmpActuallyResPos.wy)
+                            {
+                                actuallyResRegion = tmpActuallyResRegion;
+                                actuallyResPos = tmpActuallyResPos;
+                            }
+                        }
+                    }
+                });
+
+                if (actuallyResRegion != null && actuallyResPos.wy >= worldPos.y-3)
+                {
+                    posInRegion = actuallyResPos;
+                    return actuallyResRegion;
+                }
+                // we are not shifting/standing on a ledge, look below
+            }
+
+
+
 
             Chunk chunkBelowUs = null;
             for (int curY = localY; curY >= 0; curY--)
@@ -877,7 +1024,7 @@ namespace Blocks
             chunkBelowUs = world.GetChunk(chunk.cx, chunk.cy - 1, chunk.cz);
             if (chunkBelowUs != null)
             {
-                PathingChunk pathingChunkBelowUs = chunkBelowUs.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                PathingChunk pathingChunkBelowUs = chunkBelowUs.GetPathingChunk(mobilityCriteria);
                 return pathingChunkBelowUs.GetRegionStandingOn(new LVector3(worldPos.x, pathingChunkBelowUs.locationSpec.maxY, worldPos.z), out posInRegion);
             }
             // couldn't find any, sorry
@@ -887,7 +1034,140 @@ namespace Blocks
 
         public static long pathingCounter = 0;
 
-        public static PathingRegionPos Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose = false)
+        public delegate bool IsGoalPathingRegion(PathingRegion region);
+        public delegate long EstimateCost(PathingRegionPos pos);
+
+
+        static bool ArrContains(BlockValue[] arr, BlockValue val)
+        {
+            for (int i = 0; i < arr.Length; i++)
+            {
+                if (arr[i] == val)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static PathingRegionPos PathindToResource(World world, LVector3 startPos, float reach, BlockValue[] resourcesLookingFor, MobilityCriteria mobilityCriteria, out bool success, out LVector3 blockSeenAtEnd, bool verbose = false)
+        {
+            blockSeenAtEnd = LVector3.Invalid;
+            PathingRegionPos res = PathfindGeneric(world, startPos, (pathingRegion) =>
+            {
+                if (pathingRegion.cacheRunIndex != pathingCounter)
+                {
+                    pathingRegion.cacheRunIndex = pathingCounter;
+                    if (pathingRegion.cacheTmpBlock != LVector3.Invalid)
+                    {
+                        // we have already found it in the past, there is one, we are good
+                        if (ArrContains(resourcesLookingFor, pathingRegion.cacheTmpBlock.Block))
+                        {
+                            return true;
+                        }
+                    }
+
+
+                    // look through blocks in chunk first
+                    for (int i = 0; i < resourcesLookingFor.Length; i++)
+                    {
+                        // if we know we have a block of that kind, go find it
+                        if (pathingRegion.blockCounts.ContainsKey(resourcesLookingFor[i]) && pathingRegion.blockCounts[resourcesLookingFor[i]] > 0)
+                        {
+                            // go through each position and see if it is that block
+                            for (int j = 0; j < pathingRegion.positions.Count; j++)
+                            {
+                                // it is that block, yay, we are good
+                                if (pathingRegion.positions[j].Block == resourcesLookingFor[i])
+                                {
+                                    pathingRegion.cacheTmpBlock = new LVector3(pathingRegion.positions[j].wx, pathingRegion.positions[j].wy, pathingRegion.positions[j].wz);
+                                    pathingRegion.cacheTmpBlockVisibleFrom = pathingRegion.positions[i];
+                                    pathingRegion.canSeeResourcesFromHere = true;
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+
+                    // in each position in chunk, cast 20 random rays of length equal to our reach to see if we run into the block we want
+                    for (int i = 0; i < pathingRegion.positions.Count; i++)
+                    {
+                        LVector3 curPos = new LVector3(pathingRegion.positions[i].wx, pathingRegion.positions[i].wy, pathingRegion.positions[i].wz);
+
+                        LVector3 found = LVector3.Invalid;
+                        RaycastResults rayRes;
+                        Vector3 curPosVec3 = curPos.BlockCentertoUnityVector3();
+                        for (int t = 0; t < 20; t++)
+                        {
+                            if (PhysicsUtils.CustomRaycast(curPosVec3, UnityEngine.Random.onUnitSphere, reach, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) =>
+
+                            {
+                                return ArrContains(resourcesLookingFor, b);
+                            }, out rayRes))
+                            {
+                                pathingRegion.cacheTmpBlock = rayRes.hitBlock;
+                                pathingRegion.cacheTmpBlockVisibleFrom = pathingRegion.positions[i];
+                                pathingRegion.canSeeResourcesFromHere = true;
+                                return true;
+                            }
+                        }
+                    }
+                    pathingRegion.cacheTmpBlock = LVector3.Invalid;
+                    pathingRegion.cacheTmpBlockVisibleFrom = null;
+                    pathingRegion.canSeeResourcesFromHere = false;
+                    return false;
+                }
+                else
+                {
+                    return pathingRegion.canSeeResourcesFromHere;
+                }
+                return false;
+            },
+            // there isn't really an easy way to determine "how close we are" to a resource, so just return 0
+            (pos) =>
+            {
+                return 0;
+            }, mobilityCriteria, out success, verbose: false);
+
+            if (res == null)
+            {
+                success = false;
+                return null;
+            }
+            else
+            {
+                PathingRegion resRegion = res.parentRegion.GetRegion(res.localX, res.localY, res.localZ);
+
+
+                PathingRegionPos resPos = resRegion.cacheTmpBlockVisibleFrom;
+                blockSeenAtEnd = resRegion.cacheTmpBlock;
+
+                PathingRegionPos fullRes = resRegion.TraverseThroughRegion(res, resPos);
+                fullRes.RemoveDuplicatePositionsInPath();
+
+                if (verbose)
+                {
+                    PathingRegionPos tmp = fullRes;
+                    PathingRegionPos prev = null;
+                    int curPosI = 0;
+                    while (tmp != null)
+                    {
+                        if (prev != null && !PathingRegionPos.PositionsAreEqual(tmp, prev) && verbose)
+                        {
+                            world.MakeLoggingNode("resPath", "path " + curPosI, Color.green, tmp.wx, tmp.emptyBlockAboveY, tmp.wz);
+                        }
+                        prev = tmp;
+                        tmp = tmp.prev;
+                        curPosI += 1;
+                    }
+
+                }
+                return fullRes;
+            }
+
+        }
+
+        public static PathingRegionPos PathfindGeneric(World world, LVector3 startPos, IsGoalPathingRegion isGoal, EstimateCost costEstimator, MobilityCriteria mobilityCriteria, out bool success, bool verbose = false)
         {
             // TODO: sparse staircase, fix chunk connectings in sparse staircase too
 
@@ -903,44 +1183,37 @@ namespace Blocks
             success = false;
 
             Chunk startChunk = world.GetChunkAtPos(startPos);
-            Chunk endChunk = world.GetChunkAtPos(endPos);
-            if (startChunk == null || endChunk == null)
+            if (startChunk == null)
             {
-                Debug.LogWarning("either start chunk " + startChunk + " for startPos " + startPos + " or end chunk " + endChunk + " for endPos " + endPos + " was null (not generated yet), cannot pathfind");
+                Debug.LogWarning("start chunk " + startChunk + " for startPos " + startPos + " was null (not generated yet), cannot pathfind");
                 return null;
             }
 
 
-            PathingChunk startPathingChunk = startChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
-            PathingChunk endPathingChunk = endChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+            PathingChunk startPathingChunk = startChunk.GetPathingChunk(mobilityCriteria);
 
             PathingRegionPos startPosInRegion;
             PathingRegion startRegion = startPathingChunk.GetRegionStandingOn(startPos, out startPosInRegion);
-            PathingRegionPos endPosInRegion;
-            PathingRegion endRegion = endPathingChunk.GetRegionStandingOn(endPos, out endPosInRegion);
-            if (startRegion == null || endRegion == null)
+            if (startRegion == null)
             {
-                Debug.LogWarning("either start region " + startRegion + " for startPos " + startPos + " or end region " + endRegion + " for endPos " + endPos + " was null (not generated yet), cannot pathfind");
+                Debug.LogWarning("start region " + startRegion + " for startPos " + startPos + " was null (not generated yet), cannot pathfind");
                 return null;
             }
 
-            world.MakeLoggingNode("resPath", "start air", Color.gray, startPosInRegion.wx, startPosInRegion.emptyBlockAboveY, startPosInRegion.wz);
-            world.MakeLoggingNode("resPath", "end air", Color.gray, endPosInRegion.wx, endPosInRegion.emptyBlockAboveY, endPosInRegion.wz);
-            world.MakeLoggingNode("resPath", "start", Color.gray, startPosInRegion.wx, startPosInRegion.wy, startPosInRegion.wz);
-            world.MakeLoggingNode("resPath", "end", Color.gray, endPosInRegion.wx, endPosInRegion.wy, endPosInRegion.wz);
+            if (verbose)
+            {
+                world.MakeLoggingNode("resPath", "start air", Color.gray, startPosInRegion.wx, startPosInRegion.emptyBlockAboveY, startPosInRegion.wz);
+                world.MakeLoggingNode("resPath", "start", Color.gray, startPosInRegion.wx, startPosInRegion.wy, startPosInRegion.wz);
+            }
 
             startRegion.parentChunk.ExpandWalls();
-            endRegion.parentChunk.ExpandWalls();
-
-            Debug.Log("end region has " + endRegion.thingsWeCanGoTo.Count + " connections");
-
-
             PathingRegionPos res = null;
 
-            if (startRegion == endRegion)
+            if (isGoal(startRegion))
             {
-                Debug.Log("in same region, ez");
-                res = startRegion.TraverseThroughRegion(startPosInRegion, endPosInRegion);
+                Debug.Log("started in goal, ez");
+                //res = startRegion.TraverseThroughRegion(startPosInRegion, endPosInRegion);
+                res = startPosInRegion;
             }
 
 
@@ -955,14 +1228,15 @@ namespace Blocks
                     break;
                 }
                 PathingRegionPos pathThroughConnection = connection.ConnectPathToConection(startPosInRegion);
-                long cost = PathingRegionPos.Dist(pathThroughConnection, endPos)+ pathThroughConnection.pathLen;
+                long cost = costEstimator(pathThroughConnection) + pathThroughConnection.pathLen;
                 regionConnectionsToConsider.Enqueue(new Tuple<PathingRegionPos, PathingRegionConnection>(pathThroughConnection, connection), cost);
 
 
-                if (connection.to == endRegion)
+                if (isGoal(connection.to))
                 {
                     if (verbose) Debug.Log("found exit region in initial set!");
-                    res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
+                    res = pathThroughConnection;
+                    //res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
                     break;
                 }
             }
@@ -972,7 +1246,7 @@ namespace Blocks
             int jj = 0;
             while (regionConnectionsToConsider.Count > 0 && res == null)
             {
-                if ((PhysicsUtils.millis() - startTime) > 1000)
+                if ((PhysicsUtils.millis() - startTime) > 200)
                 {
                     Debug.Log("bailing, took too long");
                     break;
@@ -989,12 +1263,13 @@ namespace Blocks
                     {
                         connection.to.pathingVisited = pathingCounter;
                         PathingRegionPos pathThroughConnection = connection.ConnectPathToConection(curPosInRegion);
-                        long cost = PathingRegionPos.Dist(pathThroughConnection, endPos) + pathThroughConnection.pathLen;
+                        long cost = costEstimator(pathThroughConnection) + pathThroughConnection.pathLen;
                         regionConnectionsToConsider.Enqueue(new Tuple<PathingRegionPos, PathingRegionConnection>(pathThroughConnection, connection), cost);
 
-                        if (connection.to == endRegion)
+                        if (isGoal(connection.to))
                         {
-                            res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
+                            //res = endRegion.TraverseThroughRegion(pathThroughConnection, endPosInRegion);
+                            res = pathThroughConnection;
                             if (verbose) Debug.Log("found exit region!");
                             break;
                         }
@@ -1010,23 +1285,22 @@ namespace Blocks
                 res.RemoveDuplicatePositionsInPath();
 
 
-
-
-
                 Debug.Log("successfully pathfound with len = " + res.pathLen);
+                /*
                 int i = 0;
                 PathingRegionPos tmp = res;
                 PathingRegionPos prev = null;
                 while (tmp != null)
                 {
                     i += 1;
-                    if (prev != null && !PathingRegionPos.PositionsAreEqual(tmp, prev))
+                    if (prev != null && !PathingRegionPos.PositionsAreEqual(tmp, prev) && verbose)
                     {
                         world.MakeLoggingNode("resPath", "path " + i, Color.green, tmp.wx, tmp.emptyBlockAboveY, tmp.wz);
                     }
                     prev = tmp;
                     tmp = tmp.prev;
                 }
+                */
             }
             else
             {
@@ -1034,6 +1308,59 @@ namespace Blocks
             }
 
             return res;
+        }
+        public static PathingRegionPos Pathfind(World world, LVector3 startPos, LVector3 endPos, MobilityCriteria mobilityCriteria, out bool success, bool verbose = false)
+        {
+            Chunk endChunk = world.GetChunkAtPos(endPos);
+            success = false;
+            if (endChunk == null)
+            {
+                Debug.LogWarning("either end chunk " + endChunk + " for endPos " + endPos + " was null (not generated yet), cannot pathfind");
+                return null;
+            }
+
+
+            PathingChunk endPathingChunk = endChunk.GetPathingChunk(mobilityCriteria);
+
+            PathingRegionPos endPosInRegion;
+            PathingRegion endRegion = endPathingChunk.GetRegionStandingOn(endPos, out endPosInRegion);
+            if (endRegion == null)
+            {
+                Debug.LogWarning("end region " + endRegion + " for endPos " + endPos + " was null (not generated yet, or not a region at all and instead inside blocks), cannot pathfind");
+                return null;
+            }
+
+            endRegion.parentChunk.ExpandWalls();
+
+            if (verbose)
+            {
+                world.MakeLoggingNode("resPath", "end air", Color.gray, endPosInRegion.wx, endPosInRegion.emptyBlockAboveY, endPosInRegion.wz);
+                world.MakeLoggingNode("resPath", "end", Color.gray, endPosInRegion.wx, endPosInRegion.wy, endPosInRegion.wz);
+                Debug.Log("end region has " + endRegion.thingsWeCanGoTo.Count + " connections");
+            }
+
+
+
+            PathingRegionPos foundPosInEndRegion = PathfindGeneric(world, startPos, (region) =>
+            {
+                return region == endRegion;
+            }, (pos) =>
+            {
+                return PathingRegionPos.Dist(pos, endPos);
+            }, mobilityCriteria, out success, verbose: verbose);
+
+
+            // connect up to final position
+            if (foundPosInEndRegion != null)
+            {
+                success = true;
+                return endRegion.TraverseThroughRegion(foundPosInEndRegion, endPosInRegion);
+            }
+            else
+            {
+                success = false;
+                return null;
+            }
         }
         
 
@@ -1062,6 +1389,7 @@ namespace Blocks
                     PathingRegion region = new PathingRegion(regionI - 1, positions, PathingRegion.PathingRegionType.Regular, this);
                     regionI += 1;
                     regions.Add(region);
+                    region.Finish();
                     //Debug.Log("added region at pos " + x + " " + y + " " + z);
                 }
             });
@@ -1162,7 +1490,7 @@ namespace Blocks
                         region.AddRegionWeCanGoTo(new PathingRegionConnection(region, toRegion, curPos, new PathingRegionPos(startX, curY, startZ, null, this)));
                         
                         // if we landed on a non falling region, see if to our side is anything that we can connect to (disconnected stairs)
-                        if (curPos != null && CanWeFitAbove(startX, curY, startZ, additionalSpaceNeeded: jumpHeight))
+                        if (curPos != null && CanWeFitAbove(startX, curY, startZ, additionalSpaceNeeded: mobilityCriteria.jumpHeight))
                         {
                             PathingRegionPos prevPos = curPos;
                             if (!toRegion.RegionTypeIsFalling())
@@ -1178,7 +1506,11 @@ namespace Blocks
             }
 
             fromRegion.AddRegionWeCanGoTo(new PathingRegionConnection(fromRegion, region, fromPos, new PathingRegionPos(startX, startY, startZ, null, this)));
+
+
+            region.Finish();
         }
+
 
 
         bool wallsExpanded = false;
@@ -1206,7 +1538,7 @@ namespace Blocks
             {
                 if (neighborChunk != null)
                 {
-                    PathingChunk neighborNode = neighborChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                    PathingChunk neighborNode = neighborChunk.GetPathingChunk(mobilityCriteria);
                     ConnectExitsToNeighbor(neighborNode);
                     neighborNode.ConnectExitsToNeighbor(this);
                 }
@@ -1336,13 +1668,13 @@ namespace Blocks
             }
         }
 
-        public static PathingRegion GetRegion(World world, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, long wx, long wy, long wz, out PathingRegionPos posInRegion)
+        public static PathingRegion GetRegion(World world, MobilityCriteria mobilityCriteria, long wx, long wy, long wz, out PathingRegionPos posInRegion)
         {
             posInRegion = null;
             Chunk worldChunk = World.mainWorld.GetChunkAtPos(wx, wy, wz);
             if (worldChunk != null)
             {
-                PathingChunk worldPathingChunk = worldChunk.GetPathingChunk(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                PathingChunk worldPathingChunk = worldChunk.GetPathingChunk(mobilityCriteria);
                 return worldPathingChunk.GetRegionNotUsingLocalCoordinates(wx, wy, wz, out posInRegion);
             }
             else
@@ -1357,7 +1689,7 @@ namespace Blocks
             posInRegion = null;
             if (!locationSpec.ContainsPosition(wx, wy, wz))
             {
-                return PathingChunk.GetRegion(world, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, wx, wy, wz, out posInRegion);
+                return PathingChunk.GetRegion(world, mobilityCriteria, wx, wy, wz, out posInRegion);
             }
             int localX = (int)(wx - locationSpec.minX);
             int localY = (int)(wy - locationSpec.minY);
@@ -1471,8 +1803,8 @@ namespace Blocks
         public static PathingRegionPos Pathfind(World world, LVector3 startPos, LVector3 endPos, int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, out bool success, bool verbose=false)
         {
 
-
-            PathingRegionPos res = PathingChunk.Pathfind(world, startPos, endPos, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight, out success, verbose: verbose);
+            MobilityCriteria mobilityCriteria = new MobilityCriteria(neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+            PathingRegionPos res = PathingChunk.Pathfind(world, startPos, endPos, mobilityCriteria, out success, verbose: verbose);
 
 
 

@@ -103,10 +103,10 @@ namespace Blocks
     {
 
 
-        public float[] actionWeights = new float[(int)TypeOfThingDoing.MaxValue];
-        public float[] actionBaseWeights = new float[(int)TypeOfThingDoing.MaxValue];
-        public bool[] isImportant = new bool[(int)TypeOfThingDoing.MaxValue];
-        public float[] importantMaxValues = new float[(int)TypeOfThingDoing.MaxValue];
+        float[] actionWeights = new float[(int)TypeOfThingDoing.MaxValue];
+        float[] actionBaseWeights = new float[(int)TypeOfThingDoing.MaxValue];
+        bool[] isImportant = new bool[(int)TypeOfThingDoing.MaxValue];
+        float[] importantMaxValues = new float[(int)TypeOfThingDoing.MaxValue];
 
 
         public class ThingDoingTarget
@@ -118,15 +118,24 @@ namespace Blocks
             }
             public LVector3 block;
             public MovingEntity entity;
+            public BlockValue[] validBlocks;
 
-            public ThingDoingTarget(LVector3 block)
+            public ThingDoingTarget(LVector3 block, BlockValue[] validBlocks=null)
             {
                 this.block = block;
+                this.validBlocks = validBlocks;
+            }
+
+            public ThingDoingTarget(BlockValue[] validBlocks)
+            {
+                this.validBlocks = validBlocks;
+                this.block = LVector3.Invalid;
             }
 
             public ThingDoingTarget(MovingEntity entity)
             {
                 this.entity = entity;
+                this.block = LVector3.Invalid;
             }
         }
 
@@ -137,7 +146,9 @@ namespace Blocks
             GettingFood=2,
             RunningAway=3,
             Socializing=4,
-            MaxValue=5
+            GoingTo=5,
+            Gathering= 6,
+            MaxValue = 7
         }
 
         public class ThingDoing
@@ -268,6 +279,7 @@ namespace Blocks
         public float stamina;
         public float maxStamina;
 
+        public bool iNeedToPathfindAgain = true;
 
         public static int frameUpdatedLast = 0;
         public void UpdatePathing()
@@ -275,7 +287,7 @@ namespace Blocks
 
             ////// new temp stuff
             MovingEntity body = GetComponent<MovingEntity>();
-            pathingTarget = LVector3.FromUnityVector3(FindObjectOfType<BlocksPlayer>().transform.position);
+            //pathingTarget = LVector3.FromUnityVector3(FindObjectOfType<BlocksPlayer>().transform.position);
 
             /*
             // find position on ground below player and path to that instead
@@ -289,21 +301,52 @@ namespace Blocks
             */
             //////
 
+            pathingTarget = LVector3.Invalid;
+
+            if (thingDoing != null)
+            {
+                if (thingDoing.target != null)
+                {
+                    if (thingDoing.target.entity != null)
+                    {
+                        pathingTarget = LVector3.FromUnityVector3(thingDoing.target.entity.transform.position);
+                        iNeedToPathfindAgain = true;
+                    }
+                    else if(thingDoing.target.block != LVector3.Invalid)
+                    {
+                        pathingTarget = thingDoing.target.block;
+                        //Debug.Log("going to pathing target with block in thing doing of " + pathingTarget);
+                    }
+                }
+            }
+
+            if (curPath == null)
+            {
+                iNeedToPathfindAgain = true;
+            }
+
             if (pathingTarget == LVector3.Invalid)
             {
                 body.desiredMove = Vector3.zero;
             }
-            if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount && Input.GetKeyDown(KeyCode.H)) // offset so everyone isn't aligned on the same frame
+            if (PhysicsUtils.millis() - lastPathfind > 1000.0 / pathfindsPerSecond && frameUpdatedLast != Time.frameCount && iNeedToPathfindAgain) // offset so everyone isn't aligned on the same frame
             {
                 LVector3 myPos = LVector3.FromUnityVector3(transform.position);
                 LVector3 foundThing;
+                /*
                 if (Search(out foundThing))
                 {
                     // found it, is it closer?
                     if (pathingTarget == LVector3.Invalid || LVector3.CityBlockDistance(foundThing, myPos) < LVector3.CityBlockDistance(pathingTarget, myPos))
                     {
                         // if so, go to it instead
-                        thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, new ThingDoingTarget(foundThing));
+                        ThingDoing newThingDoing = new ThingDoing(thingDoing.typeOfThing, new ThingDoingTarget(foundThing));
+                        // copy over valid blocks for future reference
+                        if (thingDoing != null && thingDoing.target != null)
+                        {
+                            newThingDoing.target.validBlocks = thingDoing.target.validBlocks;
+                        }
+                        thingDoing = newThingDoing;
                         pathingTarget = foundThing;
                     }
                     //Debug.Log("found thing when looking");
@@ -314,10 +357,18 @@ namespace Blocks
                     //Debug.Log("did not find thing when looking");
                     //Debug.Log("did not find thing in " + steps + " steps");
                 }
+                */
                 frameUpdatedLast = Time.frameCount;
                 //Debug.Log("updating pathing");
                 RaycastResults blockStandingOn;
-                if (pathingTarget != LVector3.Invalid)
+
+                bool lookingForBlocks = false;
+                if (thingDoing != null && thingDoing.target != null && thingDoing.target.entity == null && thingDoing.target.block == LVector3.Invalid && thingDoing.target.validBlocks != null)
+                {
+                    lookingForBlocks = true;
+                }
+
+                if (pathingTarget != LVector3.Invalid || lookingForBlocks)
                 {
                     if (PhysicsUtils.RayCastAlsoHitWater(body.transform.position, -Vector3.up, 20.0f, out blockStandingOn))
                     {
@@ -336,12 +387,26 @@ namespace Blocks
                         {
                             //// new stuff
                             bool pathingSuccess = false;
-                            PathingRegionPos resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, pathingTarget, 1, 1, blocksHeight, 1, out pathingSuccess, verbose: true);
+                            PathingRegionPos resPath = null;
+                            if (lookingForBlocks)
+                            {
+                                resPath = PathingChunk.PathindToResource(World.mainWorld,  myPos, GetComponent<MovingEntity>().reachRange, thingDoing.target.validBlocks, new MobilityCriteria(1, 1, blocksHeight, 1), out pathingSuccess, out blockWeCanSeeOnceWeGetThere, verbose: world.blocksWorld.verbosePathing);
+                                if (resPath != null)
+                                {
+                                    pathingTarget = new LVector3(resPath.wx, resPath.wy, resPath.wz);
+                                    thingDoing = new ThingDoing(thingDoing.typeOfThing, new ThingDoingTarget(pathingTarget, thingDoing.target.validBlocks));
+                                }
+                            }
+                            else
+                            {
+                                resPath = BlocksPathing.Pathfind(World.mainWorld, myPos, pathingTarget, 1, 1, blocksHeight, 1, out pathingSuccess, verbose: false);
+                            }
                             iShouldJump = false;
                             if (resPath != null)
                             {
                                 curPath = (new PathingResult(resPath)).GetPathNode();
 
+                                iNeedToPathfindAgain = false;
 
                                 //Debug.Log("got path with next pos " + curPath.pos + " also, my pos is " + myPos + " and pathing target is " + pathingTarget);
                                 if (curPath.nextNode != null && curPath.nextNode.pos.y > curPath.pos.y)
@@ -357,6 +422,7 @@ namespace Blocks
                             else
                             {
                                 curPath = null;
+                                iNeedToPathfindAgain = true;
                             }
 
                             
@@ -390,6 +456,12 @@ namespace Blocks
                 lastPathfind = PhysicsUtils.millis();
             }
 
+
+            if (pathingTarget == LVector3.Invalid)
+            {
+                //Debug.Log("has invalid pathing target?");
+                iNeedToPathfindAgain = true;
+            }
             body.desiredMove = Vector3.zero;
             Vector3 targetPos = transform.position;
             if (curPath != null && pathingTarget != LVector3.Invalid)
@@ -504,6 +576,12 @@ namespace Blocks
                 curPath = curPath.GetCurNode(transform.position, out body.jumping, out dirToMove, out pushedOffPath);
                 body.SetAbsoluteDesiredMove(dirToMove);
 
+                if (pushedOffPath)
+                {
+                    //Debug.Log("pushed off path");
+                    //iNeedToPathfindAgain = true;
+                }
+
                 if (curPath.nextNode != null)
                 {
                     //Debug.Log("got cur path " + curPath.pos + " with jumping " + body.jumping + " and dir to move " + dirToMove + " and next " + curPath.nextNode.pos + " and pushed off path " + pushedOffPath);
@@ -514,28 +592,46 @@ namespace Blocks
                 }
 
 
-                if (pathingTarget.BlockV != Example.FlowerWithNectar && false)
+                BlockValue blockWeAreGoingTo = blockWeCanSeeOnceWeGetThere.BlockV;
+
+                if (!DesiredBlock(blockWeAreGoingTo) && thingDoing != null && thingDoing.target != null && thingDoing.target.entity == null)
                 {
-                    this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
-                    //Debug.Log("rip someone already ate my nectar, my block is " + World.BlockToString(pathingTarget.BlockV));
+                    Debug.Log("rip someone took my block , my block is now " + World.BlockToString(blockWeAreGoingTo));
                     curPath = null;
                     pathingTarget = LVector3.Invalid;
                 }
-                else if(false)
+                else
                 {
                     float myDist = LVector3.CityBlockDistance(LVector3.FromUnityVector3(transform.position), pathingTarget);
                     // found it, eat it
                     if (myDist <= 2)
                     {
-                        OnReachFoodBlock(pathingTarget);
+                        Debug.Log("got to desired block");
+                        if (thingDoing != null && thingDoing.typeOfThing == TypeOfThingDoing.GettingFood)
+                        {
+                            OnReachFoodBlock(blockWeCanSeeOnceWeGetThere);
+                        }
+                        else if(thingDoing != null && thingDoing.typeOfThing == TypeOfThingDoing.Gathering)
+                        {
+                            OnReachBlockToGather(blockWeCanSeeOnceWeGetThere);
+                        }
                         /*
                         DidEatObject(pathingTarget, 1.0f);
                         world[pathingTarget] = (int)Example.Flower;
                         */
-                this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
+                        //this.thingDoing = new ThingDoing(TypeOfThingDoing.GettingFood, null);
+                        if (thingDoing != null && thingDoing.target != null)
+                        {
+                            this.thingDoing = new ThingDoing(thingDoing.typeOfThing, new ThingDoingTarget(thingDoing.target.validBlocks));
+                        }
+                        else if (thingDoing != null)
+                        {
+                            this.thingDoing = new ThingDoing(thingDoing.typeOfThing, null);
+                        }
                         curPath = null;
                         pathingTarget = LVector3.Invalid;
                         body.jumping = false;
+                        iNeedToPathfindAgain = true;
                     }
                     // still pathing to it
                     else
@@ -555,15 +651,39 @@ namespace Blocks
 
         public abstract ThingDoing UpdateBehavior(TypeOfThingDoing newTypeOfThingDoing);
 
+
+        bool DesiredBlock(BlockValue block)
+        {
+            if (thingDoing != null && thingDoing.target != null && thingDoing.target.validBlocks != null)
+            {
+                for (int j = 0; j < thingDoing.target.validBlocks.Length; j++)
+                {
+                    if (thingDoing.target.validBlocks[j] == block)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            else
+            {
+                return block == blockLookingFor;
+            }
+        }
+
         public bool Search(out LVector3 found)
         {
-            found = new LVector3();
-            if (lookingForBlock)
+            found = LVector3.Invalid;
+            if (lookingForBlock || true)
             {
                 RaycastResults res;
                 for (int i = 0; i < 50; i++)
                 {
-                    if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 20.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => { return b == blockLookingFor; }, out res))
+                    if (PhysicsUtils.CustomRaycast(transform.position, Random.onUnitSphere, 20.0f, (b, bx, by, bz, pbx, pby, pbz) => { return true; }, (b, bx, by, bz, pbx, pby, pbz) => 
+                    
+                        {
+                            return DesiredBlock(b);
+                        }, out res))
                     {
                         found = res.hitBlock;
                         return true;
@@ -582,12 +702,12 @@ namespace Blocks
             food = Mathf.Min(maxFood, food + hungerGain);
         }
 
-
         public abstract float GetBaseWeight(TypeOfThingDoing thingDoing);
         public abstract float GetWeight(TypeOfThingDoing thingDoing);
         public abstract bool IsImportant(TypeOfThingDoing thingDoing, ref float maxValue);
         public abstract void OnSearchForFood(out bool lookForBlock, out BlockValue lookForBlockValue);
         public abstract void OnReachFoodBlock(LVector3 foodBlock);
+        public abstract void OnReachBlockToGather(LVector3 gatherBlock);
 
         public IEnumerable<TypeOfThingDoing> TypesOfThingsToDo()
         {
@@ -601,7 +721,7 @@ namespace Blocks
         public TypeOfThingDoing typeOfThingDoing;
         bool lookingForBlock = false;
         BlockValue blockLookingFor;
-
+        LVector3 blockWeCanSeeOnceWeGetThere;
 
         public float zeroOneThing(float x, float a)
         {
@@ -686,7 +806,7 @@ namespace Blocks
             {
                 //Debug.Log("updating action");
                 float totalWeight = 0.0f;
-                for (int i = 0; i < (int)TypeOfThingDoing.MaxValue; i++)
+                for (int i = 0; i < actionWeights.Length; i++)
                 {
                     actionWeights[i] = actionBaseWeights[i] + GetWeight((TypeOfThingDoing)i);
                     if (isImportant[i])
@@ -737,7 +857,12 @@ namespace Blocks
                 else if (Random.value < diff)*/
                 {
                     TypeOfThingDoing chosenThingDoing = (TypeOfThingDoing)chosenThing;
+                    ThingDoing prevThingDoing = thingDoing;
                     thingDoing = UpdateBehavior(chosenThingDoing);
+                    if (thingDoing != prevThingDoing)
+                    {
+                        iNeedToPathfindAgain = true;
+                    }
                     if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood)
                     {
                         OnSearchForFood(out lookingForBlock, out blockLookingFor);
@@ -746,10 +871,7 @@ namespace Blocks
             }
 
 
-            // temp dani thing
-            thingDoing.typeOfThing = TypeOfThingDoing.GettingFood;
-            // end temp dani thing
-            if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood || thingDoing.typeOfThing == TypeOfThingDoing.RunningAway)
+            if (thingDoing.typeOfThing == TypeOfThingDoing.GettingFood || thingDoing.typeOfThing == TypeOfThingDoing.RunningAway || thingDoing.typeOfThing == TypeOfThingDoing.Gathering || thingDoing.typeOfThing == TypeOfThingDoing.GoingTo)
             {
                 UpdatePathing();
             }

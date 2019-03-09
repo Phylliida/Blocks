@@ -553,9 +553,9 @@ namespace Blocks
 
         public void RenderLogging()
         {
-            if (chunk.pathingChunk != null)
+            for(int i = 0; i < chunk.pathingChunks.Count; i++)
             {
-                chunk.pathingChunk.Draw();
+                chunk.pathingChunks[i].Draw();
             }
         }
 
@@ -1164,6 +1164,87 @@ namespace Blocks
         long curBlockModifyState3 = 0;
         long curBlockModifyStateBlock = 0;
         public Chunk myChunk;
+
+
+        public int blockLighting
+        {
+            get
+            {
+                int skyLighting, blockLighting;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                return blockLighting;
+            }
+            private set
+            {
+
+            }
+        }
+
+        public int skyLighting
+        {
+            get
+            {
+                int skyLighting, blockLighting;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                return skyLighting;
+            }
+            private set
+            {
+
+            }
+        }
+
+        public bool touchingSky
+        {
+            get
+            {
+                int skyLighting, blockLighting;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                return touchingSky;
+            }
+            private set
+            {
+
+            }
+        }
+
+        public int lightProduced
+        {
+            get
+            {
+                int skyLighting, blockLighting;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+
+                if (makingBlockLight)
+                {
+                    return blockLighting;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            set
+            {
+                int skyLighting, blockLighting;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+
+                if (value > 0)
+                {
+                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, makingBlockLight: true, producedLight: value);
+                }
+                else
+                {
+                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, makingBlockLight: false, producedLight: 0);
+                }
+            }
+        }
+
         public bool WasModified
         {
             get
@@ -1383,8 +1464,31 @@ namespace Blocks
         {
 
         }
+        public override int InventorySpace()
+        {
+            return 0;
+        }
+        public override int NumCraftingOutputs()
+        {
+            return 0;
+        }
+
     }
 
+
+
+    public abstract class BlockWithInventory : BlockOrItem
+    {
+        public override bool CanBePlaced()
+        {
+            return true;
+        }
+
+        public override void OnTickStart()
+        {
+            
+        }
+    }
 
     public abstract class Block : BlockOrItem
     {
@@ -1396,6 +1500,15 @@ namespace Blocks
         {
             return true;
         }
+        public override int InventorySpace()
+        {
+            return 0;
+        }
+        public override int NumCraftingOutputs()
+        {
+            return 0;
+        }
+
     }
 
 
@@ -1405,6 +1518,16 @@ namespace Blocks
         {
             return true;
         }
+
+        public override int InventorySpace()
+        {
+            return 0;
+        }
+        public override int NumCraftingOutputs()
+        {
+            return 0;
+        }
+
     }
 
     public abstract class Item : BlockOrItem
@@ -1413,6 +1536,16 @@ namespace Blocks
         {
 
         }
+
+        public override int InventorySpace()
+        {
+            return 0;
+        }
+        public override int NumCraftingOutputs()
+        {
+            return 0;
+        }
+
         public override bool CanBePlaced()
         {
             return false;
@@ -1644,6 +1777,9 @@ namespace Blocks
             }
         }
 
+
+        public abstract int NumCraftingOutputs();
+        public abstract int InventorySpace();
         public abstract void OnTick(BlockData block);
         public abstract float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith);
         public abstract void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock);
@@ -1897,6 +2033,7 @@ namespace Blocks
     {
 
         public List<PathingNode> pathingNodes = new List<PathingNode>();
+        public List<PathingChunk> pathingChunks = new List<PathingChunk>();
         public bool mustRenderMe = false;
         public bool valid = true;
         public long cx, cy, cz;
@@ -1908,16 +2045,25 @@ namespace Blocks
         public List<Tuple<long, long, long, int>> distancesOfPlacesToExpand;
         long lastWorldNumChunks;
 
-        public PathingChunk pathingChunk = null;
 
-        public PathingChunk GetPathingChunk(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose = false)
+        public PathingChunk GetPathingChunk(MobilityCriteria mobilityCritera, bool verbose = false)
         {
-            if (pathingChunk == null)
+            PathingChunk res = null;
+            foreach (PathingChunk pathingChunk in pathingChunks)
             {
-                pathingChunk = new PathingChunk(this, neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                if (pathingChunk.mobilityCriteria.Equals(mobilityCritera))
+                {
+                    res = pathingChunk;
+                    break;
+                }
             }
-            pathingChunk.UpdateIfNeeded();
-            return pathingChunk;
+            if (res == null)
+            {
+                res = new PathingChunk(this, mobilityCritera);
+                pathingChunks.Add(res);
+            }
+            res.UpdateIfNeeded();
+            return res;
         }
 
         public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose=false)
@@ -2335,9 +2481,19 @@ namespace Blocks
         public const int TOUCHING_SKY_BIT = 1 << 8;
         public const int SKY_LIGHTING_MASK = 0xF0;
         public const int BLOCK_LIGHTING_MASK = 0xF;
+        public const int GENERATED_LIGHTING_MASK = 0xF000; // 0b1111000000000000
 
-
-        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir)
+        /// <summary>
+        /// Automatically sets blockLighting to producedLight if makingBlockLight is true and producedLight is greater than blockLight
+        /// </summary>
+        /// <param name="skyLighting"></param>
+        /// <param name="blockLighting"></param>
+        /// <param name="touchingSky"></param>
+        /// <param name="touchingTransparentOrAir"></param>
+        /// <param name="makingBlockLight"></param>
+        /// <param name="producedLight"></param>
+        /// <returns></returns>
+        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir, bool makingBlockLight=false, int producedLight=0)
         {
             int res = 0;
             if (touchingSky)
@@ -2349,11 +2505,34 @@ namespace Blocks
             {
                 res = res | TOUCHING_TRANPARENT_OR_AIR_BIT;
             }
+
+            if (makingBlockLight)
+            {
+                res = res | MAKING_BLOCK_LIGHT_BIT;
+                // produced lighting is bits 12-15
+                producedLight = System.Math.Min(System.Math.Max(producedLight, 0), 15);
+                res = res | (producedLight << 12);
+
+                if (blockLighting < producedLight)
+                {
+                    blockLighting = producedLight;
+                }
+            }
+
+
             res = res | (skyLighting << 4) | blockLighting;
+
+            
+
             return res;
         }
 
         public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight)
+        {
+            int producedLight;
+            GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out producedLight);
+        }
+        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int producedLighting)
         {
             if ((lightingState & TOUCHING_SKY_BIT) != 0)
             {
@@ -2380,6 +2559,20 @@ namespace Blocks
 
             // block lighting is bits 0-3
             blockLighting = (lightingState & BLOCK_LIGHTING_MASK);
+
+            // produced lighting is bits 12-15
+            if (makingBlockLight)
+            {
+                producedLighting = (lightingState & GENERATED_LIGHTING_MASK);
+                if (producedLighting > blockLighting)
+                {
+                    blockLighting = producedLighting;
+                }
+            }
+            else
+            {
+                producedLighting = 0;
+            }
         }
 
 
@@ -3798,9 +3991,10 @@ namespace Blocks
                         }
                     }
                     blocksWorld.blockInventories[blockPos] = blockInventory;
-                    if (this[blockPos] == Example.CraftingTable)
+                    BlockOrItem customBlockThing;
+                    if (customBlocks.ContainsKey(this[blockPos], out customBlockThing))
                     {
-                        blockInventory.resultBlocks = new BlockStack[1];
+                        blockInventory.resultBlocks = new BlockStack[customBlockThing.NumCraftingOutputs()];
                     }
                 }
             }
@@ -3958,6 +4152,50 @@ namespace Blocks
         public List<Structure> unfinishedStructures;
 
 
+        public void PlaceBlock(BlockValue block, LVector3 pos)
+        {
+            BlockOrItem customBlock;
+            if (customBlocks.ContainsKey(block, out customBlock))
+            {
+                if (customBlock.InventorySpace() > 0)
+                {
+                    Inventory blockInventory = new Inventory(customBlock.InventorySpace());
+                    if (customBlock.NumCraftingOutputs() > 0)
+                    {
+                        blockInventory.resultBlocks = new BlockStack[customBlock.NumCraftingOutputs()];
+                    }
+                    blocksWorld.blockInventories[pos] = blockInventory;
+                }
+            }
+        }
+
+        public bool BlockHasInventory(LVector3 pos, out Inventory inventory)
+        {
+            if(blocksWorld.blockInventories.ContainsKey(pos))
+            {
+                inventory = blocksWorld.blockInventories[pos];
+                return true;
+            }
+            else
+            {
+                inventory = null;
+                return false;
+            }
+        }
+
+        public bool DestroyBlockByBreaking(LVector3 pos, BlockStack thingHolding)
+        {
+            if (DropBlockOnDestroy(pos.BlockV, pos, thingHolding, pos.BlockCentertoUnityVector3(), pos.BlockCentertoUnityVector3()))
+            {
+                this[pos] = BlockValue.Air;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
         public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
         {
             if (World.creativeMode)
@@ -3977,7 +4215,19 @@ namespace Blocks
                 using (BlockData blockData = GetBlockData(pos.x, pos.y, pos.z))
                 {
                     customBlock.DropBlockOnDestroy(blockData, thingHolding, positionOfBlock, posOfOpening, out destroyBlock);
+
+                    if (destroyBlock)
+                    {
+                        int inventorySize = customBlock.InventorySpace();
+                        if (inventorySize > 0 && blocksWorld.blockInventories.ContainsKey(pos))
+                        {
+                            Inventory blockInventory = World.mainWorld.blocksWorld.blockInventories[pos];
+                            blockInventory.ThrowAllBlocks(positionOfBlock);
+                            World.mainWorld.blocksWorld.blockInventories.Remove(pos);
+                        }
+                    }
                 }
+
                 return destroyBlock;
             }
             Debug.Log("warning, drop block on destroy fell through, block = " + World.BlockToString(block) + " and block hitting with = " + World.BlockToString(thingHolding.Block));

@@ -164,6 +164,7 @@ public class SimpleWater : Block2
     public override void OnTick(BlockData block)
     {
         numUpdatesThisTick += 1;
+
         if (maxUpdates < numUpdatesThisTick)
         {
             block.needsAnotherTick = true;
@@ -180,7 +181,7 @@ public class SimpleWater : Block2
             block.block = Example.Air;
             return;
         }
-        else
+        else if(false)
         {
             // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
             foreach (BlockData neighbor in GetNeighbors(block, includingUp: false, includingDown: false))
@@ -193,6 +194,7 @@ public class SimpleWater : Block2
                 }
             }
         }
+        block.needsAnotherTick = false;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -678,6 +680,96 @@ public class Trunk : StaticBlock
 }
 
 
+public class Chest : BlockWithInventory
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Chest, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override int InventorySpace()
+    {
+        return 16*3;
+    }
+
+    public override int NumCraftingOutputs()
+    {
+        return 0;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 1.0f;
+    }
+}
+
+public class Barrel : BlockWithInventory
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Barrel, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override int InventorySpace()
+    {
+        return 8*3;
+    }
+
+    public override int NumCraftingOutputs()
+    {
+        return 0;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 1.0f;
+    }
+}
+
+
+public class CraftingTable : BlockWithInventory
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.CraftingTable, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override int InventorySpace()
+    {
+        return 9;
+    }
+
+    public override int NumCraftingOutputs()
+    {
+        return 1;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 1.0f;
+    }
+}
+
+
+
 public class SimpleBlock : Block
 {
 
@@ -722,6 +814,8 @@ public class Bark : Block
         CreateBlockEntity(Example.Bark, positionOfBlock);
     }
 
+
+    System.Random randomGen = new System.Random();
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = true;
@@ -729,7 +823,7 @@ public class Bark : Block
         {
             if (neighbor.block == Example.Water || neighbor.block == Example.WaterNoFlow)
             {
-                if (Random.value < 0.05f)
+                if (randomGen.NextDouble() < 0.01)
                 {
                     block.block = Example.WetBark;
                     block.needsAnotherTick = false;
@@ -762,6 +856,7 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Clay, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
         AddCustomBlock(Example.Stone, new Stone(), 64);
         AddCustomBlock(Example.Leaf, new Leaf(), 64);
+        AddCustomBlock(Example.CraftingTable, new CraftingTable(), 64);
         AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
         AddCustomBlock(Example.Rock, new Rock(), 64);
         AddCustomBlock(Example.LargeRock, new LargeRock(), 64);
@@ -774,6 +869,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Shovel, new SimpleItem(), 1);
         AddCustomBlock(Example.Axe, new SimpleItem(), 1);
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
+        AddCustomBlock(Example.Chest, new Chest(), 64);
+        AddCustomBlock(Example.Barrel, new Barrel(), 64);
         AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
         AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
@@ -794,24 +891,40 @@ public class ExamplePack : BlocksPack {
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
+            { Example.Trunk, Example.Trunk,  Example.Trunk},
+            { Example.Trunk, Example.Air, Example.Trunk },
+            { Example.Trunk, Example.Trunk, Example.Trunk }
+        }, new BlockStack(Example.Chest, 1)));
+
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
+            { Example.Air, Example.Trunk,  Example.Air},
+            { Example.Trunk, Example.Air, Example.Trunk },
+            { Example.Air, Example.Trunk, Example.Air }
+        }, new BlockStack(Example.Barrel, 1)));
+
+        AddCustomRecipe(new Recipe(new BlockValue[,]
+        {
             { Example.Air, Example.LargeRock,  Example.Air},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Shovel, 1, 10, 10)));
+        }, new BlockStack(Example.Shovel, 1, 64, 64)));
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
             { Example.Air, Example.LargeSharpRock,  Example.Air},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Axe, 1, 10, 10)));
+        }, new BlockStack(Example.Axe, 1, 64, 64)));
+
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
             { Example.LargeSharpRock, Example.LargeRock,  Example.LargeSharpRock},
             { Example.String, Example.Stick, Example.String },
             { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Pickaxe, 1, 10, 10)));
+        }, new BlockStack(Example.Pickaxe, 1, 64, 64)));
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {

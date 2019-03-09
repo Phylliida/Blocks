@@ -1,0 +1,13 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "largeRock": "LargeRock.png"
+    },
+    "elements": [
+        {   "from": [ 4, 2, 4 ],
+            "to": [ 12, 10, 12 ],
+            "shade": false,
+            "texture": "largeRock"
+        }
+    ]
+}

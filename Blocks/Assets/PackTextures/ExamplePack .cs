@@ -7,7 +7,9 @@ namespace Example_pack {
         public static BlockValue BallTrack = new BlockValue(false, "BallTrack", "Example");
         public static BlockValue BallTrackEmpty = new BlockValue(false, "BallTrackEmpty", "Example");
         public static BlockValue Bark = new BlockValue(false, "Bark", "Example");
+        public static BlockValue Barrel = new BlockValue(true, "Barrel", "Example");
         public static BlockValue Bedrock = new BlockValue(false, "Bedrock", "Example");
+        public static BlockValue Chest = new BlockValue(false, "Chest", "Example");
         public static BlockValue Clay = new BlockValue(false, "Clay", "Example");
         public static BlockValue CraftingTable = new BlockValue(false, "CraftingTable", "Example");
         public static BlockValue Dirt = new BlockValue(false, "Dirt", "Example");

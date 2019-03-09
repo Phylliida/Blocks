@@ -4,8 +4,24 @@ using UnityEngine;
 using Example_pack;
 using Blocks;
 
-public class AntelopeBoi : MobWithBehavior
+
+
+public class Sister : MobWithBehavior
 {
+
+    public enum SisterAssignment
+    {
+        Forage,
+        StayWithMother,
+        StayWithChampion,
+        KeepWatch
+    }
+
+    public SisterAssignment assignment = SisterAssignment.StayWithMother;
+
+    public BlocksPlayer mother;
+    public BlocksPlayer champion;
+
     public override BaseGenome GetBaseGenome()
     {
         BaseGenome res = new BaseGenome();
@@ -20,11 +36,6 @@ public class AntelopeBoi : MobWithBehavior
         res.AddKey("curiosity", 0.2f, 0.4f);
         res.AddKey("extrovertednes", 0.3f, 0.7f);
         return res;
-    }
-
-    public override void OnReachBlockToGather(LVector3 gatherBlock)
-    {
-        return;
     }
 
     public override float GetBaseWeight(TypeOfThingDoing thingDoing)
@@ -59,6 +70,16 @@ public class AntelopeBoi : MobWithBehavior
             maxValue = 30.0f;
             return true;
         }
+        else if (thingDoing == TypeOfThingDoing.Gathering)
+        {
+            maxValue = 30.0f;
+            return true;
+        }
+        else if (thingDoing == TypeOfThingDoing.GoingTo)
+        {
+            maxValue = 30.0f;
+            return true;
+        }
         //else if (thingDoing == TypeOfThingDoing.Standing) return 1.0f - genome["curiosity"];
         //else if (thingDoing == TypeOfThingDoing.Socializing) return genome["extrovertednes"];
         //else if (thingDoing == TypeOfThingDoing.Wandering) return genome["curiosity"];
@@ -68,7 +89,7 @@ public class AntelopeBoi : MobWithBehavior
     /*
     public override void UpdateBehavior(ref ThingDoing curDoing)
     {
-        
+
         if (curDoing == null)
         {
             curDoing = new ThingDoing(TypeOfThingDoing.Searching, null);
@@ -165,14 +186,62 @@ public class AntelopeBoi : MobWithBehavior
 
     */
 
+
+
     public override ThingDoing UpdateBehavior(TypeOfThingDoing newTypeOfThingDoing)
     {
-        if (newTypeOfThingDoing == TypeOfThingDoing.RunningAway)
+        ThingDoing result = null;
+        if (assignment == SisterAssignment.StayWithMother)
         {
-            newTypeOfThingDoing = TypeOfThingDoing.GettingFood;
+            result = new ThingDoing(TypeOfThingDoing.GoingTo, new ThingDoingTarget(mother.GetComponent<MovingEntity>()));
         }
-        return new ThingDoing(newTypeOfThingDoing, null);
+        else if(assignment == SisterAssignment.StayWithChampion)
+        {
+            result = new ThingDoing(TypeOfThingDoing.GoingTo, new ThingDoingTarget(champion.GetComponent<MovingEntity>()));
+        }
+        else if(assignment == SisterAssignment.Forage)
+        {
+            result = new ThingDoing(TypeOfThingDoing.Gathering, new ThingDoingTarget(new BlockValue[] { Example.Leaf, Example.Trunk, Example.Flower }));
+        }
+        else if (assignment == SisterAssignment.KeepWatch)
+        {
+            result = new ThingDoing(TypeOfThingDoing.Standing, null);
+        }
+        else
+        {
+            Debug.LogWarning("unknown sister assignment " + assignment);
+            result = new ThingDoing(newTypeOfThingDoing, null);
+        }
+
+        if (result.typeOfThing == thingDoing.typeOfThing)
+        {
+            // don't modify it if valid blocks matches (this keeps a found position if there is one when foraging)
+            if (result.target != null && result.target.validBlocks != null)
+            {
+                if (thingDoing.target == null || thingDoing.target.validBlocks == null || thingDoing.target.validBlocks.Length != result.target.validBlocks.Length)
+                {
+                    return result;
+                }
+                else
+                {
+                    for (int i = 0; i < result.target.validBlocks.Length; i++)
+                    {
+                        if (thingDoing.target.validBlocks[i] != result.target.validBlocks[i])
+                        {
+                            return result;
+                        }
+                    }
+                    return thingDoing;
+                }
+            }
+            return thingDoing;
+        }
+        else
+        {
+            return result;
+        }
     }
+
 
     public override void OnReachFoodBlock(LVector3 foodBlock)
     {
@@ -181,6 +250,11 @@ public class AntelopeBoi : MobWithBehavior
             this.food = Mathf.Min(this.food + 1.0f, maxFood);
             foodBlock.Block = Example.Flower;
         }
+    }
+
+    public override void OnReachBlockToGather(LVector3 gatherBlock)
+    {
+        world.DestroyBlockByBreaking(gatherBlock, null);
     }
 
 

@@ -8,15 +8,35 @@ namespace Blocks
     [System.Serializable]
     public class BlockStack
     {
-        public int block;
+        public int block
+        {
+            get
+            {
+                return block_;
+            }
+            set
+            {
+                block_ = value;
+                blockName = BlockValue.IdToBlockName(block);
+            }
+        }
+        int block_;
         public int count;
         public int durability = 0;
         public int maxDurability = 0;
+        public string blockName;
 
         public BlockStack Copy()
         {
             return new BlockStack(block, count, durability, maxDurability);
         }
+
+
+        public void ThrowMe(Vector3 position)
+        {
+            World.mainWorld.CreateBlockEntity(this, position);
+        }
+
         public BlockValue Block
         {
             get
@@ -69,10 +89,69 @@ namespace Blocks
     }
 
 
-
+    [System.Serializable]
     public class Inventory
     {
+        public void ChangeSize(int newInventorySize, Vector3 throwLeftoversPosition)
+        {
+            if (newInventorySize <= 0)
+            {
+                Debug.LogWarning("inventory size should not be set to less than or equal to zero, tried to set it to " + newInventorySize + " ignoring");
+                return;
+            }
+            else
+            {
+                // inventory grew, copy the contents over
+                if (capacity < newInventorySize)
+                {
+                    BlockStack[] newBlocks = new BlockStack[newInventorySize];
 
+                    for (int i = 0; i < blocks.Length; i++)
+                    {
+                        newBlocks[i] = blocks[i];
+                    }
+
+                    blocks = newBlocks;
+                }
+                // inventory shrunk, copy the contents over and throw any stuff that we can't fit
+                else if (capacity > newInventorySize)
+                {
+                    BlockStack[] newBlocks = new BlockStack[newInventorySize];
+
+                    for (int i = 0; i < newBlocks.Length; i++)
+                    {
+                        newBlocks[i] = blocks[i];
+                    }
+
+                    // try to squeeze stuff in any open spots
+                    for (int i = newBlocks.Length; i < blocks.Length; i++)
+                    {
+                        if (blocks[i] != null)
+                        {
+                            bool foundPlaceForThisItem = false;
+                            // go through new inventory and look for open spots
+                            for (int j = 0; j < newBlocks.Length; j++)
+                            {
+                                if (newBlocks[j] == null)
+                                {
+                                    newBlocks[j] = blocks[i];
+                                    foundPlaceForThisItem = true;
+                                    break;
+                                }
+                            }
+                            if (!foundPlaceForThisItem)
+                            {
+                                blocks[i].ThrowMe(throwLeftoversPosition);
+                            }
+                        }
+                    }
+
+                    blocks = newBlocks;
+                }
+                // inventory stayed the same size, do nothing
+            }
+            this.capacity = newInventorySize;
+        }
 
         public void ThrowAllBlocks(Vector3 position)
         {
@@ -150,11 +229,12 @@ namespace Blocks
             return false;
         }
 
-        public BlockStack[] resultBlocks;
 
         public int capacity;
 
         public BlockStack[] blocks;
+
+        public BlockStack[] resultBlocks;
 
         public Inventory(int capacity)
         {

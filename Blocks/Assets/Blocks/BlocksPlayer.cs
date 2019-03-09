@@ -11,7 +11,17 @@ namespace Blocks
         public SmoothMouseLook mouseLook;
         public MovingEntity body;
         public Camera mainCamera;
-        public Inventory inventory;
+        public Inventory inventory
+        {
+            get
+            {
+                return body.inventory;
+            }
+            set
+            {
+                body.inventory = value;
+            }
+        }
         public InventoryGui inventoryGui;
         public float reachRange = 6.0f;
 
@@ -24,18 +34,11 @@ namespace Blocks
         int hotbarSize = 8;
         public void Start()
         {
-            inventory = new Inventory(16);
+            body.inventorySize = 16;
+            body.inventory = new Inventory(body.inventorySize);
             inventoryGui.playerUsing = this;
             inventoryGui.inventory = inventory;
             inventoryGui.displaying = true;
-        }
-
-        public void GetBlockEntity(BlockEntity blockEntity)
-        {
-            if (inventory.TryToAddBlock(blockEntity.Stack))
-            {
-                GameObject.Destroy(blockEntity.gameObject);
-            }
         }
 
         public bool paused = false;
@@ -45,6 +48,8 @@ namespace Blocks
         int curSelectionBreakingWith = -1;
         LVector3 chunkPos;
         LVector3 startPathingPos;
+
+
         public void Update()
         {
             /*
@@ -68,7 +73,7 @@ namespace Blocks
                 Debug.Log("trying to do pathing, starting from position " + startPathingPos + " and going to position " + endPathingPos);
 
                 bool pathingSuccess;
-                PathingChunk.Pathfind(World.mainWorld, startPathingPos, endPathingPos, 1, 1, 2, 1, out pathingSuccess, verbose: World.mainWorld.blocksWorld.verbosePathing);
+                PathingChunk.Pathfind(World.mainWorld, startPathingPos, endPathingPos, new MobilityCriteria(1,1,2,1), out pathingSuccess, verbose: World.mainWorld.blocksWorld.verbosePathing);
 
             }
 
@@ -91,6 +96,7 @@ namespace Blocks
                     }
                 }
 
+                MobilityCriteria mobilityCriteria = new MobilityCriteria(1,1,2,1);
                 for (int x = -2; x <= 2; x++)
                 {
                     for (int y = -2; y <= 2; y++)
@@ -100,8 +106,8 @@ namespace Blocks
                             Chunk spooker = World.mainWorld.GetChunk(chunkPos.x + x, chunkPos.y + y, chunkPos.z + z);
                             if (spooker != null)
                             {
-                                spooker.GetPathingChunk(1, 1, 2, 1).Refresh();
-                                spooker.GetPathingChunk(1, 1, 2, 1).ExpandWalls();
+                                spooker.GetPathingChunk(mobilityCriteria).Refresh();
+                                spooker.GetPathingChunk(mobilityCriteria).ExpandWalls();
                             }
                         }
                     }
@@ -202,41 +208,15 @@ namespace Blocks
             {
                 selectionF -= Input.mouseScrollDelta.y;
             }
+
             inventoryGui.selection = Mathf.RoundToInt(selectionF);
+
+
             if (Input.mouseScrollDelta.y != 0)
             {
                 Debug.Log(Input.mouseScrollDelta.y + " delta");
             }
 
-            BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
-            foreach (BlockEntity blockEntity in entities)
-            {
-                if (!blockEntity.pullable || (blockEntity.playerThrowing != null && blockEntity.playerThrowing == GetComponent<MovingEntity>()))
-                {
-                    continue;
-                }
-                Vector3 grabFromPos = transform.position - Vector3.up * GetComponent<MovingEntity>().heightBelowHead / 3.0f;
-                if (inventory.CanAddBlock(blockEntity.Stack))
-                {
-                    if ((Vector3.Distance(blockEntity.transform.position, grabFromPos) < reachRange && blockEntity.playerPulling == null) || blockEntity.playerPulling == GetComponent<MovingEntity>())
-                    {
-                        blockEntity.playerPulling = GetComponent<MovingEntity>();
-                        float moveDist = 10.0f * Time.deltaTime;
-                        if (Vector3.Distance(blockEntity.transform.position, grabFromPos) < Mathf.Max(0.2f, moveDist))
-                        {
-                            GetBlockEntity(blockEntity);
-                        }
-                        else
-                        {
-                            blockEntity.transform.position += (grabFromPos - blockEntity.transform.position).normalized * moveDist;
-                        }
-                    }
-                }
-                else if (blockEntity.playerPulling == GetComponent<MovingEntity>())
-                {
-                    blockEntity.playerPulling = null;
-                }
-            }
 
             if (Input.GetMouseButtonDown(0))
             {
@@ -280,12 +260,6 @@ namespace Blocks
 
                         if (World.mainWorld.DropBlockOnDestroy(hitResults.hitBlock.BlockV, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                         {
-                            if (hitResults.hitBlock.BlockV == Example.CraftingTable && World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
-                            {
-                                Inventory chestInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
-                                chestInventory.ThrowAllBlocks(hitResults.hitBlock.BlockCentertoUnityVector3());
-                                World.mainWorld.blocksWorld.blockInventories.Remove(hitResults.hitBlock);
-                            }
                             World.mainWorld[hitResults.hitBlock] = 0;
                         }
                     }
@@ -311,9 +285,10 @@ namespace Blocks
                     LVector3 myFeetPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead + 0.02f, 0));
                     LVector3 myBodyPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, -body.heightBelowHead / 2.0f, 0));
                     LVector3 myHeadPos = LVector3.FromUnityVector3(transform.position + new Vector3(0, body.heightAboveHead, 0));
-                    if (hitResults.hitBlock.Block == (int)Example.CraftingTable && showingHotbarOnly)
+                    Inventory blockInventory;
+                    if (showingHotbarOnly && World.mainWorld.BlockHasInventory(hitResults.hitBlock, out blockInventory))
                     {
-                        Inventory blockInventory;
+                        /*
                         if (World.mainWorld.blocksWorld.blockInventories.ContainsKey(hitResults.hitBlock))
                         {
                             blockInventory = World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock];
@@ -324,6 +299,7 @@ namespace Blocks
                             blockInventory.resultBlocks = new BlockStack[1];
                             World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock] = blockInventory;
                         }
+                        */
                         World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
                         World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
                         showingHotbarOnly = false;
@@ -338,6 +314,7 @@ namespace Blocks
                         {
                             if (World.mainWorld.AllowedtoPlaceBlock(inventory.blocks[inventoryGui.selection].block))
                             {
+                                World.mainWorld.PlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit);
                                 World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
                                 inventory.blocks[inventoryGui.selection].count -= 1;
                                 if (inventory.blocks[inventoryGui.selection].count <= 0)

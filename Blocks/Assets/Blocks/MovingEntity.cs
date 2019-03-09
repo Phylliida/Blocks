@@ -16,6 +16,11 @@ namespace Blocks
         float gravity = 37.0f;
         float jumpSpeed = 14.0f;
 
+
+        public float reachRange = 6.0f;
+        public int inventorySize = 0;
+        public Inventory inventory;
+
         // Use this for initialization
         void Start()
         {
@@ -174,15 +179,86 @@ namespace Blocks
 
         }
 
+
+
+        public void GrabBlockEntity(BlockEntity blockEntity)
+        {
+            if (inventory.TryToAddBlock(blockEntity.Stack))
+            {
+                GameObject.Destroy(blockEntity.gameObject);
+            }
+        }
+
+        void PullBlockEntitiesNearby(float reachRange)
+        {
+            BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
+            foreach (BlockEntity blockEntity in entities)
+            {
+                if (!blockEntity.pullable || (blockEntity.playerThrowing != null && blockEntity.playerThrowing == this))
+                {
+                    continue;
+                }
+                Vector3 grabFromPos = transform.position - Vector3.up * this.heightBelowHead / 3.0f;
+                if (inventory.CanAddBlock(blockEntity.Stack))
+                {
+                    if ((Vector3.Distance(blockEntity.transform.position, grabFromPos) < reachRange && blockEntity.playerPulling == null) || blockEntity.playerPulling == this)
+                    {
+                        blockEntity.playerPulling = this;
+                        float moveDist = 10.0f * Time.deltaTime;
+                        if (Vector3.Distance(blockEntity.transform.position, grabFromPos) < Mathf.Max(0.2f, moveDist))
+                        {
+                            GrabBlockEntity(blockEntity);
+                        }
+                        else
+                        {
+                            blockEntity.transform.position += (grabFromPos - blockEntity.transform.position).normalized * moveDist;
+                        }
+                    }
+                }
+                else if (blockEntity.playerPulling == this)
+                {
+                    blockEntity.playerPulling = null;
+                }
+            }
+        }
+
         // Update is called once per frame
         void Update()
         {
 
             // don't do stuff on first three frames to let generation happen
-            if (Time.frameCount < 3)
+            if (Time.frameCount < 10)
             {
                 return;
             }
+
+
+            if (inventorySize > 0)
+            {
+                if (inventory == null)
+                {
+                    inventory = new Inventory(inventorySize);
+                }
+                else if(inventory.capacity != inventorySize)
+                {
+                    inventory.ChangeSize(inventorySize, transform.position);
+                }
+            }
+            else
+            {
+                if (inventory != null && inventory.blocks != null && inventory.capacity > 0)
+                {
+                    inventory.ThrowAllBlocks(transform.position);
+                    inventory = null;
+                }
+            }
+
+
+            if (inventory != null && inventory.capacity > 0)
+            {
+                PullBlockEntitiesNearby(reachRange);
+            }
+
             //Vector3 goodDiff;
             Vector3 desiredDiff = desiredMove * Time.deltaTime * speed;
             desiredDiff = new Vector3(desiredDiff.x, 0, desiredDiff.z);
