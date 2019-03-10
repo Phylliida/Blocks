@@ -1063,7 +1063,14 @@ namespace Blocks
                         // we have already found it in the past, there is one, we are good
                         if (ArrContains(resourcesLookingFor, pathingRegion.cacheTmpBlock.Block))
                         {
-                            return true;
+                            if (pathingRegion.cacheTmpBlockVisibleFrom == null || pathingRegion.cacheTmpBlock == LVector3.Invalid)
+                            {
+                                Debug.LogWarning("cache tmp block visble from " + pathingRegion.cacheTmpBlockVisibleFrom + " or cache tmp block " + pathingRegion.cacheTmpBlock + "  is null/invalid even though you have cached result?");
+                            }
+                            else
+                            {
+                                return true;
+                            }
                         }
                     }
 

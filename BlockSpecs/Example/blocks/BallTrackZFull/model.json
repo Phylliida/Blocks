@@ -19,8 +19,8 @@
             "shade": false,
             "texture": "ball"
         },
-        {   "fromVars": [ "5", "2", "state" ],
-            "toVars": [ "9", "6", "state+4" ],
+        {   "fromVars": [ "6", "2", "state" ],
+            "toVars": [ "10", "6", "state+4" ],
             "shade": false,
             "texture": "ball"
         }

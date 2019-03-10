@@ -1303,6 +1303,7 @@ namespace Blocks
             if (myChunk == null)
             {
                 world.SetState(wx, wy, wz, cx, cy, cz, value, stateType);
+                world.blockModifyState += 1;
             }
             else
             {
@@ -1328,6 +1329,7 @@ namespace Blocks
             if (myChunk == null)
             {
                 world[wx, wy, wz, cx, cy, cz] = value;
+                world.blockModifyState += 1;
             }
             else
             {
@@ -1364,6 +1366,16 @@ namespace Blocks
             {
                 animationState_ = PackTwoValuesIntoInt((int)animationState, (int)value);
             }
+        }
+
+
+        public BlockData.BlockRotation GetRelativeRotationOf(BlockData block)
+        {
+            int baseRotation = (int)rotation;
+            int otherRotation = (int)block.rotation;
+            // Good mod always returns a positive value
+            int res = PhysicsUtils.GoodMod(baseRotation - otherRotation, 360);
+            return (BlockRotation)res;
         }
 
         public static int PackTwoValuesIntoInt(int a, int b)
@@ -1671,6 +1683,7 @@ namespace Blocks
         {
             blockGetter.SetState(x, y, z, state, stateType);
         }
+
 
         public BlockData GetBlockDataRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ)
         {
@@ -3352,9 +3365,7 @@ namespace Blocks
             long ind = to1D(i, j, k);
             if (data[ind * 4 + (int)stateType] != state)
             {
-                if (stateType == BlockState.Animation)
-                {
-                }
+                editNum += 1;
                 needToBeUpdated = true;
                 //needToBeUpdated = true;
             }
@@ -3789,6 +3800,7 @@ namespace Blocks
         {
             frontPos = 0;
             list = new T[initialCount];
+            count = 0;
         }
 
         public T this[int i]
@@ -3822,11 +3834,10 @@ namespace Blocks
             if (count + 1 > list.Length)
             {
                 T[] newList = new T[list.Length * 2];
-                int k = 0;
                 for (int i = 0; i < count; i++)
                 {
                     int j = (i + frontPos) % list.Length;
-                    newList[k] = list[j];
+                    newList[i] = list[j];
                 }
                 list = newList;
                 frontPos = 0;
@@ -3864,7 +3875,7 @@ namespace Blocks
             }
             else
             {
-                T res = list[frontPos + count - 1];
+                T res = list[(frontPos + count - 1) % list.Length];
                 count -= 1;
                 return res;
             }

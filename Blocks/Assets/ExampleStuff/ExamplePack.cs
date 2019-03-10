@@ -148,6 +148,7 @@ public class BallTrackHorizontalFull : Block
         destroyBlock = true;
     }
 
+
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = true;
@@ -182,7 +183,13 @@ public class BallTrackHorizontalFull : Block
             {
                 using (BlockData neighbor = GetBlockDataRelative(block, 0, 0,1))
                 {
+                    BlockData.BlockRotation neighborRot = block.GetRelativeRotationOf(neighbor);
                     bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
+
+                    if (neighborRot == BlockData.BlockRotation.Degrees90 || neighborRot == BlockData.BlockRotation.Degrees270)
+                    {
+                        canFlowIntoNeighbor = false;
+                    }
 
                     // we can't flow into neighbor, flip directions
                     if (!canFlowIntoNeighbor)
@@ -200,8 +207,18 @@ public class BallTrackHorizontalFull : Block
                         else if(leftThingPos)
                         {
                             neighbor.block = Example.BallTrackZFull;
-                            neighbor.animationState = 0;
-                            neighbor.state = block.state;
+                            // flipped around
+                            if (neighborRot == BlockData.BlockRotation.Degrees180)
+                            {
+                                neighbor.animationState = (short)(trackSize - ballWidth);
+                                neighbor.state = -block.state;
+                            }
+                            // not flipped around
+                            else
+                            {
+                                neighbor.animationState = 0;
+                                neighbor.state = block.state;
+                            }
                             block.block = Example.BallTrackZEmpty;
                             block.animationState = 0;
                             block.needsAnotherTick = false;
@@ -234,7 +251,13 @@ public class BallTrackHorizontalFull : Block
             {
                 using (BlockData neighbor = GetBlockDataRelative(block, 0,0,-1))
                 {
+                    BlockData.BlockRotation neighborRot = block.GetRelativeRotationOf(neighbor);
                     bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
+
+                    if (neighborRot == BlockData.BlockRotation.Degrees90 || neighborRot == BlockData.BlockRotation.Degrees270)
+                    {
+                        canFlowIntoNeighbor = false;
+                    }
 
                     // we can't flow into neighbor, flip directions
                     if (!canFlowIntoNeighbor)
@@ -251,9 +274,20 @@ public class BallTrackHorizontalFull : Block
                         }
                         else if (leftThingPos)
                         {
+
+                            // flipped around
+                            if (neighborRot == BlockData.BlockRotation.Degrees180)
+                            {
+                                neighbor.animationState = 0;
+                                neighbor.state = -block.state;
+                            }
+                            // not flipped around
+                            else
+                            {
+                                neighbor.animationState = (short)(trackSize - ballWidth);
+                                neighbor.state = block.state;
+                            }
                             neighbor.block = Example.BallTrackZFull;
-                            neighbor.animationState = (short)(trackSize -ballWidth);
-                            neighbor.state = block.state;
                             block.animationState = 0;
                             block.block = Example.BallTrackZEmpty;
                             block.needsAnotherTick = false;
