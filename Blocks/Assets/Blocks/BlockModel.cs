@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using UnityEngine;
 
 // I'll just use this format for the convienence of minecraft modders
@@ -28,7 +29,7 @@ namespace Blocks
 
         public CubeMesh()
         {
-            RenderTriangle[] cubeTris = World.mainWorld.defaultCubeTris;
+            RenderTriangle[] cubeTris = World.defaultCubeTris;
             vertices = new Vector3[cubeTris.Length*3];
             uvs = new Vector2[cubeTris.Length*3];
             for (int i = 0; i < cubeTris.Length; i++)
@@ -248,6 +249,8 @@ namespace Blocks
             return rotation * (point - pivot) + pivot;
         }
 
+        public bool limitAngle = false;
+
         public Vector3 ApplyToPoint(Vector3 point)
         {
             if (angle == 0)
@@ -273,16 +276,21 @@ namespace Blocks
             {
                 vecAxis = new Vector3(0, 0, 1);
             }
-            // -45 to 45 -> 0 to 1
-            float angle01 = Mathf.Clamp01((angle + 45) / 90.0f);
-            // 0 to 1 -> 0 to 3
-            float angle03 = angle01 * 3;
-            // round to nearst int, will result in 0, 1, 2 or 3
-            float actualAngle03 = Mathf.Round(angle03);
-            // 0 to 3 -> 0 to 1
-            float resAngle01 = actualAngle03 / 3;
-            // 0 to 1 -> -45 to 45
-            float resAngleInDegrees = resAngle01 * 90 - 45;
+            float resAngleInDegrees = angle;
+            if (limitAngle)
+            {
+
+                // -45 to 45 -> 0 to 1
+                float angle01 = Mathf.Clamp01((angle + 45) / 90.0f);
+                // 0 to 1 -> 0 to 3
+                float angle03 = angle01 * 3;
+                // round to nearst int, will result in 0, 1, 2 or 3
+                float actualAngle03 = Mathf.Round(angle03);
+                // 0 to 3 -> 0 to 1
+                float resAngle01 = actualAngle03 / 3;
+                // 0 to 1 -> -45 to 45
+                resAngleInDegrees = resAngle01 * 90 - 45;
+            }
 
             return Quaternion.AngleAxis(resAngleInDegrees, vecAxis);
         }
@@ -296,6 +304,12 @@ namespace Blocks
     [System.Serializable]
     public class BlockModelElement
     {
+
+        public bool DependsOnState()
+        {
+            return fromVars != null || toVars != null;
+        }
+
         /// <summary>
         /// Start point of a cube according to the scheme [x, y, z]. Values must be between -16 and 32.
         /// </summary>
@@ -305,6 +319,12 @@ namespace Blocks
         /// Stop point of a cube according to the scheme [x, y, z]. Values must be between -16 and 32.
         /// </summary>
         public float[] to;
+
+        [DefaultValue(null)]
+        public string[] fromVars { get; set; }
+
+        [DefaultValue(null)]
+        public string[] toVars { get; set; }
 
 
         public string texture;
@@ -317,16 +337,588 @@ namespace Blocks
 
         string __comment = "";
 
+        public string[] SplitAndKeepDelims(string str, char[] delims)
+        {
+            List<string> result = new List<string>();
+            int startOfCur = 0;
+            for (int i = 0; i < str.Length; i++)
+            {
+                for (int j = 0; j < delims.Length; j++)
+                {
+                    if (str[i] == delims[j])
+                    {
+                        int lenOfCur = i - startOfCur;
+                        if (lenOfCur > 0)
+                        {
+                            result.Add(str.Substring(startOfCur, lenOfCur));
+                        }
+                        result.Add(str[i] + "");
+                        startOfCur = i + 1;
+                        break;
+                    }
+                }
+            }
+            if (startOfCur < str.Length)
+            {
+                result.Add(str.Substring(startOfCur));
+            }
+            return result.ToArray();
+        }
 
-        public Blocks.RenderTriangle[] ToRenderTriangles()
+        public class ArithmeticOp
+        {
+            public string op;
+            public int precedence;
+
+            public enum ArithmeticOpType
+            {
+                Unary,
+                Binary
+            }
+
+            public ArithmeticOpType opType;
+
+            public ArithmeticOp(string op, int precedence, ArithmeticOpType opType= ArithmeticOpType.Binary)
+            {
+                this.op = op;
+                this.precedence = precedence;
+                this.opType = opType;
+            }
+
+            public override string ToString()
+            {
+                return op;
+            }
+        }
+
+        public class ArithmeticVarible
+        {
+            public string name;
+            public float value;
+            bool isFloat = false;
+
+            public ArithmeticVarible(string name)
+            {
+                this.name = name;
+                if (float.TryParse(name, out this.value))
+                {
+                    isFloat = true;
+                }
+            }
+
+            public float GetValue(int state)
+            {
+                if (isFloat)
+                {
+                    return this.value;
+                }
+                else
+                {
+                    if (name == "state")
+                    {
+                        return state;
+                    }
+                    else
+                    {
+                        throw new ArithmeticException("unknown variable " + name);
+                    }
+                }
+            }
+
+            public override string ToString()
+            {
+                if (isFloat)
+                {
+                    return this.value + "";
+                }
+                else
+                {
+                    return name;
+                }
+            }
+        }
+
+        public class ArithmeticParen
+        {
+            public bool opening;
+            public ArithmeticParen(bool opening)
+            {
+                this.opening = opening;
+            }
+
+            public override string ToString()
+            {
+                if (opening)
+                {
+                    return "(";
+                }
+                else
+                {
+                    return ")";
+                }
+            }
+        }
+
+        public class ArithmeticException : System.Exception
+        {
+            public ArithmeticException(string message) : base(message)
+            {
+            }
+        }
+
+        public class ArithmeticNode
+        {
+            public enum ArithmeticType
+            {
+                Operator,
+                State,
+                Paren,
+                MergedUnaryOperator,
+                MergedBinaryOperator,
+                Scope
+            }
+
+            public string Join(string[] arr, string delim)
+            {
+                string res = "";
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    res += arr[i];
+                    if (i != arr.Length-1)
+                    {
+                        res += delim;
+                    }
+                }
+                return res;
+            }
+
+            public override string ToString()
+            {
+                if (arithemeticType == ArithmeticType.Operator)
+                {
+                    return op;
+                }
+                else if(arithemeticType == ArithmeticType.State)
+                {
+                    return variable.ToString();
+                }
+                else if(arithemeticType == ArithmeticType.Paren)
+                {
+                    return paren.ToString();
+                }
+                else if (arithemeticType == ArithmeticType.Scope)
+                {
+                    List<string> res = new List<string>();
+                    for (int i = 0; i < children.Count; i++)
+                    {
+                        res.Add(children[i].ToString());
+                    }
+                    return Join(res.ToArray(), " ");
+                }
+                else if(arithemeticType == ArithmeticType.MergedBinaryOperator)
+                {
+                    return "[" + children[0] + " " + op + " " + children[1] + "]";
+                }
+                else if(arithemeticType == ArithmeticType.MergedUnaryOperator)
+                {
+                    return "[- " + children[0] + "]";
+                }
+                else 
+                {
+                    return "";
+                }
+            }
+
+
+            public float GetValue(int state)
+            {
+                if (arithemeticType == ArithmeticType.MergedBinaryOperator)
+                {
+                    float val1 = children[0].GetValue(state);
+                    float val2 = children[1].GetValue(state);
+                    if (op == "+")
+                    {
+                        return val1 + val2;
+                    }
+                    else if(op == "-")
+                    {
+                        return val1 - val2;
+                    }
+                    else if(op == "*")
+                    {
+                        return val1 * val2;
+                    }
+                    else if (op == "/")
+                    {
+                        if (val2 == 0)
+                        {
+                            return 0;
+                        }
+                        else
+                        {
+                            return val1 / val2;
+                        }
+                    }
+                    else
+                    {
+                        throw new ArithmeticException("unknown binary operator " + op);
+                    }
+                }
+                else if(arithemeticType == ArithmeticType.MergedUnaryOperator)
+                {
+                    float val = children[0].GetValue(state);
+                    if (op == "-")
+                    {
+                        return -val;
+                    }
+                    else
+                    {
+                        throw new ArithmeticException("unknown unary operator " + op);
+                    }
+                }
+                else if(arithemeticType == ArithmeticType.Scope)
+                {
+                    if (children.Count == 0)
+                    {
+                        throw new ArithmeticException("paren need at least one thing inside of them");
+                    }
+                    else if(children.Count > 1)
+                    {
+                        throw new ArithmeticException("scope has more than one term inside of it, did you remember to call MergeOperators?");
+                    }
+                    else
+                    {
+                        return children[0].GetValue(state);
+                    }
+                }
+                else if(arithemeticType == ArithmeticType.State)
+                {
+                    return variable.GetValue(state);
+                }
+                else
+                {
+                    throw new ArithmeticException("cannot evaluate value of node of type " + arithemeticType);
+                }
+            }
+
+            public bool merged = false;
+
+            public ArithmeticNode parent = null;
+            public List<ArithmeticNode> children = new List<ArithmeticNode>();
+            public ArithmeticType arithemeticType;
+            public List<ArithmeticOp> ops = new List<ArithmeticOp>();
+            public string op;
+            public ArithmeticVarible variable;
+            public ArithmeticParen paren;
+
+            public bool IsBinaryOperator()
+            {
+                // if - it might be unary so check to see if it merged (if it did, it is either unary or binary, check. if it hasn't merged, assume it is binary)
+                return arithemeticType == ArithmeticType.Operator && (op != "-" || !merged || (merged && parent.arithemeticType == ArithmeticType.MergedBinaryOperator));
+            }
+
+            public ArithmeticNode(ArithmeticNode parent)
+            {
+                this.parent = parent;
+                this.arithemeticType = ArithmeticType.Scope;
+            }
+
+            public ArithmeticNode(ArithmeticNode opHolder, ArithmeticOp unaryOp, ArithmeticNode applyTo)
+            {
+                this.op = unaryOp.op;
+                this.ops.Add(unaryOp);
+                this.children.Add(applyTo);
+                applyTo.parent = this;
+                applyTo.merged = true;
+                opHolder.parent = this;
+                opHolder.merged = true;
+                this.arithemeticType = ArithmeticType.MergedUnaryOperator;
+            }
+
+
+            public ArithmeticNode(ArithmeticNode opHolder, ArithmeticOp binaryOp, ArithmeticNode applyToA, ArithmeticNode applyToB)
+            {
+                this.op = binaryOp.op;
+                this.ops.Add(binaryOp);
+                this.children.Add(applyToA);
+                applyToA.parent = this;
+                applyToA.merged = true;
+                applyToB.parent = this;
+                applyToB.merged = true;
+                opHolder.parent = this;
+                opHolder.merged = true;
+                this.children.Add(applyToB);
+                this.arithemeticType = ArithmeticType.MergedBinaryOperator;
+            }
+
+
+            public void MergeOperators()
+            {
+                // merge operators of children recursively
+                for (int i = 0; i < children.Count; i++)
+                {
+                    if (children[i].arithemeticType == ArithmeticType.Scope)
+                    {
+                        children[i].MergeOperators();
+                    }
+                }
+
+                // now actually do the work. First, check if unary (precedence == 2), then merge * and / (precedence == 1), then merge + and - (precedence == 0) 
+                for (int curPrecedence = 2; curPrecedence >= 0; curPrecedence--)
+                {
+                    bool mergedSomething = true;
+                    while (mergedSomething)
+                    {
+                        mergedSomething = false;
+
+                        //Debug.Log("cur loop");
+                        bool prevWasNonOp = false;
+                        List<ArithmeticNode> newChildren = new List<ArithmeticNode>();
+                        for (int i = 0; i < children.Count; i++)
+                        {
+                            ArithmeticNode cur = children[i];
+                            //Debug.Log(cur + " "  + cur.arithemeticType);
+                            if (cur.arithemeticType == ArithmeticType.Operator)
+                            {
+                                prevWasNonOp = false;
+                                if (!mergedSomething)
+                                {
+                                    bool foundSomethingThatFits = false;
+                                    foreach (ArithmeticOp possibleOp in cur.ops)
+                                    {
+                                        if (possibleOp.precedence == curPrecedence)
+                                        {
+                                            // unary if we are first or prev is also an operator
+                                            if ((i == 0 || children[i - 1].arithemeticType == ArithmeticType.Operator) && possibleOp.opType == ArithmeticOp.ArithmeticOpType.Unary)
+                                            {
+                                                if (i + 1 < children.Count && children[i + 1].arithemeticType != ArithmeticType.Operator)
+                                                {
+                                                    ArithmeticNode newChild = new ArithmeticNode(cur, possibleOp, children[i + 1]);
+                                                    i += 1; // skip past next one that we just used
+                                                    newChildren.Add(newChild);
+                                                    mergedSomething = true;
+                                                    foundSomethingThatFits = true;
+                                                    break;
+                                                }
+                                                else
+                                                {
+                                                    throw new ArithmeticException("- sign does not have term it can apply to, current scope is " + this);
+                                                }
+                                            }
+                                            // otherwise we are a binary operator
+                                            else if (possibleOp.opType == ArithmeticOp.ArithmeticOpType.Binary)
+                                            {
+                                                if (i == 0 || i == children.Count - 1 || children[i + 1].IsBinaryOperator() || children[i - 1].IsBinaryOperator())
+                                                {
+                                                    throw new ArithmeticException("operator " + possibleOp.op + " does not have a term on both sides it can apply to, current scope is " + this);
+                                                }
+                                                else
+                                                {
+                                                    ArithmeticNode beforeChild = children[i - 1];
+                                                    ArithmeticNode afterChild = children[i + 1];
+                                                    // go up if previous has already been used (say, for (-3 + 2) or (3 + 4 + 5)  (we are the rightmost plus in both of these examples))
+                                                    while (beforeChild.merged)
+                                                    {
+                                                        beforeChild = beforeChild.parent;
+                                                    }
+                                                    while (afterChild.merged)
+                                                    {
+                                                        afterChild = afterChild.parent;
+                                                    }
+                                                    ArithmeticNode newChild = new ArithmeticNode(cur, possibleOp, beforeChild, afterChild);
+                                                    i += 1; // skip past next one that we just used
+                                                    newChildren.Add(newChild);
+                                                    mergedSomething = true;
+                                                    foundSomethingThatFits = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (!foundSomethingThatFits)
+                                    {
+                                        // in case we have the processing happen after us
+                                        if (i != 0 && !children[i - 1].merged)
+                                        {
+                                            newChildren.Add(children[i - 1]);
+                                        }
+                                        newChildren.Add(cur);
+                                    }
+                                }
+                                else
+                                {
+                                   newChildren.Add(cur);
+                                }
+                            }
+                            else
+                            {
+                                if (prevWasNonOp)
+                                {
+                                    throw new ArithmeticException("multiple non-operators next to each other, this is invalid with us " + this.ToString());
+                                }
+                                prevWasNonOp = true;
+                                if (mergedSomething)
+                                {
+                                    newChildren.Add(cur);
+                                }
+                            }
+                        }
+
+                        if (mergedSomething)
+                        {
+                            this.children = newChildren;
+                        }
+
+                    }
+                }
+
+            }
+
+            public void AddChild(ArithmeticNode child)
+            {
+                if (this.arithemeticType == ArithmeticType.Operator)
+                {
+                    throw new ArithmeticException("Cannot add child to type " + this.arithemeticType);
+                }
+                else
+                {
+                    this.children.Add(child);
+                }
+            }
+
+            public ArithmeticNode(string val)
+            {
+                val = val.Trim();
+                bool foundMatchingOp = false;
+                foreach (ArithmeticOp op in AllOps)
+                {
+                    if (op.op == val)
+                    {
+                        this.arithemeticType = ArithmeticType.Operator;
+                        this.ops.Add(op);
+                        this.op = val;
+                        foundMatchingOp = true;
+                        //Debug.Log("found dat match " + op.op);
+                        // allow multiple matches (such as the unary and binary minus sign)
+                    }
+                }
+                if (val == "(")
+                {
+                    this.arithemeticType = ArithmeticType.Paren;
+                    this.paren = new ArithmeticParen(true);
+                    foundMatchingOp = true;
+                }
+                else if(val == ")")
+                {
+                    this.arithemeticType = ArithmeticType.Paren;
+                    this.paren = new ArithmeticParen(false);
+                    foundMatchingOp = true;
+                }
+                if (!foundMatchingOp)
+                {
+                    arithemeticType = ArithmeticType.State;
+                    variable = new ArithmeticVarible(val.ToLower());
+                }
+            }
+        }
+
+        static ArithmeticOp[] AllOps = new ArithmeticOp[] { new ArithmeticOp("+", 0), new ArithmeticOp("-", 0), new ArithmeticOp("-", 2, ArithmeticOp.ArithmeticOpType.Unary), new ArithmeticOp("*", 1), new ArithmeticOp("/", 1) };
+
+        public ArithmeticNode ParseString(string var)
+        {
+            try
+            {
+                string[] pieces = SplitAndKeepDelims(var, new char[] { '+', '-', '*', '/', '(', ')' });
+
+                ArithmeticNode curRoot = new ArithmeticNode(parent: null);
+                for (int i = 0; i < pieces.Length; i++)
+                {
+                    if (pieces[i].Trim() != "")
+                    {
+                        ArithmeticNode curNode = new ArithmeticNode(pieces[i]);
+                        if (curNode.arithemeticType == ArithmeticNode.ArithmeticType.Paren)
+                        {
+                            // go one stack down (opening paren)
+                            if (curNode.paren.opening)
+                            {
+                                ArithmeticNode newRoot = new ArithmeticNode(curRoot);
+                                curRoot.AddChild(newRoot);
+                                curRoot = newRoot;
+                            }
+                            else
+                            {
+                                // go one stack up (closing paren)
+                                if (curRoot.parent != null)
+                                {
+                                    curRoot = curRoot.parent;
+                                }
+                                else
+                                {
+                                    throw new ArithmeticException("Unmatched closing paren");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            curRoot.AddChild(curNode);
+                        }
+                    }
+                }
+
+                // we should get back up to root with no parent if we have balanced parens
+                if (curRoot.parent != null)
+                {
+                    throw new ArithmeticException("Unmatched opening paren");
+                }
+
+                curRoot.MergeOperators();
+
+                //Debug.Log("parsed " + var + " and got " + curRoot + " which evaluates with state=0 to " + curRoot.GetValue(0) + " and state=1 to " + curRoot.GetValue(1) + " and state=-1 to" + curRoot.GetValue(-1));
+
+                return curRoot;
+
+
+            }
+            catch (ArithmeticException arithException)
+            {
+                throw new ArithmeticException("Exception in processing string " + var + " of " + arithException);
+            }
+        }
+
+        public Blocks.RenderTriangle[] ToRenderTriangles(BlockData.BlockRotation blockRotation=BlockData.BlockRotation.Degrees0, int state=0)
         {
             CubeMesh res = new CubeMesh();
 
             // -0.5 to 0.5 -> 0 to 1
             //res = res + new Vector3(0.5f, 0.5f, 0.5f);
 
-            Vector3 fromPos = new Vector3(from[0], from[1], from[2]);
-            Vector3 toPos = new Vector3(to[0], to[1], to[2]);
+
+            Vector3 fromPos;
+            if (fromVars != null && fromVars.Length == 3)
+            {
+                float fromValX = ParseString(fromVars[0]).GetValue(state);
+                float fromValY = ParseString(fromVars[1]).GetValue(state);
+                float fromValZ = ParseString(fromVars[2]).GetValue(state);
+                fromPos = new Vector3(fromValX, fromValY, fromValZ);
+            }
+            else
+            {
+                fromPos = new Vector3(from[0], from[1], from[2]);
+            }
+
+
+            Vector3 toPos;
+            if (toVars != null && toVars.Length == 3)
+            {
+                float toValX = ParseString(toVars[0]).GetValue(state);
+                float toValY = ParseString(toVars[1]).GetValue(state);
+                float toValZ = ParseString(toVars[2]).GetValue(state);
+                toPos = new Vector3(toValX, toValY, toValZ);
+            }
+            else
+            {
+                toPos = new Vector3(to[0], to[1], to[2]);
+            }
 
             // -16 to 32 -> -1 to 2
             //fromPos = fromPos + new Vector3(16, 16, 16);
@@ -344,16 +936,47 @@ namespace Blocks
             {
                 res = res.ApplyingTransformationToEachVertex(x => { return rotation.ApplyToPoint(x); });
             }
+            int rotationDegrees = 0;
 
-            Debug.Log("my texture value is " + texture);
+            if (blockRotation == BlockData.BlockRotation.Degrees0)
+            {
 
-            Debug.Log("my to value is " + to[0] + " " + to[1] + " " + to[2]);
-            Debug.Log("my from value is " + from[0] + " " + from[1] + " " + from[2]);
+            }
+            else if(blockRotation == BlockData.BlockRotation.Degrees180)
+            {
+                rotationDegrees = 180;
+            }
+            else if(blockRotation == BlockData.BlockRotation.Degrees270)
+            {
+                rotationDegrees = 270;
+            }
+            else if(blockRotation == BlockData.BlockRotation.Degrees90)
+            {
+                rotationDegrees = 90;
+            }
+
+            if (rotationDegrees != 0)
+            {
+                BlockModelRotation customRotation = new BlockModelRotation
+                {
+                    axis = "y",
+                    angle = -rotationDegrees,
+                    origin = new float[] {0.5f, 0, 0.5f}
+                };
+                res = res.ApplyingTransformationToEachVertex(x => { return customRotation.ApplyToPoint(x); });
+
+                //Debug.Log("got " + customRotation.ApplyToPoint(new Vector3(0, 0, 1)) + " is the res");
+            }
+
+            //Debug.Log("my texture value is " + texture);
+
+            //Debug.Log("my to value is " + toPos[0] + " " + toPos[1] + " " + toPos[2]);
+            //Debug.Log("my from value is " + fromPos[0] + " " + fromPos[1] + " " + fromPos[2]);
             // offset uvs x value to match correct texture
             if (texture != null)
             {
                 int texIndex = rootModel.TexToIndex(texture);
-                Debug.Log("tex of " + texture + " maps to index " + texIndex);
+                //Debug.Log("tex of " + texture + " maps to index " + texIndex);
                 res += new Vector2(texIndex / 64.0f, 0.0f);
             }
 
@@ -509,23 +1132,86 @@ namespace Blocks
             return result;
         }
 
-        public RenderTriangle[] ToRenderTriangles()
+        Dictionary<int, RenderTriangle[]>[] cachedStateAlternatives = new Dictionary<int, RenderTriangle[]>[] {
+            new Dictionary<int, RenderTriangle[]>(),
+            new Dictionary<int, RenderTriangle[]>(),
+            new Dictionary<int, RenderTriangle[]>(),
+            new Dictionary<int, RenderTriangle[]>()
+        };
+
+
+        BlockModel cachedParent = null;
+
+        public RenderTriangle[] ToRenderTriangles(BlockData.BlockRotation rotation, int state)
+        {
+            int rotationI = ((int)rotation) / 90;
+            if (cachedStateAlternatives[rotationI].ContainsKey(state))
+            {
+                return cachedStateAlternatives[rotationI][state];
+            }
+            else
+            {
+                List<RenderTriangle> results = new List<RenderTriangle>();
+                if (parent != "")
+                {
+                    if (cachedParent == null)
+                    {
+                        cachedParent = FromJSONFilePath(parent);
+                    }
+                    results.AddRange(cachedParent.ToRenderTriangles(rotation, state));
+                }
+                foreach (BlockModelElement element in elements)
+                {
+                    element.rootModel = this;
+                    results.AddRange(element.ToRenderTriangles(rotation, state));
+                }
+
+                RenderTriangle[] actualResults = results.ToArray();
+                cachedStateAlternatives[rotationI][state] = actualResults;
+                return actualResults;
+            }
+        }
+
+        public RenderTriangle[] ToRenderTriangles(out bool dependsOnState, BlockData.BlockRotation rotation)
         {
             List<RenderTriangle> results = new List<RenderTriangle>();
 
+            dependsOnState = false;
             if (parent != "")
             {
-                results.AddRange(FromJSONFilePath(parent).ToRenderTriangles());
+                if (cachedParent != null)
+                {
+                    cachedParent = FromJSONFilePath(parent);
+                }
+                RenderTriangle[] parentRes = cachedParent.ToRenderTriangles(out dependsOnState, rotation);
+                if (parentRes != null)
+                {
+                    results.AddRange(parentRes);
+                }
             }
-            foreach (BlockModelElement element in elements)
+            if (!dependsOnState)
             {
-                element.rootModel = this;
-                results.AddRange(element.ToRenderTriangles());
+                foreach (BlockModelElement element in elements)
+                {
+                    if (element.DependsOnState())
+                    {
+                        dependsOnState = true;
+                    }
+                }
             }
-            return results.ToArray();
+            if (dependsOnState)
+            {
+                return null;
+            }
+            else
+            {
+                foreach (BlockModelElement element in elements)
+                {
+                    element.rootModel = this;
+                    results.AddRange(element.ToRenderTriangles(rotation));
+                }
+                return results.ToArray();
+            }
         }
-
-
     }
-
 }

@@ -6,6 +6,40 @@ using UnityEngine;
 
 namespace Blocks
 {
+
+    public class DoEveryMS
+    {
+        public long ms;
+        long randVariance = 0;
+        long timeWhenLastDid;
+        public DoEveryMS(long ms, long randVariance = 0)
+        {
+            this.ms = ms;
+            this.timeWhenLastDid = 0;
+        }
+
+        public bool Do()
+        {
+            long curTime = PhysicsUtils.millis();
+            if (curTime - timeWhenLastDid > ms)
+            {
+                timeWhenLastDid = curTime;
+
+                // randomly wait +- randVariance*[random value in 0-1] until the next
+                if (randVariance != 0)
+                {
+                    long randOff = (long)((Random.value * 2.0f - 1.0f) * randVariance);
+                    timeWhenLastDid += randOff;
+                }
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
     // This allows us to have a very large world while not having any rounding error worse than if we were in -16.0f to 16.0f
     // Unfortunately unity still requires us to output a floating point position for the camera, but internally we will work with this
     // We can get around unity's limitation by moving the world around, which while that is supported by moving the rendering root, I don't like it because multiplayer/multiple entities could cause weird issues

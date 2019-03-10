@@ -1,0 +1,28 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "ball": "Ball.png"
+    },
+    "elements": [
+        {   "from": [ 0, 0, 2 ],
+            "to": [ 16, 1, 14 ],
+            "shade": false,
+            "texture": "ball"
+        },
+        {   "from": [ 0, 1, 2 ],
+            "to": [ 16, 5, 3 ],
+            "shade": false,
+            "texture": "ball"
+        },
+        {   "from": [ 0, 1, 13 ],
+            "to": [ 16, 5, 14 ],
+            "shade": false,
+            "texture": "ball"
+        },
+        {   "fromVars": [ "state", "2", "5" ],
+            "toVars": [ "state+4", "6", "9" ],
+            "shade": false,
+            "texture": "ball"
+        }
+    ]
+}

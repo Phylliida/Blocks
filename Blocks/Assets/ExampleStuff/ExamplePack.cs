@@ -33,7 +33,7 @@ public class WaterSource : Block
 
     public override void OnTick(BlockData block)
     {
-        using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
+        using (BlockData below = GetBlockDataNotRelative(block.x, block.y - 1, block.z))
         {
             if (below.block == Example.Water || below.block == Example.WaterNoFlow)
             {
@@ -106,7 +106,7 @@ public class BallTrack : Block
         int state3 = block.animationState;
         if (state3 == onEnterNextOne)
         {
-            using (BlockData blockBelow = GetBlockData(block.x, block.y - 1, block.z))
+            using (BlockData blockBelow = GetBlockDataRelative(block, 0, -1, 0))
             {
                 if (blockBelow.block == Example.BallTrackEmpty)
                 {
@@ -128,9 +128,149 @@ public class BallTrack : Block
         }
         else
         {
-            block.animationState = (block.animationState + 1) % 24;
+            block.animationState = (short)((block.animationState + 1) % 24);
         }
 
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
+
+public class BallTrackHorizontalFull : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        //CreateBlockEntity(Example.BallTrackHorizontal, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = true;
+        int ballWidth = 4;
+        int trackSize = 16;
+
+        // ball goes from [state, state+4]
+        // if state == 12, ball it at edge (track is 16 wide)
+        // if state == 0, ball is at other edge
+        // thus, when going negative:
+
+        Debug.Log(block.animationState + " " + block.state + " " + (int)block.rotation);
+        if (block.state > 0)
+        {
+
+            // when going positive
+            //   [0                   < state <= trackSize-ballWidth]: moving like normal
+            //   [trackSize-ballWidth < state <= trackSize]:  only move more if we can move into neighboring one, also animate us moving into there. Otherwise, reverse direction 
+            //   [trackSize           < state]: we are no longer in this, move to neighbor
+
+
+            block.animationState += 1;
+
+            bool moveLikeNormal = 0 < block.animationState && block.animationState <= trackSize - ballWidth;
+            bool movingIntoNext = trackSize - ballWidth < block.animationState && block.animationState <= trackSize;
+            bool leftThingPos = trackSize < block.animationState;
+
+            if (moveLikeNormal)
+            {
+            }
+            else if(movingIntoNext || leftThingPos)
+            {
+                using (BlockData neighbor = GetBlockDataRelative(block, 0, 0,1))
+                {
+                    bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
+
+                    // we can't flow into neighbor, flip directions
+                    if (!canFlowIntoNeighbor)
+                    {
+                        block.animationState = (short)(trackSize - ballWidth - 1);
+                        Debug.Log("got to end 1, swapping");
+                        block.state = -block.state;
+                    }
+                    // we can flow into neighbor, continue going
+                    else
+                    {
+                        if (movingIntoNext)
+                        {
+                        }
+                        else if(leftThingPos)
+                        {
+                            neighbor.block = Example.BallTrackZFull;
+                            neighbor.animationState = 0;
+                            neighbor.state = block.state;
+                            block.block = Example.BallTrackZEmpty;
+                            block.animationState = 0;
+                            block.needsAnotherTick = false;
+                        }
+                    }
+                }
+            }
+            // none of the above, undo any changes
+            else
+            {
+                block.animationState -= 1;
+            }
+        }
+        else if(block.state < 0)
+        {
+            block.animationState -= 1;
+
+            //   [0          <= state < trackSize-ballWidth]: moving like normal
+            //   [-ballWidth <= state < 0]: only move more if we can move into neighboring one, also animate us moving into there. Otherwise, reverse direction
+            //   [             state < -ballWidth]: we are no longer in this, move to neighbor
+            bool moveLikeNormal = 0 <= block.animationState && block.animationState < trackSize - ballWidth;
+            bool movingIntoNext = -ballWidth <= block.animationState && block.animationState < 0;
+            bool leftThingPos = block.animationState < -ballWidth;
+
+            Debug.Log(moveLikeNormal + " " + movingIntoNext + " " + leftThingPos + " " + block.animationState);
+            if (moveLikeNormal)
+            {
+            }
+            else if (movingIntoNext || leftThingPos)
+            {
+                using (BlockData neighbor = GetBlockDataRelative(block, 0,0,-1))
+                {
+                    bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
+
+                    // we can't flow into neighbor, flip directions
+                    if (!canFlowIntoNeighbor)
+                    {
+                        block.animationState = 0;
+                        block.state = -block.state;
+                        Debug.Log("got to end 2, swapping");
+                    }
+                    // we can flow into neighbor, continue going
+                    else
+                    {
+                        if (movingIntoNext)
+                        {
+                        }
+                        else if (leftThingPos)
+                        {
+                            neighbor.block = Example.BallTrackZFull;
+                            neighbor.animationState = (short)(trackSize -ballWidth);
+                            neighbor.state = block.state;
+                            block.animationState = 0;
+                            block.block = Example.BallTrackZEmpty;
+                            block.needsAnotherTick = false;
+                        }
+                    }
+                }
+            }
+            // none of the above, undo any changes
+            else
+            {
+                block.animationState += 1;
+            }
+        }
+        else
+        {
+            block.state = 1;
+        }
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -156,7 +296,7 @@ public class SimpleWater : Block2
 
     bool IsWater(long x, long y, long z)
     {
-        BlockValue block = GetBlock(x, y, z);
+        BlockValue block = GetBlockNotRelative(x, y, z);
         return block == Example.Water || block == Example.WaterNoFlow;
     }
 
@@ -175,9 +315,9 @@ public class SimpleWater : Block2
         block.state = 0;
 
             // if air below, set below = water and us = air
-        if (GetBlock(block.x, block.y - 1, block.z) == Example.Air)
+        if (GetBlockNotRelative(block.x, block.y - 1, block.z) == Example.Air)
         {
-            SetBlock(block.x, block.y - 1, block.z, Example.Water);
+            SetBlockNotRelative(block.x, block.y - 1, block.z, Example.Water);
             block.block = Example.Air;
             return;
         }
@@ -186,9 +326,9 @@ public class SimpleWater : Block2
             // otherwise, look if air neighbors (or air neighbors of air neighbors one block out in a line) have air below them, if so flow into them
             foreach (BlockData neighbor in GetNeighbors(block, includingUp: false, includingDown: false))
             {
-                if (neighbor.block == Example.Air && GetBlock(neighbor.x, neighbor.y - 1, neighbor.z) == Example.Air)
+                if (neighbor.block == Example.Air && GetBlockNotRelative(neighbor.x, neighbor.y - 1, neighbor.z) == Example.Air)
                 {
-                    SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
+                    SetBlockNotRelative(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
                     block.block = Example.Air;
                     return;
                 }
@@ -219,19 +359,19 @@ public class Water : Block2
 
     bool IsWater(long x, long y, long z)
     {
-        BlockValue block = GetBlock(x, y, z);
+        BlockValue block = GetBlockNotRelative(x, y, z);
         return block == Example.Water || block == Example.WaterNoFlow;
     }
 
     public int GetNumAirNeighbors(long wx, long wy, long wz)
     {
         return
-            (GetBlock(wx + 1, wy, wz) == (int)Example.Air ? 1 : 0) +
-            (GetBlock(wx - 1, wy, wz) == (int)Example.Air ? 1 : 0) +
-            (GetBlock(wx, wy + 1, wz) == (int)Example.Air ? 1 : 0) +
-            (GetBlock(wx, wy - 1, wz) == (int)Example.Air ? 1 : 0) +
-            (GetBlock(wx, wy, wz + 1) == (int)Example.Air ? 1 : 0) +
-            (GetBlock(wx, wy, wz - 1) == (int)Example.Air ? 1 : 0);
+            (GetBlockNotRelative(wx + 1, wy, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlockNotRelative(wx - 1, wy, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlockNotRelative(wx, wy + 1, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlockNotRelative(wx, wy - 1, wz) == (int)Example.Air ? 1 : 0) +
+            (GetBlockNotRelative(wx, wy, wz + 1) == (int)Example.Air ? 1 : 0) +
+            (GetBlockNotRelative(wx, wy, wz - 1) == (int)Example.Air ? 1 : 0);
 
     }
 
@@ -265,8 +405,8 @@ public class Water : Block2
                 {
                     if (b == (int)Example.Air && by < block.y)
                     {
-                        SetBlock(bx, by, bz, Example.Water);
-                        SetState(bx, by, bz, GetNumAirNeighbors(bx, by, bz), BlockState.State);
+                        SetBlockNotRelative(bx, by, bz, Example.Water);
+                        SetStateNotRelative(bx, by, bz, GetNumAirNeighbors(bx, by, bz), BlockState.State);
                         return true;
                     }
                     return false;
@@ -288,11 +428,11 @@ public class Water : Block2
         {
 
             // if air below, set below = water and us = air
-            if (GetBlock(block.x, block.y-1, block.z) == Example.Air)
+            if (GetBlockNotRelative(block.x, block.y-1, block.z) == Example.Air)
             {
-                SetBlock(block.x, block.y-1, block.z, Example.Water);
+                SetBlockNotRelative(block.x, block.y-1, block.z, Example.Water);
                 block.state = 0;
-                SetState(block.x, block.y - 1, block.z, GetNumAirNeighbors(block.x, block.y - 1, block.z), BlockState.State); // +1 because we are now air instead of water
+                SetStateNotRelative(block.x, block.y - 1, block.z, GetNumAirNeighbors(block.x, block.y - 1, block.z), BlockState.State); // +1 because we are now air instead of water
                 block.block = Example.Air;
                 world.AddBlockUpdateToNeighbors(block.x, block.y + 1, block.z);
                 world.AddBlockUpdateToNeighbors(block.x, block.y, block.z);
@@ -307,18 +447,18 @@ public class Water : Block2
                     LVector3 pos2 = 2 * (neighbor.pos - block.pos) + block.pos;
                     if (neighbor.block == Example.Air)
                     {
-                        if (GetBlock(neighbor.x, neighbor.y-1, neighbor.z) == Example.Air)
+                        if (GetBlockNotRelative(neighbor.x, neighbor.y-1, neighbor.z) == Example.Air)
                         {
-                            SetBlock(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
-                            SetState(neighbor.x, neighbor.y - 1, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y-1, neighbor.z), BlockState.State);
+                            SetBlockNotRelative(neighbor.x, neighbor.y - 1, neighbor.z, Example.Water);
+                            SetStateNotRelative(neighbor.x, neighbor.y - 1, neighbor.z, GetNumAirNeighbors(neighbor.x, neighbor.y-1, neighbor.z), BlockState.State);
                             block.state = 0;
                             block.block = Example.Air;
                             return;
                         }
-                        else if (pos2.BlockV == Example.Air && GetBlock(pos2.x, pos2.y - 1, pos2.z) == Example.Air)
+                        else if (pos2.BlockV == Example.Air && GetBlockNotRelative(pos2.x, pos2.y - 1, pos2.z) == Example.Air)
                         {
-                            SetBlock(pos2.x, pos2.y - 1, pos2.z, Example.Water);
-                            SetState(pos2.x, pos2.y - 1, pos2.z, GetNumAirNeighbors(pos2.x, pos2.y - 1, pos2.z), BlockState.State);
+                            SetBlockNotRelative(pos2.x, pos2.y - 1, pos2.z, Example.Water);
+                            SetStateNotRelative(pos2.x, pos2.y - 1, pos2.z, GetNumAirNeighbors(pos2.x, pos2.y - 1, pos2.z), BlockState.State);
                             block.state = 0;
                             block.block = Example.Air;
                             return;
@@ -355,8 +495,8 @@ public class Water : Block2
                         {
                             if (b == (int)Example.WaterNoFlow && IsWater(bx, by - 1, bz) && airNeighbor.y < by)
                             {
-                                SetBlock(bx, by, bz, Example.Air);
-                                SetState(bx, by, bz, 0, BlockState.State);
+                                SetBlockNotRelative(bx, by, bz, Example.Air);
+                                SetStateNotRelative(bx, by, bz, 0, BlockState.State);
                                 return true;
                             }
                             return false;
@@ -364,8 +504,8 @@ public class Water : Block2
                     ))
                     {
 
-                        SetBlock(airNeighbor.x, airNeighbor.y, airNeighbor.z, Example.Water);
-                        SetState(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), BlockState.State);
+                        SetBlockNotRelative(airNeighbor.x, airNeighbor.y, airNeighbor.z, Example.Water);
+                        SetStateNotRelative(airNeighbor.x, airNeighbor.y, airNeighbor.z, GetNumAirNeighbors(airNeighbor.x, airNeighbor.y, airNeighbor.z), BlockState.State);
                         block.state = curNumAirNeighbors - 1; // we just replaced an air neighbor with water
                         block.needsAnotherTick = true;
                         return;
@@ -417,7 +557,7 @@ public class Grass : Block2
         long state2 = block.lightingState;
         long state3 = block.animationState;
         block.needsAnotherTick = false;
-        if (GetBlock(block.x, block.y+1, block.z) != Example.Air)
+        if (GetBlockNotRelative(block.x, block.y+1, block.z) != Example.Air)
         {
             block.block = Example.Dirt;
             return;
@@ -425,7 +565,7 @@ public class Grass : Block2
         foreach (BlockData neighbor in Get26Neighbors(block))
         {
             // if neighbor is dirt and it has air above it, try growing into it
-            if (neighbor.block == Example.Dirt && GetBlock(neighbor.x, neighbor.y + 1, neighbor.z) == Example.Air)
+            if (neighbor.block == Example.Dirt && GetBlockNotRelative(neighbor.x, neighbor.y + 1, neighbor.z) == Example.Air)
             {
                 if (rand() < 0.5f)
                 {
@@ -713,7 +853,7 @@ public class Barrel : BlockWithInventory
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        CreateBlockEntity(Example.Barrel, positionOfBlock);
+        //CreateBlockEntity(Example.Barrel, positionOfBlock);
         destroyBlock = true;
     }
 
@@ -870,7 +1010,7 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Axe, new SimpleItem(), 1);
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
         AddCustomBlock(Example.Chest, new Chest(), 64);
-        AddCustomBlock(Example.Barrel, new Barrel(), 64);
+        //AddCustomBlock(Example.Barrel, new Barrel(), 64);
         AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
         AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
@@ -879,7 +1019,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Water, new SimpleWater(), 64);
         AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
         AddCustomBlock(Example.Lava, new Lava(), 64);
-        AddCustomBlock(Example.BallTrack, new BallTrack(), 64);
+        AddCustomBlock(Example.BallTrackZFull, new BallTrackHorizontalFull(), 64);
+        AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(0.2f), 64);
         AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 
@@ -897,12 +1038,14 @@ public class ExamplePack : BlocksPack {
         }, new BlockStack(Example.Chest, 1)));
 
 
+        
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {
             { Example.Air, Example.Trunk,  Example.Air},
             { Example.Trunk, Example.Air, Example.Trunk },
             { Example.Air, Example.Trunk, Example.Air }
         }, new BlockStack(Example.Barrel, 1)));
+        
 
         AddCustomRecipe(new Recipe(new BlockValue[,]
         {

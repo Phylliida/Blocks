@@ -4,8 +4,12 @@ namespace Example_pack {
     public class Example : BlockCollection
     {
         public static BlockValue Axe = new BlockValue(true, "Axe", "Example");
-        public static BlockValue BallTrack = new BlockValue(false, "BallTrack", "Example");
+        public static BlockValue BallTrack = new BlockValue(true, "BallTrack", "Example");
         public static BlockValue BallTrackEmpty = new BlockValue(false, "BallTrackEmpty", "Example");
+        public static BlockValue BallTrackXEmpty = new BlockValue(true, "BallTrackXEmpty", "Example");
+        public static BlockValue BallTrackXFull = new BlockValue(true, "BallTrackXFull", "Example");
+        public static BlockValue BallTrackZEmpty = new BlockValue(true, "BallTrackZEmpty", "Example");
+        public static BlockValue BallTrackZFull = new BlockValue(true, "BallTrackZFull", "Example");
         public static BlockValue Bark = new BlockValue(false, "Bark", "Example");
         public static BlockValue Barrel = new BlockValue(true, "Barrel", "Example");
         public static BlockValue Bedrock = new BlockValue(false, "Bedrock", "Example");

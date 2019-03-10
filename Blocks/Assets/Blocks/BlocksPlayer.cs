@@ -271,6 +271,24 @@ namespace Blocks
                 }
             }
 
+
+            if (Input.GetMouseButtonDown(2) && showingHotbarOnly)
+            {
+                RaycastResults hitResults;
+
+                if (PhysicsUtils.MouseCast(mainCamera, 0.1f, reachRange * World.mainWorld.worldScale, out hitResults))
+                {
+                    using (BlockData middleClickedOnBlock = World.mainWorld.GetBlockData(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z))
+                    {
+                        int rotAngle = (int)middleClickedOnBlock.rotation;
+                        int oldAngle = rotAngle;
+                        rotAngle = (rotAngle + 90) % 360;
+                        middleClickedOnBlock.rotation = (BlockData.BlockRotation)rotAngle;
+                        Debug.Log("rotating spooker from old rotation of " + oldAngle + " and spooker of " + hitResults.hitBlock + " to new rotation of " + rotAngle + " which is actually " + (BlockData.BlockRotation)rotAngle);
+                    }
+                }
+            }
+
             if (Input.GetMouseButtonDown(1) && showingHotbarOnly)
             {
                 //Debug.Log("made click");

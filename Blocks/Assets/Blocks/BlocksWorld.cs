@@ -1338,7 +1338,116 @@ namespace Blocks
 
         public int state { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState1) { cachedState1 = GetState(wx, wy, wz, cx, cy, cz, BlockState.State); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state) { wasModified = true; cachedState1 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.State); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
         public int lightingState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState2) { cachedState2 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != lightingState) { wasModified = true; cachedState2 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
-        public int animationState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState) { wasModified = true; cachedState3 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+        int animationState_ { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState_) { wasModified = true; cachedState3 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+
+
+
+        public short animationState {
+            get {
+                int a, b;
+                UnpackValuesFromInt(animationState_, out a, out b);
+                return (short)a;
+            }
+            set {
+                animationState_ = PackTwoValuesIntoInt((int)value, (int)rotationState_);
+            }
+        }
+        short rotationState_
+        {
+            get
+            {
+                int a, b;
+                UnpackValuesFromInt(animationState_, out a, out b);
+                return (short)b;
+            }
+            set
+            {
+                animationState_ = PackTwoValuesIntoInt((int)animationState, (int)value);
+            }
+        }
+
+        public static int PackTwoValuesIntoInt(int a, int b)
+        {
+            ushort sa = (ushort)a;
+            ushort sb = (ushort)b;
+            uint ua = sa;
+            uint ub = sb;
+            uint res = (ua << 16) | ub;
+
+            return (int)res;
+        }
+
+        public static void UnpackValuesFromInt(int x, out int a, out int b)
+        {
+            uint ux = (uint)x;
+
+            ushort ua = (ushort)(ux >> 16);
+            ushort ub = (ushort)(ux & 0xFFFFF);
+            short sa = (short)ua;
+            short sb = (short)ub;
+
+            a = (int)sa;
+            b = (int)sb;
+            
+        }
+
+
+        /// <summary>
+        /// Degrees counterclockwise (with respect to looking down) around the y axis 
+        /// </summary>
+        public enum BlockRotation
+        {
+            /// <summary>
+            /// Applies no rotation
+            /// </summary>
+            Degrees0=0,
+            /// <summary>
+            /// Causes newX = oldZ
+            /// newZ = -oldX
+            /// </summary>
+            Degrees90=90,
+            /// <summary>
+            /// Causes newX = -oldX
+            /// newZ = -oldZ
+            /// </summary>
+            Degrees180 = 180,
+            /// <summary>
+            /// Causes newX = -oldZ
+            /// newZ = oldX
+            /// </summary>
+            Degrees270 = 270
+        }
+
+
+        // because first 16 bits are anim state, second 16 bits are 
+        public static BlockRotation RotationFromRawAnimInt(int animInt)
+        {
+            int a, b;
+            UnpackValuesFromInt(animInt, out a, out b);
+            return (BlockRotation)(b);
+        }
+
+        public static short AnimStateFromRawAnimInt(int animInt)
+        {
+            int a, b;
+            UnpackValuesFromInt(animInt, out a, out b);
+            return (short)a;
+        }
+
+
+        // degrees clockwise facing up around the y axis.
+        public BlockRotation rotation
+        {
+            get
+            {
+                return (BlockRotation)(int)(rotationState_);
+            }
+            set
+            {
+                rotationState_ = (short)((int)value);
+            }
+        }
+
         public BlockValue block { get { if (!isGenerated) { return BlockValue.Wildcard; } if (world.blockModifyState != curBlockModifyStateBlock) { cachedBlock = GetBlock(wx, wy, wz, cx, cy, cz); curBlockModifyStateBlock = world.blockModifyState; } return cachedBlock; } set { if (value != block) { wasModified = true; cachedBlock = value; SetBlock(wx, wy, wz, cx, cy, cz,value); curBlockModifyStateBlock = world.blockModifyState; CheckLocalStates(); } } }
         //public int state2 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 2); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 2) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 2); curBlockModifyState = world.blockModifyState; } } }
         //public int state3 { get { return world.GetState(wx, wy, wz, cx, cy, cz, 3); } set { if (curBlockModifyState != world.blockModifyState && world.GetState(wx, wy, wz, cx, cy, cz, 3) != value) { wasModified = true; world.SetState(wx, wy, wz, cx, cy, cz, value, 3); curBlockModifyState = world.blockModifyState; } } }
@@ -1458,6 +1567,125 @@ namespace Blocks
         }
     }
 
+
+    public class RelativeBlockDataGetter
+    {
+
+        public World world;
+        public BlockGetter blockGetter;
+        public RelativeBlockDataGetter(World world, BlockGetter blockGetter)
+        {
+            this.world = world;
+            this.blockGetter = blockGetter;
+        }
+
+        public RelativeBlockDataGetter()
+        {
+            this.world = World.mainWorld;
+            this.blockGetter = World.mainWorld;
+        }
+
+        void GetWorldCoordinatesFromRelativeCoordinates(BlockData block, long relativeX, long relativeY, long relativeZ, out long x, out long y, out long z)
+        {
+            if (block.rotation == BlockData.BlockRotation.Degrees0)
+            {
+                x = block.x + relativeX;
+                y = block.y + relativeY;
+                z = block.z + relativeZ;
+            }
+            else if(block.rotation == BlockData.BlockRotation.Degrees90)
+            {
+                x = block.x - relativeZ;
+                y = block.y + relativeY;
+                z = block.z + relativeX;
+            }
+            else if(block.rotation == BlockData.BlockRotation.Degrees180)
+            {
+                x = block.x - relativeX;
+                y = block.y + relativeY;
+                z = block.z - relativeZ;
+            }
+
+            else if (block.rotation == BlockData.BlockRotation.Degrees270)
+            {
+                x = block.x + relativeZ;
+                y = block.y + relativeY;
+                z = block.z - relativeX;
+            }
+            else
+            {
+                x = block.x + relativeX;
+                y = block.y + relativeY;
+                z = block.z + relativeZ;
+            }
+        }
+
+        public BlockValue GetBlockRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ)
+        {
+            long x, y, z;
+            GetWorldCoordinatesFromRelativeCoordinates(relativeTo, relativeX, relativeY, relativeZ, out x, out y, out z);
+            //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
+            return GetBlockNotRelative(x, y, z);
+        }
+
+        public BlockValue GetBlockNotRelative(long x, long y, long z)
+        {
+            return blockGetter[x, y, z];
+        }
+
+        public void SetBlockRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ, BlockValue value)
+        {
+            long x, y, z;
+            GetWorldCoordinatesFromRelativeCoordinates(relativeTo, relativeX, relativeY, relativeZ, out x, out y, out z);
+            //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
+            SetBlockNotRelative(x, y, z, value);
+        }
+
+        public void SetBlockNotRelative(long x, long y, long z, BlockValue value)
+        {
+            blockGetter[x, y, z] = (int)value;
+        }
+
+        public int GetStateRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ, BlockState stateType)
+        {
+            long x, y, z;
+            GetWorldCoordinatesFromRelativeCoordinates(relativeTo, relativeX, relativeY, relativeZ, out x, out y, out z);
+            //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
+            return GetStateNotRelative(x, y, z, stateType);
+        }
+
+        public int GetStateNotRelative(long x, long y, long z, BlockState stateType)
+        {
+            return blockGetter.GetState(x, y, z, stateType);
+        }
+
+        public void SetStateRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ, int state, BlockState stateType)
+        {
+            long x, y, z;
+            GetWorldCoordinatesFromRelativeCoordinates(relativeTo, relativeX, relativeY, relativeZ, out x, out y, out z);
+            //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
+            SetStateNotRelative(x, y, z, state, stateType);
+        }
+
+        public void SetStateNotRelative(long x, long y, long z, int state, BlockState stateType)
+        {
+            blockGetter.SetState(x, y, z, state, stateType);
+        }
+
+        public BlockData GetBlockDataRelative(BlockData relativeTo, long relativeX, long relativeY, long relativeZ)
+        {
+            long x, y, z;
+            GetWorldCoordinatesFromRelativeCoordinates(relativeTo, relativeX, relativeY, relativeZ, out x, out y, out z);
+            //PhysicsUtils.ModPos(x, y, z, out x, out y, out z);
+            return GetBlockDataNotRelative(x, y, z);
+        }
+
+        public BlockData GetBlockDataNotRelative(long x, long y, long z)
+        {
+            return blockGetter.GetBlockData(x, y, z);
+        }
+    }
+
     public abstract class StaticBlock : Block
     {
         public override void OnTick(BlockData block)
@@ -1567,7 +1795,7 @@ namespace Blocks
         }
     }
 
-    public abstract class BlockOrItem : BlockDataGetter
+    public abstract class BlockOrItem : RelativeBlockDataGetter
     {
         public float rand()
         {
@@ -1585,11 +1813,11 @@ namespace Blocks
             }
             if (includingUp)
             {
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z)) yield return n;
             }
             if (includingDown)
             {
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z)) yield return n;
             }
         }
 
@@ -1599,31 +1827,31 @@ namespace Blocks
             globalPreference = (globalPreference + 1) % 4;
             if (globalPreference == 0)
             {
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
             }
             else if (globalPreference == 1)
             {
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
             }
             else if (globalPreference == 2)
             {
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
             }
             else if (globalPreference == 3)
             {
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
             }
         }
 
@@ -1632,148 +1860,148 @@ namespace Blocks
             globalPreference = (globalPreference + 1) % 4;
             if (globalPreference == 0)
             {
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z - 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
-
-
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z)) yield return n;
 
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z - 1)) yield return n;
+
+
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z - 1)) yield return n;
             }
             else if (globalPreference == 1)
             {
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z + 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
-
-
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z)) yield return n;
 
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z + 1)) yield return n;
+
+
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z + 1)) yield return n;
             }
             else if (globalPreference == 2)
             {
 
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z + 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
-
-
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z)) yield return n;
 
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z + 1)) yield return n;
+
+
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z + 1)) yield return n;
             }
             else if (globalPreference == 3)
             {
-                using (BlockData n = GetBlockData(block.x, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y, block.z + 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y, block.z - 1)) yield return n;
 
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z)) yield return n;
-
-
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z)) yield return n;
 
 
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y - 1, block.z + 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x + 1, block.y + 1, block.z - 1)) yield return n;
-                using (BlockData n = GetBlockData(block.x - 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x, block.y + 1, block.z - 1)) yield return n;
+
+
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y - 1, block.z + 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x + 1, block.y + 1, block.z - 1)) yield return n;
+                using (BlockData n = GetBlockDataNotRelative(block.x - 1, block.y + 1, block.z - 1)) yield return n;
             }
         }
 
@@ -2032,6 +2260,7 @@ namespace Blocks
     public class Chunk
     {
 
+        public DoEveryMS needToDoAnotherTick = new DoEveryMS(10);
         public List<PathingNode> pathingNodes = new List<PathingNode>();
         public List<PathingChunk> pathingChunks = new List<PathingChunk>();
         public bool mustRenderMe = false;
@@ -2467,8 +2696,8 @@ namespace Blocks
                 Chunk newValidOne = chunkData.attachedChunks[randomGen.Next(0, Mathf.Min(maxNews, chunkData.attachedChunks.Count))];
 
                 // this ordering of these two statements is important because newValidOne could be us
-                this.valid = false;
-                newValidOne.valid = true;
+                //this.valid = false;
+                //newValidOne.valid = true;
 
             }
             valid = true;
@@ -2644,18 +2873,21 @@ namespace Blocks
             }
         }
 
-        public bool Tick(bool allowGenerate, ref int maxMillisInFrame)
+        public bool Tick(long frameId, bool allowGenerate, bool allowTick, ref int maxMillisInFrame)
         {
+
+            needToDoAnotherTick.ms = (int)(1000.0 / world.blocksWorld.ticksPerSecond);
             if (cleanedUp)
             {
                 Debug.LogWarning("Chunk " + cx + " " + cy + " " + cz + " is already cleaned up, and yet is having Tick() ran on it, did you forget to remove the reference somewhere?");
+                return false;
             }
             bool didGenerate = false;
             if (generating)
             {
                 if (allowGenerate)
                 {
-
+                    this.TickStart(frameId);
                     Generate();
                     this.chunkRenderer.Tick();
                     return true;
@@ -2669,13 +2901,20 @@ namespace Blocks
                 generating = false;
             }
 
-            this.chunkRenderer.Tick();
-
-
             if (!valid)
             {
-                return false;
+                //return false;
             }
+
+            this.chunkRenderer.Tick();
+
+            if (!allowTick || !needToDoAnotherTick.Do())
+            {
+                return didGenerate;
+            }
+
+            this.TickStart(frameId);
+
 
             int numLightUpdated = 0;
             if (chunkData.blocksNeedUpdating.Count != 0)
@@ -3113,6 +3352,10 @@ namespace Blocks
             long ind = to1D(i, j, k);
             if (data[ind * 4 + (int)stateType] != state)
             {
+                if (stateType == BlockState.Animation)
+                {
+                }
+                needToBeUpdated = true;
                 //needToBeUpdated = true;
             }
             //if (forceBlockUpdate || data[ind*4+(int)stateType] != state)
@@ -4022,28 +4265,61 @@ namespace Blocks
             chunkProperties.AddChunkPropertyEvent(chunkPropertyEvent);
         }
 
-        Dictionary<BlockValue, RenderTriangle[]> blockCustomTriangles = new Dictionary<BlockValue, RenderTriangle[]>();
+        Dictionary<BlockValue, RenderTriangle[]>[] blockCustomTriangles = new Dictionary<BlockValue, RenderTriangle[]>[] {
+            new Dictionary<BlockValue, RenderTriangle[]>(),
+            new Dictionary<BlockValue, RenderTriangle[]>(),
+            new Dictionary<BlockValue, RenderTriangle[]>(),
+            new Dictionary<BlockValue, RenderTriangle[]>()
+        };
+        Dictionary<BlockValue, BlockModel>[] blockCustomTrianglesDependsOnState = new Dictionary<BlockValue, BlockModel>[]
+        {
+            new Dictionary<BlockValue, BlockModel>(),
+            new Dictionary<BlockValue, BlockModel>(),
+            new Dictionary<BlockValue, BlockModel>(),
+            new Dictionary<BlockValue, BlockModel>()
+        };
 
 
-        public RenderTriangle[] defaultCubeTris
+        public static RenderTriangle[] defaultCubeTris
         {
             get
             {
-                return blocksWorld.cubeTris;
+                if (World.mainWorld != null && World.mainWorld.blocksWorld.cubeTris != null)
+                {
+                    return World.mainWorld.blocksWorld.cubeTris;
+                }
+                else
+                {
+                    return BlocksWorld.GetDefaultCubeTris();
+                }
             }
-            set
+            private set
             {
-                blocksWorld.cubeTris = value;
+                
             }
         }
 
 
-        public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, RenderTriangle template, Vector3 blockPos, Matrix4x4 localToWorldMat)
+        public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, int animInt, RenderTriangle template, Vector3 blockPos, Matrix4x4 localToWorldMat)
         {
-            RenderTriangle[] blockTris;
-            if (blockCustomTriangles.ContainsKey(blockId))
+
+            BlockData.BlockRotation rotation = BlockData.RotationFromRawAnimInt(animInt);
+            int rotationI = ((int)rotation)/90;
+            int state = BlockData.AnimStateFromRawAnimInt(animInt);
+
+            if ((int)rotation != 0)
             {
-                blockTris = blockCustomTriangles[blockId];
+                Debug.Log("got other rotation of " + (int)rotation + " with rotation i " + rotationI);
+            }
+
+            RenderTriangle[] blockTris;
+            if (blockCustomTriangles[rotationI].ContainsKey(blockId))
+            {
+                blockTris = blockCustomTriangles[rotationI][blockId];
+            }
+            else if (blockCustomTrianglesDependsOnState[rotationI].ContainsKey(blockId))
+            {
+                blockTris = blockCustomTrianglesDependsOnState[rotationI][blockId].ToRenderTriangles(rotation, state);
             }
             else
             {
@@ -4309,11 +4585,30 @@ namespace Blocks
             World.mainWorld = this;
             this.blocksWorld = blocksWorld;
 
+            BlockData.BlockRotation[] rotations = new BlockData.BlockRotation[]
+            {
+                BlockData.BlockRotation.Degrees0,
+                BlockData.BlockRotation.Degrees90,
+                BlockData.BlockRotation.Degrees180,
+                BlockData.BlockRotation.Degrees270
+            };
 
 
             foreach (KeyValuePair<BlockValue, BlockModel> blockModel in BlockValue.customModels)
             {
-                this.blockCustomTriangles[blockModel.Key] = blockModel.Value.ToRenderTriangles();
+                bool dependsOnState = false;
+                for (int i = 0; i < rotations.Length; i++)
+                {
+                    RenderTriangle[] blockTriangles = blockModel.Value.ToRenderTriangles(out dependsOnState, rotations[i]);
+                    if (dependsOnState)
+                    {
+                        this.blockCustomTrianglesDependsOnState[i][blockModel.Key] = blockModel.Value;
+                    }
+                    else
+                    {
+                        this.blockCustomTriangles[i][blockModel.Key] = blockTriangles;
+                    }
+                }
             }
 
 
@@ -6053,6 +6348,7 @@ namespace Blocks
         }
 
 
+
         public bool playerMovedChunks = false;
         long frameId = 0;
         public long frameTimeStart = 0;
@@ -6069,6 +6365,7 @@ namespace Blocks
 
             // Randomly shuffle the order we update the chunks in, for the memes when they are tiled procedurally
             //Shuffle(allChunksHere);
+
 
             frameTimeStart = PhysicsUtils.millis();
             numBlockUpdatesThisTick = 0;
@@ -6089,26 +6386,26 @@ namespace Blocks
                 LVector3 playerPos = LVector3.FromUnityVector3(playerPosition);
 
                 Chunk playerChunk = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z);
-                RunTick(playerChunk, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunk, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkBelow = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y-chunkSize, playerPos.z);
-                RunTick(playerChunkBelow, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkBelow, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
                 Chunk playerChunkAbove = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y + chunkSize, playerPos.z);
-                RunTick(playerChunkAbove, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkAbove, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkX = GetOrGenerateChunkAtPos(playerPos.x + chunkSize, playerPos.y, playerPos.z);
-                RunTick(playerChunkX, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkX, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkX2 = GetOrGenerateChunkAtPos(playerPos.x - chunkSize, playerPos.y, playerPos.z);
-                RunTick(playerChunkX2, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkX2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkZ = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z+chunkSize);
-                RunTick(playerChunkZ, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkZ, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSize);
-                RunTick(playerChunkZ2, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkZ2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
 
@@ -6192,7 +6489,7 @@ namespace Blocks
                     break;
                 }
                 chunkI += 1;
-                RunTick(chunk, allowGenerate, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(chunk, allowGenerate, true, ref maxTickSteps, ref numGenerated, maxGenerating);
             }
             if (!bailed)
             {
@@ -6201,10 +6498,9 @@ namespace Blocks
         }
 
 
-        public void RunTick(Chunk chunk, bool allowGenerate, ref int maxTickSteps, ref int numGenerated, int maxGenerating)
+        public void RunTick(Chunk chunk, bool allowGenerate, bool allowTick, ref int maxTickSteps, ref int numGenerated, int maxGenerating)
         {
-            chunk.TickStart(frameId);
-            if (chunk.Tick(allowGenerate, ref maxTickSteps))
+            if (chunk.Tick(frameId, allowGenerate, allowTick, ref maxTickSteps))
             {
                 numGenerated += 1;
                 if (numGenerated > maxGenerating)
@@ -6825,9 +7121,16 @@ namespace Blocks
                     {
                         blockModel = BlockModel.FromJSONFilePath(blockModelPath);
                         blockCustomModelTexturePaths = blockModel.GetTexturePaths();
+                        bool dependsOnState;
+                        blockModel.ToRenderTriangles(out dependsOnState, BlockData.BlockRotation.Degrees0); // just for testing
+
+                        if (dependsOnState)
+                        {
+                            blockModel.ToRenderTriangles(BlockData.BlockRotation.Degrees0, 0); // just for testing
+                        }
 
                         // successfully parsed
-                        Debug.Log("successfully processed model for block " + blockName + " with model path " + blockModelPath + " and " + blockCustomModelTexturePaths.Length + " textures");
+                        Debug.Log("successfully processed model for block " + blockName + " with model path " + blockModelPath + " and " + blockCustomModelTexturePaths.Length + " textures with depends on state " + dependsOnState);
                         isValid = true;
                         hasCustomModel = true;
                         isTransparent = true;
@@ -6994,7 +7297,7 @@ namespace Blocks
         public ComputeBuffer blockBreakingBuffer;
         public static Mesh blockMesh;
 
-        public float ApplyEpsPerturb(float val, float eps)
+        public static float ApplyEpsPerturb(float val, float eps)
         {
             if (val == 0)
             {
@@ -7011,7 +7314,7 @@ namespace Blocks
         }
 
         // shifts [0,1] to [eps, 1-eps] so rendering won't show the neighboring textures due to rounding errors
-        public Vector3 ApplyEpsPerturb(Vector3 offset, float eps)
+        public static Vector3 ApplyEpsPerturb(Vector3 offset, float eps)
         {
             return new Vector3(ApplyEpsPerturb(offset.x, eps), ApplyEpsPerturb(offset.y, eps), ApplyEpsPerturb(offset.z, eps));
         }
@@ -7019,7 +7322,7 @@ namespace Blocks
         public RenderTriangle[] cubeTris;
         
         
-        Float4 MakeFloat4(float x, float y, float z, float w)
+        static Float4 MakeFloat4(float x, float y, float z, float w)
         {
             Float4 res = new Float4
             {
@@ -7032,7 +7335,7 @@ namespace Blocks
         }
 
 
-        Float2 MakeFloat2(float x, float y)
+        static Float2 MakeFloat2(float x, float y)
         {
             Float2 res = new Float2
             {
@@ -7044,6 +7347,180 @@ namespace Blocks
 
 
         ComputeBuffer helperForCustomBlocks;
+
+
+        public static RenderTriangle[] GetDefaultCubeTris()
+        {
+            float epsPerturb = 1.0f / 64.0f;
+            float[] texOffsets = new float[36 * 4];
+            float[] vertNormals = new float[36 * 4];
+            List<Vector2> texOffsetsGood = new List<Vector2>();
+            List<Vector3> vertOffsetsGood = new List<Vector3>();
+            List<RenderTriangle> defaultCubeTris = new List<RenderTriangle>();
+
+            RenderTriangle curCubeTri = new RenderTriangle();
+            float[] triOffsets = new float[36 * 4];
+            for (int i = 0; i < 36; i++)
+            {
+                Vector3 offset = Vector3.zero;
+                Vector3 texOffset = Vector2.zero;
+                Vector3 normal = Vector3.one.normalized;
+                switch (i)
+                {
+                    // bottom, top
+                    // left, right
+                    // front, back
+
+                    // bottom
+                    case 0: offset = new Vector3(1, 0, 1); break;
+                    case 1: offset = new Vector3(1, 0, 0); break;
+                    case 2: offset = new Vector3(0, 0, 0); break;
+                    case 3: offset = new Vector3(0, 0, 0); break;
+                    case 4: offset = new Vector3(0, 0, 1); break;
+                    case 5: offset = new Vector3(1, 0, 1); break;
+
+                    // top
+                    case 6: offset = new Vector3(0, 1, 0); break;
+                    case 7: offset = new Vector3(1, 1, 0); break;
+                    case 8: offset = new Vector3(1, 1, 1); break;
+                    case 9: offset = new Vector3(1, 1, 1); break;
+                    case 10: offset = new Vector3(0, 1, 1); break;
+                    case 11: offset = new Vector3(0, 1, 0); break;
+
+                    // left
+                    case 12: offset = new Vector3(1, 1, 0); break;
+                    case 13: offset = new Vector3(0, 1, 0); break;
+                    case 14: offset = new Vector3(0, 0, 0); break;
+                    case 15: offset = new Vector3(1, 0, 0); break;
+                    case 16: offset = new Vector3(1, 1, 0); break;
+                    case 17: offset = new Vector3(0, 0, 0); break;
+
+                    // right
+                    case 18: offset = new Vector3(0, 0, 1); break;
+                    case 19: offset = new Vector3(0, 1, 1); break;
+                    case 20: offset = new Vector3(1, 1, 1); break;
+                    case 21: offset = new Vector3(0, 0, 1); break;
+                    case 22: offset = new Vector3(1, 1, 1); break;
+                    case 23: offset = new Vector3(1, 0, 1); break;
+
+                    // forward
+                    case 24: offset = new Vector3(0, 0, 0); break;
+                    case 25: offset = new Vector3(0, 1, 0); break;
+                    case 26: offset = new Vector3(0, 1, 1); break;
+                    case 27: offset = new Vector3(0, 0, 0); break;
+                    case 28: offset = new Vector3(0, 1, 1); break;
+                    case 29: offset = new Vector3(0, 0, 1); break;
+                    // back
+                    case 30: offset = new Vector3(1, 1, 1); break;
+                    case 31: offset = new Vector3(1, 1, 0); break;
+                    case 32: offset = new Vector3(1, 0, 0); break;
+                    case 33: offset = new Vector3(1, 0, 1); break;
+                    case 34: offset = new Vector3(1, 1, 1); break;
+                    case 35: offset = new Vector3(1, 0, 0); break;
+                }
+
+
+
+
+                // bottom
+                float texX = 0.0f;
+                float texY = 0.0f;
+
+                Vector3 offsetForTex = ApplyEpsPerturb(offset, epsPerturb);
+
+
+                if (i >= 0 && i <= 5)
+                {
+                    texX = offsetForTex.x + 1.0f;
+                    texY = offsetForTex.z + 2.0f;
+                    normal = new Vector3(0, -1, 0);
+                }
+                // top
+                else if (i >= 6 && i <= 11)
+                {
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.z + 2.0f;
+                    normal = new Vector3(0, 1, 0);
+                }
+                // left
+                else if (i >= 12 && i <= 17)
+                {
+                    texX = offsetForTex.x;
+                    texY = offsetForTex.y + 1.0f;
+                    normal = new Vector3(0, 0, -1);
+                }
+                // right
+                else if (i >= 18 && i <= 23)
+                {
+                    texX = offsetForTex.x + 1.0f;
+                    texY = offsetForTex.y + 1.0f;
+                    normal = new Vector3(0, 0, 1);
+                }
+                // forward
+                else if (i >= 24 && i <= 29)
+                {
+                    texX = offsetForTex.z;
+                    texY = offsetForTex.y;
+                    normal = new Vector3(-1, 0, 0);
+                }
+                // back
+                else if (i >= 30 && i <= 35)
+                {
+                    texX = offsetForTex.z + 1.0f;
+                    texY = offsetForTex.y;
+                    normal = new Vector3(1, 0, 0);
+                }
+                texOffset = new Vector2(texX, texY);
+                triOffsets[i * 4] = offset.x;
+                triOffsets[i * 4 + 1] = offset.y;
+                triOffsets[i * 4 + 2] = offset.z;
+                triOffsets[i * 4 + 3] = 0;
+
+                texOffsets[i * 4] = texOffset.x / 2.0f;
+                texOffsets[i * 4 + 1] = texOffset.y / (float)World.numBlocks;
+                texOffsets[i * 4 + 2] = 0;
+                texOffsets[i * 4 + 3] = 0;
+
+
+
+                vertNormals[i * 4] = normal.x;
+                vertNormals[i * 4 + 1] = normal.y;
+                vertNormals[i * 4 + 2] = normal.z;
+                vertNormals[i * 4 + 3] = 0.0f;
+
+                Vector2 resTexOffset = new Vector2(texOffset.x / 2.0f, texOffset.y / 3.0f);
+                Vector3 resOffset = offset - new Vector3(0.5f, 0.5f, 0.5f);
+                texOffsetsGood.Add(resTexOffset);
+                vertOffsetsGood.Add(resOffset);
+
+                resOffset = offset;
+                resTexOffset = new Vector2(texOffset.x / (2.0f * 64.0f), resTexOffset.y / (float)World.numBlocks);
+                if (i % 3 == 0)
+                {
+                    curCubeTri.vertex1 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv1 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+                }
+                else if (i % 3 == 1)
+                {
+                    curCubeTri.vertex2 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv2 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+                }
+                else if (i % 3 == 2)
+                {
+                    curCubeTri.vertex3 = MakeFloat4(resOffset.x, resOffset.y, resOffset.z, 0);
+                    curCubeTri.uv3 = MakeFloat2(resTexOffset.x, resTexOffset.y);
+
+                    // we are finished with current tri, store it and start a new one
+
+                    defaultCubeTris.Add(curCubeTri);
+
+                    curCubeTri = new RenderTriangle();
+                }
+            }
+
+            return defaultCubeTris.ToArray();
+        }
+
 
         void SetupRendering()
         {
@@ -7847,7 +8324,10 @@ namespace Blocks
                     int lx, ly, lz;
                     chunk.chunkData.to3D(nonCubePositions[i], out lx, out ly, out lz);
                     Vector3 blockPos = new Vector3(lx, ly, lz);
-                    bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, template, blockPos, renderTransform.localToWorldMatrix));
+                    int stateForBlockAnim = rawData[pos + 3];
+
+
+                    bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, stateForBlockAnim, template, blockPos, renderTransform.localToWorldMatrix));
                 }
 
 

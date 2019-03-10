@@ -606,7 +606,7 @@ namespace Blocks
                     // found it, eat it
                     if (myDist <= 2)
                     {
-                        Debug.Log("got to desired block");
+                        //Debug.Log("got to desired block");
                         if (thingDoing != null && thingDoing.typeOfThing == TypeOfThingDoing.GettingFood)
                         {
                             OnReachFoodBlock(blockWeCanSeeOnceWeGetThere);
@@ -753,38 +753,6 @@ namespace Blocks
 
 
 
-        public class DoEveryMS
-        {
-            long ms;
-            long randVariance = 0;
-            long timeWhenLastDid;
-            public DoEveryMS(long ms, long randVariance=0)
-            {
-                this.ms = ms;
-                this.timeWhenLastDid = 0;
-            }
-
-            public bool Do()
-            {
-                long curTime = PhysicsUtils.millis();
-                if (curTime - timeWhenLastDid > ms)
-                {
-                    timeWhenLastDid = curTime;
-
-                    // randomly wait +- randVariance*[random value in 0-1] until the next
-                    if (randVariance != 0)
-                    {
-                        long randOff = (long)((Random.value * 2.0f - 1.0f) * randVariance);
-                        timeWhenLastDid += randOff;
-                    }
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
-            }
-        }
 
         DoEveryMS updateWander = new DoEveryMS(100, 100);
         DoEveryMS updateAction = new DoEveryMS(2000, 100);

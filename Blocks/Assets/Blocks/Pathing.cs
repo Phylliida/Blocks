@@ -1211,7 +1211,7 @@ namespace Blocks
 
             if (isGoal(startRegion))
             {
-                Debug.Log("started in goal, ez");
+                //Debug.Log("started in goal, ez");
                 //res = startRegion.TraverseThroughRegion(startPosInRegion, endPosInRegion);
                 res = startPosInRegion;
             }
@@ -1219,7 +1219,7 @@ namespace Blocks
 
             Priority_Queue.SimplePriorityQueue<Tuple<PathingRegionPos, PathingRegionConnection>, long> regionConnectionsToConsider = new Priority_Queue.SimplePriorityQueue<Tuple<PathingRegionPos, PathingRegionConnection>, long>();
 
-            Debug.Log("start region has " + startRegion.thingsWeCanGoTo.Count + " connections");
+            //Debug.Log("start region has " + startRegion.thingsWeCanGoTo.Count + " connections");
 
             foreach (PathingRegionConnection connection in startRegion.thingsWeCanGoTo)
             {
@@ -1285,7 +1285,7 @@ namespace Blocks
                 res.RemoveDuplicatePositionsInPath();
 
 
-                Debug.Log("successfully pathfound with len = " + res.pathLen);
+                //Debug.Log("successfully pathfound with len = " + res.pathLen);
                 /*
                 int i = 0;
                 PathingRegionPos tmp = res;
