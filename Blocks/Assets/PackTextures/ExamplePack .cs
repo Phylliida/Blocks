@@ -6,6 +6,8 @@ namespace Example_pack {
         public static BlockValue Axe = new BlockValue(true, "Axe", "Example");
         public static BlockValue BallTrack = new BlockValue(true, "BallTrack", "Example");
         public static BlockValue BallTrackEmpty = new BlockValue(false, "BallTrackEmpty", "Example");
+        public static BlockValue BallTrackTurnEmpty = new BlockValue(true, "BallTrackTurnEmpty", "Example");
+        public static BlockValue BallTrackTurnFull = new BlockValue(true, "BallTrackTurnFull", "Example");
         public static BlockValue BallTrackXEmpty = new BlockValue(true, "BallTrackXEmpty", "Example");
         public static BlockValue BallTrackXFull = new BlockValue(true, "BallTrackXFull", "Example");
         public static BlockValue BallTrackZEmpty = new BlockValue(true, "BallTrackZEmpty", "Example");

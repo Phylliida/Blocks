@@ -1,0 +1,33 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "inventory": "BallTrackTurnFull.png",
+        "floor": "Floor.png",
+        "ball": "Ball.png"
+    },
+    "elements": [
+        {   
+            "from": [ 0, 0, 0 ],
+            "to": [ 16, 1, 16 ],
+            "shade": false,
+            "texture": "floor"
+        },
+        {   
+            "from": [ 0, 1, 1 ],
+            "to": [ 1, 5, 16 ],
+            "shade": false,
+            "texture": "floor"
+        },
+        {   
+            "from": [ 1, 1, 0 ],
+            "to": [ 16, 5, 1 ],
+            "shade": false,
+            "texture": "floor"
+        },
+        {   "fromVars": [ "14-(state/16)*7 + -(1-state/16)*0", "2", "14-(state/16)*0 + -(1-state/16)*7" ],
+            "toVars": [ "14-(state/16)*7 + -(1-state/16)*0+4", "2+4", "14-(state/16)*0 + -(1-state/16)*7+4" ],
+            "shade": false,
+            "texture": "ball"
+        }
+    ]
+}

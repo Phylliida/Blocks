@@ -1,6 +1,7 @@
 {
     "ambientocclusion": false,
     "textures": {
+        "inventory": "BallTrackZEmpty.png",
         "ball": "Ball.png"
     },
     "elements": [

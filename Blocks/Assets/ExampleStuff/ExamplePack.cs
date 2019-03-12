@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Blocks;
+using ExtensionMethods;
 
 public class Light : Block
 {
@@ -35,15 +36,12 @@ public class WaterSource : Block
     {
         using (BlockData below = GetBlockDataNotRelative(block.x, block.y - 1, block.z))
         {
-            if (below.block == Example.Water || below.block == Example.WaterNoFlow)
+            if (below.block == Example.Air)
             {
                 below.block = Example.Water;
-                block.state = 1 - block.state;
-                below.state = block.state;
-            }
-            else if (below.block == Example.Air)
-            {
-                below.block = Example.Water;
+                below.SetPressureIn(0);
+                below.SetPressureOut(0);
+                below.SetWaterAmount(1);
             }
         }
     }
@@ -54,6 +52,278 @@ public class WaterSource : Block
     }
 }
 
+
+
+namespace ExtensionMethods
+{
+    public static class WaterExampleExtensions
+    {
+
+        public static short GetWaterAmount(this BlockData block)
+        {
+            return block.animationState;
+        }
+
+        public static void SetWaterAmount(this BlockData block, short value)
+        {
+            block.animationState = value;
+        }
+
+
+        /// <summary>
+        /// Warning: this converts to a short before assigning, this method is just provided so you don't have to litter the code with casts since c# will return an int when you subtract two shorts
+        /// </summary>
+        /// <param name="block"></param>
+        /// <param name="value"></param>
+        public static void SetWaterAmount(this BlockData block, int value)
+        {
+            block.animationState = (short)value;
+        }
+
+        public static short GetPressureIn(this BlockData block)
+        {
+            short pressureIn, pressureOut;
+            PhysicsUtils.UnpackValuesFromInt(block.state, out pressureIn, out pressureOut);
+            return pressureIn;
+        }
+
+        public static short GetPressureOut(this BlockData block)
+        {
+            short pressureIn, pressureOut;
+            PhysicsUtils.UnpackValuesFromInt(block.state, out pressureIn, out pressureOut);
+            return pressureOut;
+        }
+
+        public static void SetPressureIn(this BlockData block, short pressureIn)
+        {
+            short pressureOut = block.GetPressureOut();
+            block.state = PhysicsUtils.PackTwoValuesIntoInt(pressureIn, pressureOut);
+        }
+
+        public static void SetPressureOut(this BlockData block, short pressureOut)
+        {
+            short pressureIn = block.GetPressureIn();
+            block.state = PhysicsUtils.PackTwoValuesIntoInt(pressureIn, pressureOut);
+        }
+    }
+}
+
+
+public class WaterNewWithPressure : Block
+{
+
+    public short tickId = -1;
+    public override void OnTickStart()
+    {
+        tickId += 1;
+    }
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        destroyBlock = false;
+    }
+
+    public static short MaxWater = 1;
+
+    public float HowFull(int numWater)
+    {
+        return numWater / 4.0f;
+    }
+
+    public int NumCanAddTo(int myAmount, int theirAmount)
+    {
+        int maxCanAdd = MaxWater - theirAmount;
+        return System.Math.Min(maxCanAdd, myAmount);
+    }
+
+    public void FlowMaxWaterPossibleInto(BlockData from, BlockData to)
+    {
+        FlowWaterInto(from, to, NumCanAddTo(from.animationState, to.animationState));
+    }
+
+    public void FlowCompletelyIntoAir(BlockData from, BlockData to)
+    {
+        SetAirToWater(to);
+        FlowMaxWaterPossibleInto(from, to);
+        int numWater = from.GetWaterAmount();
+        if (numWater == 0)
+        {
+            SetWaterToAir(from);
+            return;
+        }
+        else
+        {
+            Debug.LogWarning("warning: flowing to air did not completely empty us out? We still have " + numWater + " water left");
+        }
+    }
+
+    public void FlowWaterInto(BlockData from, BlockData to, int amount)
+    {
+        from.SetWaterAmount(from.GetWaterAmount() - amount);
+        to.SetWaterAmount(to.GetWaterAmount() + amount);
+    }
+
+
+    public int NumWaterNeighbors(BlockData block)
+    {
+        int numWaterNeighbors = 0;
+        foreach (BlockData neighbor in GetNeighbors(block))
+        {
+            if (neighbor.block == Example.Water)
+            {
+                numWaterNeighbors += 1;
+            }
+        }
+        return numWaterNeighbors;
+    }
+
+    public void RecomputePressureIn(BlockData block)
+    {
+        int totalPressureIn = 0;
+        foreach (BlockData neighbor in GetNeighbors(block))
+        {
+            if (neighbor.block == Example.Water)
+            {
+                int neighborContribution = neighbor.GetPressureIn() / NumWaterNeighbors(neighbor);
+
+                // blocks above us give us 12 pressure
+                if (neighbor.y == block.y + 1)
+                {
+                    totalPressureIn += neighbor.GetWaterAmount() + neighborContribution;
+                }
+                // blocks below us can send us pressure but it uses some up
+                else if(neighbor.y == block.y - 1)
+                {
+                    totalPressureIn += System.Math.Max(0, neighborContribution - 1);
+                }
+                else
+                {
+                    totalPressureIn += neighborContribution; 
+                }
+            }
+        }
+        block.SetPressureIn((short)totalPressureIn);
+    }
+
+    /// <summary>
+    /// Note that this will set the block's value to Water and set pressure in, pressure out, and water amount to 0
+    /// </summary>
+    /// <param name="block"></param>
+    public void SetAirToWater(BlockData block)
+    {
+        block.block = Example.Water;
+        block.SetPressureIn(0);  // default initial values
+        block.SetPressureOut(0);
+        block.SetWaterAmount(0);
+    }
+    /// <summary>
+    /// Note that this will set the block's pressure in, pressure out, and water amount to 0, then set block to air
+    /// </summary>
+    /// <param name="block"></param>
+    public void SetWaterToAir(BlockData block)
+    {
+        block.SetPressureIn(0); // default initial values, just in case
+        block.SetPressureOut(0);
+        block.SetWaterAmount(0);
+        block.block = Example.Air;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        // I know I'm things from ints to shorts haphazardly around here, but I don't really care that much since the values should never get that high (I think? I should check in the case of a very large tank)
+
+
+
+
+
+
+
+        int numWater = block.GetWaterAmount();
+
+
+
+        if (numWater == 0)
+        {
+            SetWaterToAir(block);
+            block.needsAnotherTick = false;
+            return;
+        }
+
+        // flow into below if possible
+        using (BlockData below = GetBlockDataRelative(block, 0, -1, 0))
+        {
+            if (below.block == Example.Water && below.GetPressureIn() < 1)
+            {
+                FlowMaxWaterPossibleInto(block, below);
+            }
+            else if (below.block == Example.Air)
+            {
+                SetAirToWater(below);
+                FlowMaxWaterPossibleInto(block, below);
+            }
+            // get updated water amount after flowing down
+            numWater = block.GetWaterAmount();
+        }
+
+
+        if (numWater == 0)
+        {
+            SetWaterToAir(block);
+            block.needsAnotherTick = false;
+            return;
+        }
+
+        int oldPressureIn = block.GetPressureIn();
+        RecomputePressureIn(block);
+
+        int pressureIn = block.GetPressureIn();
+
+        if (pressureIn != oldPressureIn)
+        {
+            world.AddBlockUpdateToNeighbors(block.x, block.y, block.z);
+        }
+
+        // if we have pressure, move to horizontal neighbor if we can (we already tried moving below us above, so this is the second best option we have)
+        if (pressureIn >= 1)
+        {
+            foreach (BlockData horizontalNeighbor in GetHorizontalNeighbors(block))
+            {
+                // flow to neighbor if air
+                if (horizontalNeighbor.block == Example.Air)
+                {
+                    FlowCompletelyIntoAir(block, horizontalNeighbor);
+                    block.needsAnotherTick = false;
+                    return;
+                }
+            }
+
+            using (BlockData above = GetBlockDataRelative(block, 0, 1, 0))
+            {
+                if (above.block == BlockValue.Air || (above.block == Example.Water && above.GetWaterAmount() < MaxWater))
+                {
+                    if (above.block == BlockValue.Air)
+                    {
+                        SetAirToWater(above);
+                    }
+                    FlowWaterInto(block, above, 1);
+                    int newWaterAmount = block.GetWaterAmount();
+                    if (newWaterAmount == 0)
+                    {
+                        SetWaterToAir(block);
+                        block.needsAnotherTick = false;
+                        return;
+                    }
+                }
+            }
+        }
+        block.needsAnotherTick = true;
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.0f;
+    }
+}
 
 public class Lava : Block
 {
@@ -160,7 +430,7 @@ public class BallTrackHorizontalFull : Block
         // if state == 0, ball is at other edge
         // thus, when going negative:
 
-        Debug.Log(block.animationState + " " + block.state + " " + (int)block.rotation);
+        //Debug.Log(block.animationState + " " + block.state + " " + (int)block.rotation);
         if (block.state > 0)
         {
 
@@ -179,23 +449,18 @@ public class BallTrackHorizontalFull : Block
             if (moveLikeNormal)
             {
             }
-            else if(movingIntoNext || leftThingPos)
+            else if (movingIntoNext || leftThingPos)
             {
-                using (BlockData neighbor = GetBlockDataRelative(block, 0, 0,1))
+                using (BlockData neighbor = GetBlockDataRelative(block, 0, 0, 1))
                 {
-                    BlockData.BlockRotation neighborRot = block.GetRelativeRotationOf(neighbor);
-                    bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
-
-                    if (neighborRot == BlockData.BlockRotation.Degrees90 || neighborRot == BlockData.BlockRotation.Degrees270)
-                    {
-                        canFlowIntoNeighbor = false;
-                    }
+                    bool needToInvertVelUponEntry;
+                    bool canFlowIntoNeighbor = BallTrackUtils.CanFlowInto(block, neighbor, out needToInvertVelUponEntry);
 
                     // we can't flow into neighbor, flip directions
                     if (!canFlowIntoNeighbor)
                     {
                         block.animationState = (short)(trackSize - ballWidth - 1);
-                        Debug.Log("got to end 1, swapping");
+                        //Debug.Log("got to end 1, swapping");
                         block.state = -block.state;
                     }
                     // we can flow into neighbor, continue going
@@ -204,11 +469,10 @@ public class BallTrackHorizontalFull : Block
                         if (movingIntoNext)
                         {
                         }
-                        else if(leftThingPos)
+                        else if (leftThingPos)
                         {
-                            neighbor.block = Example.BallTrackZFull;
                             // flipped around
-                            if (neighborRot == BlockData.BlockRotation.Degrees180)
+                            if (needToInvertVelUponEntry)
                             {
                                 neighbor.animationState = (short)(trackSize - ballWidth);
                                 neighbor.state = -block.state;
@@ -219,7 +483,8 @@ public class BallTrackHorizontalFull : Block
                                 neighbor.animationState = 0;
                                 neighbor.state = block.state;
                             }
-                            block.block = Example.BallTrackZEmpty;
+                            BallTrackUtils.FillBlock(neighbor);
+                            BallTrackUtils.EmptyBlock(block);
                             block.animationState = 0;
                             block.needsAnotherTick = false;
                         }
@@ -232,7 +497,7 @@ public class BallTrackHorizontalFull : Block
                 block.animationState -= 1;
             }
         }
-        else if(block.state < 0)
+        else if (block.state < 0)
         {
             block.animationState -= 1;
 
@@ -243,28 +508,23 @@ public class BallTrackHorizontalFull : Block
             bool movingIntoNext = -ballWidth <= block.animationState && block.animationState < 0;
             bool leftThingPos = block.animationState < -ballWidth;
 
-            Debug.Log(moveLikeNormal + " " + movingIntoNext + " " + leftThingPos + " " + block.animationState);
+            //Debug.Log(moveLikeNormal + " " + movingIntoNext + " " + leftThingPos + " " + block.animationState);
             if (moveLikeNormal)
             {
             }
             else if (movingIntoNext || leftThingPos)
             {
-                using (BlockData neighbor = GetBlockDataRelative(block, 0,0,-1))
+                using (BlockData neighbor = GetBlockDataRelative(block, 0, 0, -1))
                 {
-                    BlockData.BlockRotation neighborRot = block.GetRelativeRotationOf(neighbor);
-                    bool canFlowIntoNeighbor = (neighbor.block == Example.BallTrackZEmpty);
-
-                    if (neighborRot == BlockData.BlockRotation.Degrees90 || neighborRot == BlockData.BlockRotation.Degrees270)
-                    {
-                        canFlowIntoNeighbor = false;
-                    }
+                    bool needToInvertVelUponEntry;
+                    bool canFlowIntoNeighbor = BallTrackUtils.CanFlowInto(block, neighbor, out needToInvertVelUponEntry);
 
                     // we can't flow into neighbor, flip directions
                     if (!canFlowIntoNeighbor)
                     {
                         block.animationState = 0;
                         block.state = -block.state;
-                        Debug.Log("got to end 2, swapping");
+                        //Debug.Log("got to end 2, swapping");
                     }
                     // we can flow into neighbor, continue going
                     else
@@ -276,7 +536,7 @@ public class BallTrackHorizontalFull : Block
                         {
 
                             // flipped around
-                            if (neighborRot == BlockData.BlockRotation.Degrees180)
+                            if (needToInvertVelUponEntry)
                             {
                                 neighbor.animationState = 0;
                                 neighbor.state = -block.state;
@@ -287,9 +547,306 @@ public class BallTrackHorizontalFull : Block
                                 neighbor.animationState = (short)(trackSize - ballWidth);
                                 neighbor.state = block.state;
                             }
-                            neighbor.block = Example.BallTrackZFull;
+                            BallTrackUtils.FillBlock(neighbor);
+                            BallTrackUtils.EmptyBlock(block);
                             block.animationState = 0;
-                            block.block = Example.BallTrackZEmpty;
+                            block.needsAnotherTick = false;
+                        }
+                    }
+                }
+            }
+            // none of the above, undo any changes
+            else
+            {
+                block.animationState += 1;
+            }
+        }
+        else
+        {
+            block.state = 1;
+        }
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
+
+public static class BallTrackUtils
+{
+    public enum AxisDir
+    {
+        YPlus,
+        YMinus,
+        XPlus,
+        XMinus,
+        ZPlus,
+        ZMinus,
+        None
+    }
+
+    public static bool CanGoInto(BlockData a, AxisDir aRelativeOutAxis, BlockData b, AxisDir bRelativeInAxis)
+    {
+        if (!DoesNotHaveBall(b.block))
+        {
+            return false;
+        }
+        long relativePosX, relativePosY, relativePosZ;
+
+        a.GetRelativePosOf(b, out relativePosX, out relativePosY, out relativePosZ);
+        bool goesOutA = OffsetMatchesAxis(relativePosX, relativePosY, relativePosZ, aRelativeOutAxis);
+
+        b.GetRelativePosOf(a, out relativePosX, out relativePosY, out relativePosZ);
+        bool goesInB = OffsetMatchesAxis(relativePosX, relativePosY, relativePosZ, bRelativeInAxis);
+
+
+
+        return goesOutA && goesInB;
+
+    }
+
+    public static bool DoesNotHaveBall(BlockValue block)
+    {
+        return block == Example.BallTrackTurnEmpty || block == Example.BallTrackZEmpty;
+    }
+
+    public static bool OffsetMatchesAxis(long offX, long offY, long offZ, AxisDir axis)
+    {
+        if (axis == AxisDir.XMinus) return offX == -1;
+        if (axis == AxisDir.XPlus) return offX == 1;
+        if (axis == AxisDir.YMinus) return offY == -1;
+        if (axis == AxisDir.YPlus) return offY == 1;
+        if (axis == AxisDir.ZMinus) return offZ == -1;
+        if (axis == AxisDir.ZPlus) return offZ == 1;
+        return false;
+    }
+
+
+    public static void GetInAndOutAxes(BlockData a, out AxisDir outAxis, out AxisDir inAxis, out bool inverted, bool allowInvert =false,bool forceInvert = false)
+    {
+        if (a.block == Example.BallTrackZFull || a.block == Example.BallTrackZEmpty)
+        {
+            outAxis = AxisDir.ZMinus;
+            inAxis = AxisDir.ZPlus;
+        }
+        else if(a.block == Example.BallTrackTurnFull || a.block == Example.BallTrackTurnEmpty)
+        {
+            outAxis = AxisDir.XPlus;
+            inAxis = AxisDir.ZPlus;
+        }
+        else
+        {
+            //Debug.LogWarning("getting axis for unknown block " + a.block);
+            outAxis = AxisDir.None;
+            inAxis = AxisDir.None;
+        }
+
+        inverted = false;
+        // swap them since we are going backwards
+        if (forceInvert || (a.state < 0 && allowInvert))
+        {
+            inverted = true;
+            AxisDir tmp = outAxis;
+            outAxis = inAxis;
+            inAxis = tmp;
+        }
+    }
+
+    public static void FillBlock(BlockData a)
+    {
+        if (a.block == Example.BallTrackZEmpty)
+        {
+            a.block = Example.BallTrackZFull;
+        }
+        else if (a.block == Example.BallTrackTurnEmpty)
+        {
+            a.block = Example.BallTrackTurnFull;
+        }
+    }
+
+
+    public static void EmptyBlock(BlockData a)
+    {
+        if (a.block == Example.BallTrackZFull)
+        {
+            a.block = Example.BallTrackZEmpty;
+        }
+        else if (a.block == Example.BallTrackTurnFull)
+        {
+            a.block = Example.BallTrackTurnEmpty;
+        }
+    }
+
+    public static bool CanFlowInto(BlockData a, BlockData b, out bool needToInvertVelUponEntry)
+    {
+        needToInvertVelUponEntry = false;
+
+        BlockData.BlockRotation relativeRot = a.GetRelativeRotationOf(b);
+
+        AxisDir inA, outA, inB, outB;
+        bool aInverted, bInverted;
+        GetInAndOutAxes(a, out inA, out outA, out aInverted, allowInvert: true);
+        GetInAndOutAxes(b, out inB, out outB, out bInverted, allowInvert: false, forceInvert: aInverted);
+
+        if (CanGoInto(a, outA, b, inB))
+        {
+            return true;
+        }
+        else if(CanGoInto(a, outA, b, outB))
+        {
+            needToInvertVelUponEntry = true;
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}
+
+
+public class BallTrackTurnFull : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        //CreateBlockEntity(Example.BallTrackHorizontal, positionOfBlock);
+        destroyBlock = true;
+    }
+
+
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = true;
+        int ballWidth = 4;
+        int trackSize = 16;
+
+        // ball goes from [state, state+4]
+        // if state == 12, ball it at edge (track is 16 wide)
+        // if state == 0, ball is at other edge
+        // thus, when going negative:
+
+        //Debug.Log(block.animationState + " " + block.state + " " + (int)block.rotation);
+        if (block.state > 0)
+        {
+
+            // when going positive
+            //   [0                   < state <= trackSize-ballWidth]: moving like normal
+            //   [trackSize-ballWidth < state <= trackSize]:  only move more if we can move into neighboring one, also animate us moving into there. Otherwise, reverse direction 
+            //   [trackSize           < state]: we are no longer in this, move to neighbor
+
+
+            block.animationState += 1;
+
+            bool moveLikeNormal = 0 < block.animationState && block.animationState <= trackSize - ballWidth;
+            bool movingIntoNext = trackSize - ballWidth < block.animationState && block.animationState <= trackSize;
+            bool leftThingPos = trackSize < block.animationState;
+
+            if (moveLikeNormal)
+            {
+            }
+            else if (movingIntoNext || leftThingPos)
+            {
+                using (BlockData neighbor = GetBlockDataRelative(block, 0, 0, 1))
+                {
+                    bool needToInvertVelUponEntry;
+                    bool canFlowIntoNeighbor = BallTrackUtils.CanFlowInto(block, neighbor, out needToInvertVelUponEntry);
+
+                    // we can't flow into neighbor, flip directions
+                    if (!canFlowIntoNeighbor)
+                    {
+                        block.animationState = (short)(trackSize - ballWidth - 1);
+                        //Debug.Log("got to end 1, swapping");
+                        block.state = -block.state;
+                    }
+                    // we can flow into neighbor, continue going
+                    else
+                    {
+                        if (movingIntoNext)
+                        {
+                        }
+                        else if (leftThingPos)
+                        {
+                            // flipped around
+                            if (needToInvertVelUponEntry)
+                            {
+                                neighbor.animationState = (short)(trackSize - ballWidth);
+                                neighbor.state = -block.state;
+                            }
+                            // not flipped around
+                            else
+                            {
+                                neighbor.animationState = 0;
+                                neighbor.state = block.state;
+                            }
+                            BallTrackUtils.FillBlock(neighbor);
+                            BallTrackUtils.EmptyBlock(block);
+                            block.animationState = 0;
+                            block.needsAnotherTick = false;
+                        }
+                    }
+                }
+            }
+            // none of the above, undo any changes
+            else
+            {
+                block.animationState -= 1;
+            }
+        }
+        else if (block.state < 0)
+        {
+            block.animationState -= 1;
+
+            //   [0          <= state < trackSize-ballWidth]: moving like normal
+            //   [-ballWidth <= state < 0]: only move more if we can move into neighboring one, also animate us moving into there. Otherwise, reverse direction
+            //   [             state < -ballWidth]: we are no longer in this, move to neighbor
+            bool moveLikeNormal = 0 <= block.animationState && block.animationState < trackSize - ballWidth;
+            bool movingIntoNext = -ballWidth <= block.animationState && block.animationState < 0;
+            bool leftThingPos = block.animationState < -ballWidth;
+
+            //Debug.Log(moveLikeNormal + " " + movingIntoNext + " " + leftThingPos + " " + block.animationState);
+            if (moveLikeNormal)
+            {
+            }
+            else if (movingIntoNext || leftThingPos)
+            {
+                using (BlockData neighbor = GetBlockDataRelative(block, 1, 0, 0))
+                {
+                    bool needToInvertVelUponEntry;
+                    bool canFlowIntoNeighbor = BallTrackUtils.CanFlowInto(block, neighbor, out needToInvertVelUponEntry);
+
+                    // we can't flow into neighbor, flip directions
+                    if (!canFlowIntoNeighbor)
+                    {
+                        block.animationState = 0;
+                        block.state = -block.state;
+                        //Debug.Log("got to end 2, swapping");
+                    }
+                    // we can flow into neighbor, continue going
+                    else
+                    {
+                        if (movingIntoNext)
+                        {
+                        }
+                        else if (leftThingPos)
+                        {
+
+                            // flipped around
+                            if (needToInvertVelUponEntry)
+                            {
+                                neighbor.animationState = 0;
+                                neighbor.state = -block.state;
+                            }
+                            // not flipped around
+                            else
+                            {
+                                neighbor.animationState = (short)(trackSize - ballWidth);
+                                neighbor.state = block.state;
+                            }
+                            BallTrackUtils.FillBlock(neighbor);
+                            BallTrackUtils.EmptyBlock(block);
+                            block.animationState = 0;
                             block.needsAnotherTick = false;
                         }
                     }
@@ -1045,17 +1602,20 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
         AddCustomBlock(Example.Chest, new Chest(), 64);
         //AddCustomBlock(Example.Barrel, new Barrel(), 64);
-        AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
+        //AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
+        AddCustomBlock(Example.Sand, new WaterSource(), 64);
         AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
         //AddCustomBlock(Example.Water, new Water(), 64);
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
-        AddCustomBlock(Example.Water, new SimpleWater(), 64);
+        AddCustomBlock(Example.Water, new WaterNewWithPressure(), 64);
         AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
         AddCustomBlock(Example.Lava, new Lava(), 64);
         AddCustomBlock(Example.BallTrackZFull, new BallTrackHorizontalFull(), 64);
+        AddCustomBlock(Example.BallTrackTurnFull, new BallTrackTurnFull(), 64);
         AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(0.2f), 64);
-        AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
+        AddCustomBlock(Example.BallTrackTurnEmpty, new SimpleBlock(0.2f), 64);
+        //AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 
         AddCustomRecipe(new Recipe(new BlockValue[,]

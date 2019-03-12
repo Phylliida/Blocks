@@ -473,6 +473,31 @@ namespace Blocks
     {
 
 
+        public static int PackTwoValuesIntoInt(short a, short b)
+        {
+            ushort sa = (ushort)a;
+            ushort sb = (ushort)b;
+            uint ua = sa;
+            uint ub = sb;
+            uint res = (ua << 16) | ub;
+
+            return (int)res;
+        }
+
+        public static void UnpackValuesFromInt(int x, out short a, out short b)
+        {
+            uint ux = (uint)x;
+
+            ushort ua = (ushort)(ux >> 16);
+            ushort ub = (ushort)(ux & 0xFFFFF);
+            short sa = (short)ua;
+            short sb = (short)ub;
+
+            a = (short)sa;
+            b = (short)sb;
+
+        }
+
 
         // from https://stackoverflow.com/a/4016511/2924421
         public static long millis()

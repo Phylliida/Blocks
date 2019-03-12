@@ -284,7 +284,7 @@ namespace Blocks
                         int oldAngle = rotAngle;
                         rotAngle = (rotAngle + 90) % 360;
                         middleClickedOnBlock.rotation = (BlockData.BlockRotation)rotAngle;
-                        Debug.Log("rotating spooker from old rotation of " + oldAngle + " and spooker of " + hitResults.hitBlock + " to new rotation of " + rotAngle + " which is actually " + (BlockData.BlockRotation)rotAngle);
+                        //Debug.Log("rotating spooker from old rotation of " + oldAngle + " and spooker of " + hitResults.hitBlock + " to new rotation of " + rotAngle + " which is actually " + (BlockData.BlockRotation)rotAngle);
                     }
                 }
             }

@@ -1345,26 +1345,27 @@ namespace Blocks
 
 
         public short animationState {
-            get {
-                int a, b;
-                UnpackValuesFromInt(animationState_, out a, out b);
-                return (short)a;
+            get
+            {
+                short animState, rotState;
+                PhysicsUtils.UnpackValuesFromInt(animationState_, out animState, out rotState);
+                return animState;
             }
             set {
-                animationState_ = PackTwoValuesIntoInt((int)value, (int)rotationState_);
+                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(value, rotationState_);
             }
         }
         short rotationState_
         {
             get
             {
-                int a, b;
-                UnpackValuesFromInt(animationState_, out a, out b);
-                return (short)b;
+                short animState, rotState;
+                PhysicsUtils.UnpackValuesFromInt(animationState_, out animState, out rotState);
+                return rotState;
             }
             set
             {
-                animationState_ = PackTwoValuesIntoInt((int)animationState, (int)value);
+                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(animationState, value);
             }
         }
 
@@ -1378,30 +1379,47 @@ namespace Blocks
             return (BlockRotation)res;
         }
 
-        public static int PackTwoValuesIntoInt(int a, int b)
-        {
-            ushort sa = (ushort)a;
-            ushort sb = (ushort)b;
-            uint ua = sa;
-            uint ub = sb;
-            uint res = (ua << 16) | ub;
 
-            return (int)res;
+        public void RotateOffsetRelativeToMe(long offX, long offY, long offZ, out long relativeOffX, out long relativeOffY, out long relativeOffZ)
+        {
+
+            if (rotation == BlockRotation.Degrees0)
+            {
+                relativeOffX = offX;
+                relativeOffY = offY;
+                relativeOffZ = offZ;
+            }
+            else if(rotation == BlockRotation.Degrees90)
+            {
+                relativeOffX = offZ;
+                relativeOffY = offY;
+                relativeOffZ = -offX;
+            }
+            else if (rotation == BlockRotation.Degrees180)
+            {
+                relativeOffX = -offX;
+                relativeOffY = offY;
+                relativeOffZ = -offZ;
+            }
+            else if (rotation == BlockRotation.Degrees270)
+            {
+                relativeOffX = -offZ;
+                relativeOffY = offY;
+                relativeOffZ = offX;
+            }
+            else
+            {
+                relativeOffX = offX;
+                relativeOffY = offY;
+                relativeOffZ = offZ;
+            }
         }
 
-        public static void UnpackValuesFromInt(int x, out int a, out int b)
+        public void GetRelativePosOf(BlockData block, out long relativeX, out long relativeY, out long relativeZ)
         {
-            uint ux = (uint)x;
-
-            ushort ua = (ushort)(ux >> 16);
-            ushort ub = (ushort)(ux & 0xFFFFF);
-            short sa = (short)ua;
-            short sb = (short)ub;
-
-            a = (int)sa;
-            b = (int)sb;
-            
+            RotateOffsetRelativeToMe(block.x - x, block.y - y, block.z - z, out relativeX, out relativeY, out relativeZ);
         }
+
 
 
         /// <summary>
@@ -1434,16 +1452,16 @@ namespace Blocks
         // because first 16 bits are anim state, second 16 bits are 
         public static BlockRotation RotationFromRawAnimInt(int animInt)
         {
-            int a, b;
-            UnpackValuesFromInt(animInt, out a, out b);
-            return (BlockRotation)(b);
+            short a, b;
+            PhysicsUtils.UnpackValuesFromInt(animInt, out a, out b);
+            return (BlockRotation)((int)b);
         }
 
         public static short AnimStateFromRawAnimInt(int animInt)
         {
-            int a, b;
-            UnpackValuesFromInt(animInt, out a, out b);
-            return (short)a;
+            short a, b;
+            PhysicsUtils.UnpackValuesFromInt(animInt, out a, out b);
+            return a;
         }
 
 
@@ -4320,7 +4338,7 @@ namespace Blocks
 
             if ((int)rotation != 0)
             {
-                Debug.Log("got other rotation of " + (int)rotation + " with rotation i " + rotationI);
+                //Debug.Log("got other rotation of " + (int)rotation + " with rotation i " + rotationI);
             }
 
             RenderTriangle[] blockTris;

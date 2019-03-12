@@ -226,22 +226,27 @@ namespace Blocks
         /// <summary>
         /// Sets the center of the rotation according to the scheme [x, y, z].
         /// </summary>
-        public float[] origin = new float[] { 0, 0, 0 };
+        /// 
+        [DefaultValue(new float[] { 0, 0, 0 })]
+        public float[] origin;
 
         /// <summary>
         /// Specifies the direction of rotation, can be "x", "y" or "z".
         /// </summary>
-        public string axis = "x";
+        [DefaultValue("y")]
+        public string axis;
 
         /// <summary>
         /// Specifies the angle of rotation. Can be 45 through -45 degrees in 22.5 degree increments.
         /// </summary>
-        public float angle = 0;
+        [DefaultValue(0)]
+        public float angle;
 
         /// <summary>
         /// Specifies whether or not to scale the faces across the whole block. Can be true or false. Defaults to false.
         /// </summary>
-        public bool rescale = false;
+        [DefaultValue(false)]
+        public bool rescale;
 
         // from http://answers.unity.com/answers/1306696/view.html
         public static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation)
@@ -329,6 +334,7 @@ namespace Blocks
 
         public string texture;
 
+        [DefaultValue(null)]
         public BlockModelRotation rotation;
 
         public bool shade;
