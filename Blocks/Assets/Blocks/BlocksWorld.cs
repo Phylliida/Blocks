@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Runtime.InteropServices;
 using ExtensionMethods;
+using Blocks.ExtensionMethods;
 namespace Blocks
 {
 
@@ -1361,13 +1362,52 @@ namespace Blocks
             {
                 short animState, rotState;
                 PhysicsUtils.UnpackValuesFromInt(animationState_, out animState, out rotState);
-                return rotState;
+
+                ushort rotRes = (ushort)rotState;
+
+               
+                return (short)rotRes.GetBits(minRotBitInclusive, maxRotBitExclusive);
             }
             set
             {
-                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(animationState, value);
+
+                ushort curConnectivityVal = (ushort)connectivityFlags;
+                ushort actualVal = 0;
+                actualVal = actualVal.SettingBits(minRotBitInclusive, maxRotBitExclusive, (ushort)value);
+                actualVal = actualVal.SettingBits(minConnectedBitInclusive, maxConnectedBitExclusive, curConnectivityVal);
+
+                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(animationState, (short)actualVal);
             }
         }
+
+
+        public int connectivityFlags
+        {
+            get
+            {
+                short animState, rotState;
+                PhysicsUtils.UnpackValuesFromInt(animationState_, out animState, out rotState);
+
+                ushort rotRes = (ushort)rotState;
+
+
+                return (int)rotRes.GetBits(minConnectedBitInclusive, maxConnectedBitExclusive);
+            }
+            set
+            {
+
+
+                ushort curRotVal = (ushort)rotationState_;
+                ushort actualVal = 0;
+                actualVal = actualVal.SettingBits(minRotBitInclusive, maxRotBitExclusive, curRotVal);
+                actualVal = actualVal.SettingBits(minConnectedBitInclusive, maxConnectedBitExclusive, (ushort)value);
+
+                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(animationState, (short)actualVal);
+            }
+        }
+
+
+
 
 
         public BlockData.BlockRotation GetRelativeRotationOf(BlockData block)
@@ -1382,38 +1422,9 @@ namespace Blocks
 
         public void RotateOffsetRelativeToMe(long offX, long offY, long offZ, out long relativeOffX, out long relativeOffY, out long relativeOffZ)
         {
-
-            if (rotation == BlockRotation.Degrees0)
-            {
-                relativeOffX = offX;
-                relativeOffY = offY;
-                relativeOffZ = offZ;
-            }
-            else if(rotation == BlockRotation.Degrees90)
-            {
-                relativeOffX = offZ;
-                relativeOffY = offY;
-                relativeOffZ = -offX;
-            }
-            else if (rotation == BlockRotation.Degrees180)
-            {
-                relativeOffX = -offX;
-                relativeOffY = offY;
-                relativeOffZ = -offZ;
-            }
-            else if (rotation == BlockRotation.Degrees270)
-            {
-                relativeOffX = -offZ;
-                relativeOffY = offY;
-                relativeOffZ = offX;
-            }
-            else
-            {
-                relativeOffX = offX;
-                relativeOffY = offY;
-                relativeOffZ = offZ;
-            }
+            PhysicsUtils.RotateOffsetRelativeToRotation(rotation, offX, offY, offZ, out relativeOffX, out relativeOffY, out relativeOffZ);
         }
+
 
         public void GetRelativePosOf(BlockData block, out long relativeX, out long relativeY, out long relativeZ)
         {
@@ -1435,18 +1446,75 @@ namespace Blocks
             /// Causes newX = oldZ
             /// newZ = -oldX
             /// </summary>
-            Degrees90=90,
+            Degrees90=1,
             /// <summary>
             /// Causes newX = -oldX
             /// newZ = -oldZ
             /// </summary>
-            Degrees180 = 180,
+            Degrees180=2,
             /// <summary>
             /// Causes newX = -oldZ
             /// newZ = oldX
             /// </summary>
-            Degrees270 = 270
+            Degrees270=3
         }
+
+        /*
+        public static int[] offsets = new int[]
+        {
+            -1,-1,-1,
+            0,-1,-1,
+            1,-1,-1,
+
+            -1,0,-1,
+            0,0,-1,
+            1,0,-1,
+
+            -1,1,-1,
+            0,1,-1,
+            1,1,-1,
+
+
+
+
+            -1,-1,0,
+            0,-1,0,
+            1,-1,0,
+
+            -1,0,0,
+            //0,0,0, we don't need a flag specifying connectivity to ourselves
+            1,0,0,
+
+            -1,1,0,
+            0,1,0,
+            1,1,0,
+
+
+
+
+            -1,-1,1,
+            0,-1,1,
+            1,-1,1,
+
+            -1,0,1,
+            0,0,1,
+            1,0,1,
+
+            -1,1,1,
+            0,1,1,
+            1,1,1
+        };
+
+        */
+
+        
+
+
+
+        const int minRotBitInclusive = 0;
+        const int maxRotBitExclusive = 2; // need 2 bits for 0,1,2,3 (4 possible rotation values)
+        const int minConnectedBitInclusive = maxRotBitExclusive;
+        const int maxConnectedBitExclusive = maxRotBitExclusive + 14; // need 14 bits for all possible connectivity flags (sideways, up, down, sideways up, sideways down)
 
 
         // because first 16 bits are anim state, second 16 bits are 
@@ -1454,7 +1522,22 @@ namespace Blocks
         {
             short a, b;
             PhysicsUtils.UnpackValuesFromInt(animInt, out a, out b);
-            return (BlockRotation)((int)b);
+            ushort val = (ushort)b;
+            // See PhysicsUtils extension methods, this requires
+            // using Blocks.ExtensionMethods
+            ushort rotVal = val.GetBits(minRotBitInclusive, maxRotBitExclusive);
+            return (BlockRotation)((int)rotVal);
+        }
+
+        public static int GetConnectivityFromRawAnimInt(int animInt)
+        {
+            short a, b;
+            PhysicsUtils.UnpackValuesFromInt(animInt, out a, out b);
+            ushort val = (ushort)b;
+            // See PhysicsUtils extension methods, this requires
+            // using Blocks.ExtensionMethods
+            ushort connectionVal = val.GetBits(minConnectedBitInclusive, maxConnectedBitExclusive);
+            return (int)connectionVal;
         }
 
         public static short AnimStateFromRawAnimInt(int animInt)
@@ -1470,7 +1553,7 @@ namespace Blocks
         {
             get
             {
-                return (BlockRotation)(int)(rotationState_);
+                return RotationFromRawAnimInt(animationState_);
             }
             set
             {
@@ -1543,11 +1626,24 @@ namespace Blocks
             this.wy = y;
             this.wz = z;
             myChunk = null;
-            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out this.cx, out this.cy, out this.cz);
             //cachedBlock = world[wx, wy, wz, cx, cy, cz];
             //this.curBlockModifyStateBlock = world.blockModifyState;
         }
     }
+
+
+    public enum AxisDir
+    {
+        YPlus,
+        YMinus,
+        XPlus,
+        XMinus,
+        ZPlus,
+        ZMinus,
+        None
+    }
+
     public class BlockDataGetter
     {
 
@@ -1747,9 +1843,35 @@ namespace Blocks
         {
             
         }
+
+        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        {
+            return false;
+        }
+
+
+        public override bool CanConnect()
+        {
+            return false;
+        }
     }
 
-    public abstract class Block : BlockOrItem
+    public abstract class Block : ConnectableBlock
+    {
+        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        {
+            return false;
+        }
+
+
+        public override bool CanConnect()
+        {
+            return false;
+        }
+
+    }
+
+    public abstract class ConnectableBlock : BlockOrItem
     {
         public override void OnTickStart()
         {
@@ -1767,7 +1889,6 @@ namespace Blocks
         {
             return 0;
         }
-
     }
 
 
@@ -1787,6 +1908,17 @@ namespace Blocks
             return 0;
         }
 
+
+        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        {
+            return false;
+        }
+
+        public override bool CanConnect()
+        {
+            return false;
+        }
+
     }
 
     public abstract class Item : BlockOrItem
@@ -1794,6 +1926,22 @@ namespace Blocks
         public override void OnTickStart()
         {
 
+        }
+
+
+        public override bool CanConnect()
+        {
+            return false;
+        }
+
+        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        {
+            return false;
+        }
+
+        public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+        {
+            return BlockValue.Air;
         }
 
         public override int InventorySpace()
@@ -2043,15 +2191,28 @@ namespace Blocks
         public abstract float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith);
         public abstract void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock);
         public abstract bool CanBePlaced();
+        public virtual bool CanBePlaced(AxisDir facePlacedOn, LVector3 pos)
+        {
+            return CanBePlaced();
+        }
         public abstract void OnTickStart();
-
+        public abstract BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos);
+        public abstract bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar);
+        public abstract bool CanConnect();
 
         public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
         {
-            GameObject blockEntity = GameObject.Instantiate(World.mainWorld.blocksWorld.blockEntityPrefab);
-            blockEntity.transform.position = position;
-            blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
-            return blockEntity.GetComponent<BlockEntity>();
+            if (block != BlockValue.Air)
+            {
+                GameObject blockEntity = GameObject.Instantiate(World.mainWorld.blocksWorld.blockEntityPrefab);
+                blockEntity.transform.position = position;
+                blockEntity.GetComponent<BlockEntity>().blockId = (int)block;
+                return blockEntity.GetComponent<BlockEntity>();
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 
@@ -2445,8 +2606,6 @@ namespace Blocks
         public void CreateStuff()
         {
             this.chunkRenderer = new ChunkRenderer(this, chunkSize);
-            chunkData = new ChunkData(chunkSize, fillWithWildcard: false);
-            chunkData.attachedChunks.Add(this);
         }
 
 
@@ -2454,6 +2613,8 @@ namespace Blocks
         {
             this.world = world;
             this.chunkSize = chunkSize;
+            this.chunkData = new ChunkData(chunkSize, fillWithWildcard: false);
+            this.chunkData.attachedChunks.Add(this);
             this.cx = chunkX;
             this.cy = chunkY;
             this.cz = chunkZ;
@@ -3047,12 +3208,55 @@ namespace Blocks
                         if (world.customBlocks.ContainsKey(blockValue, out customBlock))
                         {
                             customBlock.OnTick(block);
+
+                            int connectedFlags = 0;
+                            int numConnected = 0;
+                            if (customBlock.CanConnect())
+                            {
+                                for (int h = 0; h < RotationUtils.NUM_CONNECTIVITY_OFFSETS; h++)
+                                {
+                                    int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[h * 3];
+                                    int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[h * 3+1];
+                                    int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[h * 3+2];
+
+                                    using (BlockData neighborData = world.GetBlockData(wx + offsetX, wy + offsetY, wz + offsetZ))
+                                    {
+                                        if (customBlock.CanConnect(neighborData.block, offsetY == 0, numConnected))
+                                        {
+                                            connectedFlags = connectedFlags | (1 << h);
+                                            numConnected += 1;
+
+                                            if (offsetY != 0)
+                                            {
+                                                for (int w = 0; w < RotationUtils.NUM_CONNECTIVITY_OFFSETS; w++)
+                                                {
+                                                    int offsetX2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3];
+                                                    int offsetY2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 1];
+                                                    int offsetZ2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 2];
+
+                                                    if (offsetX2 == -offsetX && offsetY2 == -offsetY && offsetZ2 == -offsetZ)
+                                                    {
+                                                        if ((neighborData.connectivityFlags & (1 << w)) == 0)
+                                                        {
+                                                            world.AddBlockUpdate(wx + offsetX, wy + offsetY, wz + offsetZ, alsoToNeighbors: true);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            block.connectivityFlags = connectedFlags;
                         }
 
                         if (block.needsAnotherTick)
                         {
                             chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
                         }
+
+
 
                         if (block.WasModified)
                         {
@@ -3373,8 +3577,17 @@ namespace Blocks
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetState(long i, long j, long k, BlockState stateType)
         {
-            long ind = to1D(i, j, k);
-            return data[ind * 4 + (int)stateType];
+            try
+            {
+                long ind = to1D(i, j, k);
+                return data[ind * 4 + (int)stateType];
+            }
+            catch (System.Exception e)
+            {
+                long ind = to1D(i, j, k);
+                Debug.Log("failed with data len " + data.Length + " and ind " + ind +" and local " + i + " " + j + " " + k);
+                throw e;
+            }
         }
 
         public void SetState(long i, long j, long k, int state, BlockState stateType, out bool addedBlockUpdate, bool forceBlockUpdate = false)
@@ -3402,7 +3615,16 @@ namespace Blocks
 
         public void AddBlockUpdate(long i, long j, long k)
         {
-            blocksNeedUpdatingNextFrame.Add((int)to1D(i, j, k));
+            int val = (int)to1D(i, j, k);
+            if (val < data.Length && val >= 0)
+            {
+                blocksNeedUpdatingNextFrame.Add(val);
+            }
+            else
+            {
+                throw new System.Exception("error: tried to add update with invalid relative pos " + i + " " + j + " " + k);
+
+            }
         }
 
         public int GetBlock(long i, long j, long k)
@@ -3437,6 +3659,12 @@ namespace Blocks
         {
             get
             {
+                long ind = (i + j * chunkSize + k * chunkSize_2)*4;
+                if (ind < 0 || ind >= data.Length)
+                {
+                    Debug.LogWarning("warning: out of range, with local " + i + " " + j + " " + k + " and data " + data.Length);
+                    return 0;
+                }
                 return data[(i + j * chunkSize + k * chunkSize_2) * 4];
             }
             set
@@ -3902,36 +4130,64 @@ namespace Blocks
 
     public class BlockDataCache
     {
-        FastStackQueue<BlockData> blockDatasNotInUse;
+        FastStackQueue<BlockData> blockDatasNotInUseBackground;
+        FastStackQueue<BlockData> blockDatasNotInUseMainThread;
 
         BlockGetter world;
 
         public BlockDataCache(BlockGetter world)
         {
             this.world = world;
-            blockDatasNotInUse = new FastStackQueue<BlockData>(100);
+            blockDatasNotInUseBackground = new FastStackQueue<BlockData>(100);
+            blockDatasNotInUseMainThread = new FastStackQueue<BlockData>(100);
         }
 
         public BlockData GetNewBlockData(long x, long y, long z)
         {
-            if (blockDatasNotInUse.Count == 0)
+            if (Thread.CurrentThread == World.mainWorld.helperThread)
             {
-                blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
-                blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
-                blockDatasNotInUse.Enqueue(new BlockData(world, x, y, z));
-                return new BlockData(world, x, y, z);
+                if (blockDatasNotInUseBackground.Count == 0)
+                {
+                    blockDatasNotInUseBackground.Enqueue(new BlockData(world, x, y, z));
+                    blockDatasNotInUseBackground.Enqueue(new BlockData(world, x, y, z));
+                    blockDatasNotInUseBackground.Enqueue(new BlockData(world, x, y, z));
+                    return new BlockData(world, x, y, z);
+                }
+                else
+                {
+                    BlockData res = blockDatasNotInUseBackground.Dequeue();
+                    res.ReassignValues(x, y, z);
+                    return res;
+                }
             }
             else
             {
-                BlockData res = blockDatasNotInUse.Dequeue();
-                res.ReassignValues(x, y, z);
-                return res;
+                if (blockDatasNotInUseMainThread.Count == 0)
+                {
+                    blockDatasNotInUseMainThread.Enqueue(new BlockData(world, x, y, z));
+                    blockDatasNotInUseMainThread.Enqueue(new BlockData(world, x, y, z));
+                    blockDatasNotInUseMainThread.Enqueue(new BlockData(world, x, y, z));
+                    return new BlockData(world, x, y, z);
+                }
+                else
+                {
+                    BlockData res = blockDatasNotInUseMainThread.Dequeue();
+                    res.ReassignValues(x, y, z);
+                    return res;
+                }
             }
         }
 
         public void DoneWithBlockData(BlockData blockData)
         {
-            blockDatasNotInUse.Enqueue(blockData);
+            if (Thread.CurrentThread == World.mainWorld.helperThread)
+            {
+                blockDatasNotInUseBackground.Enqueue(blockData);
+            }
+            else
+            {
+                blockDatasNotInUseMainThread.Enqueue(blockData);
+            }
         }
     }
 
@@ -4328,17 +4584,39 @@ namespace Blocks
             }
         }
 
+        public bool HasNonBlockModel(BlockValue blockId)
+        {
+            return blockCustomTriangles[0].ContainsKey(blockId) || blockCustomTrianglesDependsOnState[0].ContainsKey(blockId);
+        }
+
+
+        RenderTriangle dummyTemplate = new RenderTriangle();
+        public RenderTriangle[] GetTrianglesForBlock(LVector3 pos)
+        {
+            LVector3 chunkPos;
+            GetChunkCoordinatesAtPos(pos, out chunkPos);
+            Vector3 offset = (new Vector3(chunkPos.x, chunkPos.y, chunkPos.z)) * chunkSize * worldScale;
+            Matrix4x4 helperMat = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one);
+            return GetTrianglesForBlock(pos.BlockV, GetState(pos.x, pos.y, pos.z, BlockState.Animation), dummyTemplate, new Vector3(pos.x, pos.y, pos.z), helperMat);
+        }
+
 
         public RenderTriangle[] GetTrianglesForBlock(BlockValue blockId, int animInt, RenderTriangle template, Vector3 blockPos, Matrix4x4 localToWorldMat)
         {
 
             BlockData.BlockRotation rotation = BlockData.RotationFromRawAnimInt(animInt);
-            int rotationI = ((int)rotation)/90;
+            int connectedFlags = BlockData.GetConnectivityFromRawAnimInt(animInt);
+            int rotationI = PhysicsUtils.RotationToDegrees(rotation) / 90;
             int state = BlockData.AnimStateFromRawAnimInt(animInt);
 
             if ((int)rotation != 0)
             {
                 //Debug.Log("got other rotation of " + (int)rotation + " with rotation i " + rotationI);
+            }
+
+            if (connectedFlags != 0)
+            {
+                //Debug.Log("got other connectivity of " + connectedFlags);
             }
 
             RenderTriangle[] blockTris;
@@ -4348,7 +4626,7 @@ namespace Blocks
             }
             else if (blockCustomTrianglesDependsOnState[rotationI].ContainsKey(blockId))
             {
-                blockTris = blockCustomTrianglesDependsOnState[rotationI][blockId].ToRenderTriangles(rotation, state);
+                blockTris = blockCustomTrianglesDependsOnState[rotationI][blockId].ToRenderTriangles(rotation, state, connectedFlags);
             }
             else
             {
@@ -4457,7 +4735,15 @@ namespace Blocks
         public List<Structure> unfinishedStructures;
 
 
-        public void PlaceBlock(BlockValue block, LVector3 pos)
+        /// <summary>
+        /// Setup stuff like inventory at block position
+        /// Also, get what block we should actually be placing, given that we placed it from the given axis
+        /// </summary>
+        /// <param name="block"></param>
+        /// <param name="pos"></param>
+        /// <param name="axisPlacedFrom"></param>
+        /// <returns></returns>
+        public BlockValue PrePlaceBlock(BlockValue block, LVector3 pos, AxisDir axisPlacedFrom)
         {
             BlockOrItem customBlock;
             if (customBlocks.ContainsKey(block, out customBlock))
@@ -4471,7 +4757,11 @@ namespace Blocks
                     }
                     blocksWorld.blockInventories[pos] = blockInventory;
                 }
+
+                return customBlock.PlaceMe(axisPlacedFrom, pos);
             }
+
+            return block;
         }
 
         public bool BlockHasInventory(LVector3 pos, out Inventory inventory)
@@ -4547,12 +4837,12 @@ namespace Blocks
         ////BlockValue.LargeSharpRock
     };
 
-        public bool AllowedtoPlaceBlock(BlockValue block)
+        public bool AllowedtoPlaceBlock(BlockValue block, AxisDir axisPlacedOn, LVector3 pos)
         {
             BlockOrItem customBlock;
             if (customBlocks.ContainsKey(block, out customBlock))
             {
-                return customBlock.CanBePlaced();
+                return customBlock.CanBePlaced() && customBlock.CanBePlaced(axisPlacedOn, pos);
             }
             foreach (BlockValue item in items)
             {

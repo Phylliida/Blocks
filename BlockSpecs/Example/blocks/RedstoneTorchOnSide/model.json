@@ -1,0 +1,24 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "inventory": "RedstoneTorch.png",
+        "base": "Base.png",
+        "tip": "Tip.png"
+    },
+    "elements": [
+        {  
+            "from": [ 15, 0, 7 ],
+            "to": [ 17, 6, 9 ],
+            "shade": false,
+            "texture": "base",
+            "rotation": { "origin": [ 0, 3.5, 8 ], "axis": "z", "angle": 22.5 }
+        },
+        {   
+            "from": [ 15, 6, 7 ],
+            "to": [ 17, 8, 9 ],
+            "shade": false,
+            "texture": "tip",
+            "rotation": { "origin": [ 0, 3.5, 8 ], "axis": "z", "angle": 22.5 }
+        }
+    ]
+}

@@ -1,0 +1,55 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "inventory": "Redstone.png",
+        "base": "RedTex.png"
+    },
+    "elements": [
+    ],
+    
+    "variants": 
+    {
+        "connectedToNone": [
+            {  
+                "from": [ 7, 0, 7 ],
+                "to": [ 9, 1, 9 ],
+                "shade": false,
+                "texture": "base"
+            }
+        ],
+        
+        "connectedToPX_append_rotate": [
+            { 
+                "from": [ 9, 0, 7 ],
+                "to": [ 16, 1, 9 ],
+                "shade": false,
+                "texture": "base"
+            }
+        ],
+        
+        "connectedToPUX_append_rotate": [
+            { 
+                "from": [ 9, 0, 7 ],
+                "to": [ 16, 1, 9 ],
+                "shade": false,
+                "texture": "base"
+            },
+            
+            { 
+                "from": [ 15, 0, 7 ],
+                "to": [ 16, 16, 9 ],
+                "shade": false,
+                "texture": "base"
+            }
+        ],
+        
+        "connectedToPDX_append_rotate": [
+            { 
+                "from": [ 9, 0, 7 ],
+                "to": [ 16, 1, 9 ],
+                "shade": false,
+                "texture": "base"
+            }
+        ]
+    }
+}

@@ -449,6 +449,345 @@ namespace Blocks
         }
     }
 
+    public static class RotationUtils
+    {
+
+        public static int[] CONNECTIVITY_OFFSETS = new int[]
+        {
+
+            -1,0,0,
+            1,0,0,
+            // 0,0,0,
+            0,0,-1,
+            0,0,1,
+
+            -1,-1,0,
+            1,-1,0,
+            0,-1,0,
+            0,-1,-1,
+            0,-1,1,
+
+
+            -1,1,0,
+            1,1,0,
+            0,1,0,
+            0,1,-1,
+            0,1,1
+        };
+
+
+        public static int NUM_CONNECTIVITY_OFFSETS = CONNECTIVITY_OFFSETS.Length / 3;
+
+        public class RotationVariant
+        {
+            public bool allowAppend;
+            public bool allowRotate;
+            public bool[] values = new bool[NUM_CONNECTIVITY_OFFSETS];
+
+            public override int GetHashCode()
+            {
+                return ToMergedVal();
+            }
+
+            int mergedVal;
+            bool foundMergedVal = false;
+
+            public int ToMergedVal()
+            {
+                if (foundMergedVal)
+                {
+                    return mergedVal;
+                }
+                mergedVal = 0;
+                for (int i = 0; i < values.Length; i++)
+                {
+                    if (values[i])
+                    {
+                        mergedVal = mergedVal | (1 << i);
+                    }
+                }
+                foundMergedVal = true;
+                return mergedVal;
+            }
+
+            BlockModelElement[] elements;
+
+
+
+            Dictionary<int, Blocks.RenderTriangle[]>[] cachedStateAlternatives = new Dictionary<int, Blocks.RenderTriangle[]>[] {
+                new Dictionary<int, Blocks.RenderTriangle[]>(),
+                new Dictionary<int, Blocks.RenderTriangle[]>(),
+                new Dictionary<int, Blocks.RenderTriangle[]>(),
+                new Dictionary<int, Blocks.RenderTriangle[]>()
+            };
+
+
+            public Blocks.RenderTriangle[] ToRenderTriangles(BlockData.BlockRotation blockRotation = BlockData.BlockRotation.Degrees0, int state = 0, BlockModel parent=null)
+            {
+                int rotationI = PhysicsUtils.RotationToDegrees(blockRotation) / 90;
+                if (cachedStateAlternatives[rotationI].ContainsKey(state))
+                {
+                    return cachedStateAlternatives[rotationI][state];
+                }
+
+                // Degrees to rotation does mod 360 for us so we don't need to worry about that
+                BlockData.BlockRotation combinedRotation = PhysicsUtils.DegreesToRotation(PhysicsUtils.RotationToDegrees(blockRotation) + PhysicsUtils.RotationToDegrees(rot));
+
+                List<Blocks.RenderTriangle> res = new List<RenderTriangle>();
+
+                foreach (BlockModelElement element in elements)
+                {
+                    res.AddRange(element.ToRenderTriangles(combinedRotation, state));
+                }
+
+                if (mergedA != null)
+                {
+                    res.AddRange(mergedA.ToRenderTriangles(combinedRotation, state, parent));
+                }
+                if (mergedB != null)
+                {
+                    res.AddRange(mergedB.ToRenderTriangles(combinedRotation, state, parent));
+                }
+
+                if (parent != null)
+                {
+                    res.AddRange(parent.ToRenderTriangles(blockRotation, state, ToMergedVal()));
+                }
+
+                Blocks.RenderTriangle[] result = res.ToArray();
+                cachedStateAlternatives[rotationI][state] = result;
+                return result;
+            }
+
+            public RotationVariant[] RotatedVariants()
+            {
+                List<RotationVariant> variants = new List<RotationVariant>();
+                if (allowRotate)
+                {
+                    variants.Add(new RotationVariant(this, BlockData.BlockRotation.Degrees90));
+                    variants.Add(new RotationVariant(this, BlockData.BlockRotation.Degrees180));
+                    variants.Add(new RotationVariant(this, BlockData.BlockRotation.Degrees270));
+                }
+                return variants.ToArray();
+            }
+
+            BlockData.BlockRotation rot = BlockData.BlockRotation.Degrees0;
+
+            public RotationVariant(RotationVariant prev, BlockData.BlockRotation rot)
+            {
+                this.elements = prev.elements;
+                this.rot = rot;
+                this.allowAppend = prev.allowAppend;
+
+                for (int i = 0; i < NUM_CONNECTIVITY_OFFSETS; i++)
+                {
+
+                    if (!prev.values[i])
+                    {
+                        continue;
+                    }
+                    int pos = i * 3;
+                    long offsetX = CONNECTIVITY_OFFSETS[pos];
+                    long offsetY = CONNECTIVITY_OFFSETS[pos + 1];
+                    long offsetZ = CONNECTIVITY_OFFSETS[pos + 2];
+                    long myOffX, myOffY, myOffZ;
+
+                    PhysicsUtils.RotateOffsetRelativeToRotation(rot, offsetX, offsetY, offsetZ, out myOffX, out myOffY, out myOffZ);
+
+                    int newOffX = (int)myOffX;
+                    int newOffY = (int)myOffY;
+                    int newOffZ = (int)myOffZ;
+                    // find which index that maps to
+                    bool foundIt = false;
+                    //Debug.Log("rotating " + offsetX + " " + offsetY + " " + offsetZ + " to " + newOffX + " " + newOffY + " " + newOffZ);
+                    for (int j = 0; j < NUM_CONNECTIVITY_OFFSETS; j++)
+                    {
+                        if (CONNECTIVITY_OFFSETS[j * 3] == newOffX &&
+                            CONNECTIVITY_OFFSETS[j * 3 + 1] == newOffY &&
+                            CONNECTIVITY_OFFSETS[j * 3 + 2] == newOffZ)
+                        {
+                            values[j] = true;
+                            foundIt = true;
+                            break;
+                        }
+                    }
+                    if (!foundIt)
+                    {
+                        Debug.LogWarning("could not find rotated offsets " + newOffX + " " + newOffY + " " + newOffZ);
+                    }
+                }
+            }
+
+
+            RotationVariant mergedA, mergedB;
+
+            public RotationVariant(RotationVariant a, RotationVariant b)
+            {
+                this.elements = new BlockModelElement[0];
+                for (int i = 0; i < NUM_CONNECTIVITY_OFFSETS; i++)
+                {
+                    if (a.values[i] || b.values[i])
+                    {
+                        values[i] = true;
+                    }
+                }
+
+                this.mergedA = a;
+                this.mergedB = b;
+            }
+
+            public RotationVariant(string name, BlockModelElement[] elements)
+            {
+                this.rot = BlockData.BlockRotation.Degrees0;
+                this.elements = elements;
+                name = name.ToLower();
+                if (name.Substring(0, "connectedto".Length) == "connectedto")
+                {
+                    string[] pieces = name.Substring("connectedto".Length).Split(new char[] { '_' });
+
+                    foreach (string piece in pieces)
+                    {
+                        int offsetX = 0;
+                        int offsetY = 0;
+                        int offsetZ = 0;
+                        if (piece == "px") offsetX = 1;
+                        else if (piece == "py") offsetY = 1;
+                        else if (piece == "pz") offsetZ = 1;
+                        else if (piece == "nx") offsetX = -1;
+                        else if (piece == "ny") offsetY = -1;
+                        else if (piece == "nz") offsetZ = -1;
+                        else if (piece == "nux") { offsetX = -1; offsetY = 1; }
+                        else if (piece == "nuz") { offsetZ = -1; offsetY = 1; }
+                        else if (piece == "pux") { offsetX = 1; offsetY = 1; }
+                        else if (piece == "puz") { offsetZ = 1; offsetY = 1; }
+                        else if (piece == "ndx") { offsetX = -1; offsetY = -1; }
+                        else if (piece == "ndz") { offsetZ = -1; offsetY = -1; }
+                        else if (piece == "pdx") { offsetX = 1; offsetY = -1; }
+                        else if (piece == "pdz") { offsetZ = 1; offsetY = -1; }
+                        else if (piece == "append") allowAppend = true;
+                        else if (piece == "rotate") allowRotate = true;
+
+                        for (int i = 0; i < NUM_CONNECTIVITY_OFFSETS; i++)
+                        {
+                            if (CONNECTIVITY_OFFSETS[i*3] == offsetX &&
+                                CONNECTIVITY_OFFSETS[i*3+1] == offsetY && 
+                                CONNECTIVITY_OFFSETS[i*3+2] == offsetZ)
+                            {
+                                values[i] = true;
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+
+
+        public class RotationVariantCollection
+        {
+            Dictionary<int, RotationVariant> collection = new Dictionary<int, RotationVariant>();
+            List<RotationVariant> baseVariants = new List<RotationVariant>();
+            BlockModel rootModel;
+            public RotationVariantCollection(Dictionary<string, BlockModelElement[]> variants, BlockModel rootModel)
+            {
+                this.rootModel = rootModel;
+                foreach (KeyValuePair<string, BlockModelElement[]> variant in variants)
+                {
+                    RotationVariant cur = new RotationVariant(variant.Key, variant.Value);
+                    foreach (BlockModelElement element in variant.Value)
+                    {
+                        element.rootModel = rootModel;
+                    }
+                    Debug.Log("added base value of " + cur.ToMergedVal());
+                    baseVariants.Add(cur);
+                    collection[cur.ToMergedVal()] = cur;
+                }
+
+                List<RotationVariant> curBaseVariants = new List<RotationVariant>(baseVariants);
+
+                foreach (RotationVariant baseVariant in curBaseVariants)
+                {
+                    if (baseVariant.allowRotate)
+                    {
+                        foreach (RotationVariant rotatedVariant in baseVariant.RotatedVariants())
+                        {
+                            //Debug.Log("have rotated variant " + rotatedVariant.ToMergedVal());
+                            // add if we don't have that represented yet
+                            if(!collection.ContainsKey(rotatedVariant.ToMergedVal()))
+                            {
+                                //Debug.Log("added rotated value of " + rotatedVariant.ToMergedVal());
+                                baseVariants.Add(rotatedVariant);
+                                collection[rotatedVariant.ToMergedVal()] = rotatedVariant;
+                            }
+                        }
+                    }
+                }
+            }
+
+            public bool IsSubsetOrEqualToFlags(int maybeSubsetOrEqualTo, int flags)
+            {
+                return (maybeSubsetOrEqualTo & flags) == maybeSubsetOrEqualTo;
+            }
+
+
+            public RotationVariant GetRotationVariant(int rotationFlags)
+            {
+                //Debug.Log("getting rotation variant of " + rotationFlags);
+                if (collection.ContainsKey(rotationFlags))
+                {
+                    //Debug.Log("has cached " + rotationFlags);
+                    return collection[rotationFlags];
+                }
+                else
+                {
+                    //Debug.Log("does not have cached " + rotationFlags);
+                    int mergedFlags = 0;
+                    RotationVariant merged = null;
+                    // we could not find one, try merging
+                    foreach (RotationVariant variant in baseVariants)
+                    {
+                        // see if it is a subset of the needed flags
+                        if (IsSubsetOrEqualToFlags(variant.ToMergedVal(), rotationFlags))
+                        {
+                            mergedFlags = mergedFlags | variant.ToMergedVal();
+                            if (merged == null)
+                            {
+                                merged = variant;
+                            }
+                            else
+                            {
+                                // make sure it actually contributes something
+                                if (IsSubsetOrEqualToFlags(variant.ToMergedVal(), merged.ToMergedVal()))
+                                {
+
+                                }
+                                else
+                                {
+                                    // merge it with the current merged one
+                                    merged = new RotationVariant(merged, variant);
+
+                                    // see if we have all the needed flags filled now
+                                    if (merged.ToMergedVal() == rotationFlags)
+                                    {
+                                        // we have them all, we are good
+                                        collection[merged.ToMergedVal()] = merged;
+                                        return merged;
+                                    }
+                                }
+                            }
+                            //Debug.Log("merging with " + variant.ToMergedVal() + " to give us " + merged.ToMergedVal());
+
+                        }
+                    }
+
+                    //Debug.Log("got result of " + merged);
+                    // could not find any and could not manage to merge things or rotate things to get something that works
+                    return merged;
+                }
+            }
+        }
+    }
+
 
     public class RaycastResults
     {
@@ -457,6 +796,8 @@ namespace Blocks
         public LVector3 blockBeforeHit;
         public float dist;
         public Vector3 normal;
+        public AxisDir axisHitFrom;
+
 
         public RaycastResults(Vector3 hitPos, LVector3 hitBlock, LVector3 blockBeforeHit, float dist, Vector3 normal)
         {
@@ -465,6 +806,159 @@ namespace Blocks
             this.blockBeforeHit = blockBeforeHit;
             this.dist = dist;
             this.normal = normal;
+
+            if (blockBeforeHit == hitBlock)
+            {
+                axisHitFrom = AxisDir.None;
+            }
+            else
+            {
+                if (blockBeforeHit.x < hitBlock.x) axisHitFrom = AxisDir.XMinus;
+                else if (blockBeforeHit.x > hitBlock.x) axisHitFrom = AxisDir.XPlus;
+                else if (blockBeforeHit.y < hitBlock.y) axisHitFrom = AxisDir.YMinus;
+                else if (blockBeforeHit.y > hitBlock.y) axisHitFrom = AxisDir.YPlus;
+                else if (blockBeforeHit.z < hitBlock.z) axisHitFrom = AxisDir.ZMinus;
+                else if (blockBeforeHit.z > hitBlock.z) axisHitFrom = AxisDir.ZPlus;
+                else axisHitFrom = AxisDir.None;
+            }
+
+        }
+    }
+
+
+    namespace ExtensionMethods
+    {
+        public static class IntBitFiddleExtensions
+        {
+            /// <summary>
+            /// Gets the uint represented by the given bits
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <returns></returns>
+            public static uint GetBits(this uint a, int lowestBitInclusive, int highestBitExclusive = 32)
+            {
+                return PhysicsUtils.GetBits(a, lowestBitInclusive, highestBitExclusive);
+            }
+
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static uint SettingBits(this uint a, int lowestBitInclusive, int highestBitExclusive, uint value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, highestBitExclusive, value);
+            }
+
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static uint SettingBits(this uint a, int lowestBitInclusive, uint value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, value);
+            }
+        }
+
+
+
+        public static class ShortBitFiddleExtensions
+        {
+            /// <summary>
+            /// Gets the ushort represented by the given bits
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <returns></returns>
+            public static ushort GetBits(this ushort a, int lowestBitInclusive, int highestBitExclusive = 16)
+            {
+                return PhysicsUtils.GetBits(a, lowestBitInclusive, highestBitExclusive);
+            }
+
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static ushort SettingBits(this ushort a, int lowestBitInclusive, int highestBitExclusive, ushort value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, highestBitExclusive, value);
+            }
+
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static ushort SettingBits(this ushort a, int lowestBitInclusive, ushort value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, value);
+            }
+        }
+
+
+
+
+        public static class ByteBitFiddleExtensions
+        {
+            /// <summary>
+            /// Gets the byte represented by the given bits
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <returns></returns>
+            public static byte GetBits(this byte a, int lowestBitInclusive, int highestBitExclusive = 16)
+            {
+                return PhysicsUtils.GetBits(a, lowestBitInclusive, highestBitExclusive);
+            }
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static byte SettingBits(this byte a, int lowestBitInclusive, int highestBitExclusive, byte value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, highestBitExclusive, value);
+            }
+
+
+            /// <summary>
+            /// Overwrites the specified bits with the new value
+            /// </summary>
+            /// <param name="a"></param>
+            /// <param name="lowestBitInclusive"></param>
+            /// <param name="highestBitExclusive"></param>
+            /// <param name="value"></param>
+            /// <returns></returns>
+            public static byte SettingBits(this byte a, int lowestBitInclusive, byte value)
+            {
+                return PhysicsUtils.SettingBits(a, lowestBitInclusive, value);
+            }
         }
     }
 
@@ -472,6 +966,330 @@ namespace Blocks
     public class PhysicsUtils
     {
 
+
+        public static int RotationToDegrees(BlockData.BlockRotation rotation)
+        {
+            if (rotation == BlockData.BlockRotation.Degrees0)
+            {
+                return 0;
+            }
+            else if(rotation == BlockData.BlockRotation.Degrees90)
+            {
+                return 90;
+            }
+            else if(rotation == BlockData.BlockRotation.Degrees180)
+            {
+                return 180;
+            }
+            else if(rotation == BlockData.BlockRotation.Degrees270)
+            {
+                return 270;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// This will do mod and rounding for you, so negative values and values greater than 360 will be put back in the correct range and rounded to nearest multiple of 90
+        /// </summary>
+        /// <param name="degrees"></param>
+        /// <returns></returns>
+        public static BlockData.BlockRotation DegreesToRotation(int degrees)
+        {
+            degrees = GoodMod(degrees, 360);
+            // floor to nearest 90
+            degrees = degrees / 90;
+            degrees *= 90;
+            if (degrees == 0)
+            {
+                return BlockData.BlockRotation.Degrees0;
+            }
+            else if(degrees == 90)
+            {
+                return BlockData.BlockRotation.Degrees90;
+            }
+            else if(degrees == 180)
+            {
+                return BlockData.BlockRotation.Degrees180;
+            }
+            else if(degrees == 270)
+            {
+                return BlockData.BlockRotation.Degrees270;
+            }
+            else
+            {
+                return BlockData.BlockRotation.Degrees0;
+            }
+        }
+
+        public static void RotateOffsetRelativeToRotation(BlockData.BlockRotation rotation, long offX, long offY, long offZ, out long relativeOffX, out long relativeOffY, out long relativeOffZ)
+        {
+            if (rotation == BlockData.BlockRotation.Degrees0)
+            {
+                relativeOffX = offX;
+                relativeOffY = offY;
+                relativeOffZ = offZ;
+            }
+            else if (rotation == BlockData.BlockRotation.Degrees90)
+            {
+                relativeOffX = offZ;
+                relativeOffY = offY;
+                relativeOffZ = -offX;
+            }
+            else if (rotation == BlockData.BlockRotation.Degrees180)
+            {
+                relativeOffX = -offX;
+                relativeOffY = offY;
+                relativeOffZ = -offZ;
+            }
+            else if (rotation == BlockData.BlockRotation.Degrees270)
+            {
+                relativeOffX = -offZ;
+                relativeOffY = offY;
+                relativeOffZ = offX;
+            }
+            else
+            {
+                relativeOffX = offX;
+                relativeOffY = offY;
+                relativeOffZ = offZ;
+            }
+        }
+
+        /// <summary>
+        /// Gets the uint that is repesented by the bits from lowestBitInclusive to all the bits before highestBitExclusive
+        /// This is like accessing a python array, also negative values are allowed and they will behave in the same way as a python array
+        /// This means that a negative value is treated as 32 + that negative value (since there are 32 bits in a c# uint)
+        /// For example:
+        /// GetBits(10, 0, -2)
+        /// Gets everything except the top two highest order bits
+        /// GetBits(10,2,0)
+        /// Will return 0 since highestBitExclusive is lower than lowestBitInclusive (no bits are retreived, default value is 0)
+        /// GetBits(10,0,32)
+        /// Will just return num (gets all the bits)
+        /// </summary>
+        /// <param name="num"></param>
+        /// <param name="lowestBit"></param>
+        /// <param name="highestBit"></param>
+        /// <returns></returns>
+        public static uint GetBits(uint num, int lowestBitInclusive, int highestBitExclusive=32)
+        {
+            int maxSize = sizeof(uint) * 8; // sizeof gives size in bytes, I need size in bits
+            int highestBit = highestBitExclusive - 1;
+            // lets you use -1 for highest bit
+            if (highestBitExclusive < 0)
+            {
+                highestBitExclusive += maxSize;
+            }
+            if (lowestBitInclusive < 0)
+            {
+                lowestBitInclusive += maxSize;
+            }
+
+            if (highestBitExclusive > maxSize)
+            {
+                highestBitExclusive = maxSize;
+            }
+
+            if (lowestBitInclusive > maxSize)
+            {
+                return 0;
+            }
+
+            if (lowestBitInclusive >= highestBitExclusive)
+            {
+                return 0;
+            }
+
+            uint res = num >> lowestBitInclusive;
+
+            // we aren't using the highest bit, get everything
+            if (highestBitExclusive == maxSize)
+            {
+                return res;
+            }
+            // otherwise, mask off the bits that are too high
+            else
+            {
+
+                int numBits = highestBitExclusive - lowestBitInclusive;
+                // etc.
+                uint maskForThatManyBits = (uint)((1 << numBits) - 1);
+
+                return res & maskForThatManyBits;
+            }
+        }
+
+        /// <summary>
+        /// Returns 0b111...111 with nBits ones
+        /// </summary>
+        /// <param name="nBits"></param>
+        /// <returns></returns>
+        public static uint MaskForNBits(int nBits)
+        {
+            int maxSize = sizeof(uint) * 8; // sizeof gives size in bytes, I need size in bits
+            if (nBits >= maxSize)
+            {
+                uint res = 0;
+                return ~res; // invert all the bits, the trick below doesn't work if we are using all the bits
+            }
+            // if numBits = 1, 1 << 1 = 2 = 10 in binary. Minus 1 = 1
+            // if numBits = 2, 1 << 2 = 4 = 100 in binary. Minus 1 = 11
+            // if numBits = 3, 1 << 3 = 8 = 1000 in binary. Minus 1 = 111
+            return (uint)((1 << nBits) - 1);
+        }
+
+        public static uint ClearBits(uint originalVal, int lowestBitInclusive, int highestBitExclusive)
+        {
+            int maxSize = sizeof(uint) * 8; // sizeof gives size in bytes, I need size in bits
+            if (lowestBitInclusive >= maxSize)
+            {
+                return originalVal;
+            }
+            else
+            {
+                // not using highest bit exclusive
+                if (highestBitExclusive >= maxSize)
+                {
+                    highestBitExclusive = maxSize;
+                    // invert the bits
+
+                }
+                if (lowestBitInclusive >= highestBitExclusive)
+                {
+                    return originalVal;
+                }
+                else
+                {
+                    int nBits = highestBitExclusive - lowestBitInclusive;
+                    // bitwise invert mask that only gives you those bits, then bitwise and with original value to clear those bits
+                    uint bitMask = ~(MaskForNBits(nBits) << lowestBitInclusive);
+                    return originalVal & bitMask;
+                }
+            }
+        }
+
+        public static uint SettingBits(uint originalVal, int lowestBitInclusive, int highestBitExclusive, uint value)
+        {
+            int maxSize = sizeof(uint) * 8; // sizeof gives size in bytes, I need size in bits
+            uint clearedVal = ClearBits(originalVal, lowestBitInclusive, highestBitExclusive);
+            uint fixedValue = ClearBits(value << lowestBitInclusive, highestBitExclusive, maxSize); // clear everything past the number of bits
+            // bitwise or the two things together to get the results
+            return clearedVal | fixedValue;
+        }
+
+        public static uint SettingBits(uint originalVal, int lowestBitInclusive, uint value)
+        {
+            int maxSize = sizeof(uint) * 8; // sizeof gives size in bytes, I need size in bits
+            return SettingBits(originalVal, lowestBitInclusive, maxSize, value);
+        }
+
+
+
+        /// <summary>
+        /// Gets the uint that is repesented by the bits from lowestBitInclusive to all the bits before highestBitExclusive
+        /// This is like accessing a python array, also negative values are allowed and they will behave in the same way as a python array
+        /// This means that a negative value is treated as 32 + that negative value (since there are 32 bits in a c# uint)
+        /// For example:
+        /// GetBits(10, 0, -2)
+        /// Gets everything except the top two highest order bits
+        /// GetBits(10,2,0)
+        /// Will return 0 since highestBitExclusive is lower than lowestBitInclusive (no bits are retreived, default value is 0)
+        /// GetBits(10,0,32)
+        /// Will just return num (gets all the bits)
+        /// </summary>
+        /// <param name="num"></param>
+        /// <param name="lowestBit"></param>
+        /// <param name="highestBit"></param>
+        /// <returns></returns>
+        public static ushort GetBits(ushort num, int lowestBitInclusive, int highestBitExclusive = 16)
+        {
+            // I could the same code above for shorts, but since all computation is done in ints anyway (as far as I know?) I might as well just do this
+            // the cast will get rid of the bits we can't use
+            return (ushort)GetBits((uint)num, lowestBitInclusive, highestBitExclusive);
+        }
+
+        public static ushort ClearBits(ushort originalVal, int lowestBitInclusive, int highestBitExclusive)
+        {
+            return (ushort)ClearBits((uint)originalVal, lowestBitInclusive, highestBitExclusive);
+        }
+
+        public static ushort SettingBits(ushort originalVal, int lowestBitInclusive, int highestBitExclusive, ushort value)
+        {
+            return (ushort)SettingBits((uint)originalVal, lowestBitInclusive, highestBitExclusive, (uint)value);
+        }
+
+        public static ushort SettingBits(ushort originalVal, int lowestBitInclusive, ushort value)
+        {
+            int maxSize = sizeof(ushort) * 8; // sizeof gives size in bytes, I need size in bits
+            return SettingBits(originalVal, lowestBitInclusive, maxSize, value);
+        }
+
+
+        /// <summary>
+        /// Gets the uint that is repesented by the bits from lowestBitInclusive to all the bits before highestBitExclusive
+        /// This is like accessing a python array, also negative values are allowed and they will behave in the same way as a python array
+        /// This means that a negative value is treated as 32 + that negative value (since there are 32 bits in a c# uint)
+        /// For example:
+        /// GetBits(10, 0, -2)
+        /// Gets everything except the top two highest order bits
+        /// GetBits(10,2,0)
+        /// Will return 0 since highestBitExclusive is lower than lowestBitInclusive (no bits are retreived, default value is 0)
+        /// GetBits(10,0,32)
+        /// Will just return num (gets all the bits)
+        /// </summary>
+        /// <param name="num"></param>
+        /// <param name="lowestBit"></param>
+        /// <param name="highestBit"></param>
+        /// <returns></returns>
+        public static byte GetBits(byte num, int lowestBitInclusive, int highestBitExclusive = 16)
+        {
+            // I could the same code above for shorts, but since all computation is done in ints anyway (as far as I know?) I might as well just do this.
+            // the cast will get rid of the bits we can't use
+            return (byte)GetBits((uint)num, lowestBitInclusive, highestBitExclusive);
+        }
+
+        public static byte ClearBits(byte originalVal, int lowestBitInclusive, int highestBitExclusive)
+        {
+            return (byte)ClearBits((byte)originalVal, lowestBitInclusive, highestBitExclusive);
+        }
+
+        public static byte SettingBits(byte originalVal, int lowestBitInclusive, int highestBitExclusive, byte value)
+        {
+            return (byte)SettingBits((uint)originalVal, lowestBitInclusive, highestBitExclusive, (uint)value);
+        }
+
+        public static byte SettingBits(byte originalVal, int lowestBitInclusive, byte value)
+        {
+            int maxSize = sizeof(byte) * 8; // sizeof gives size in bytes, I need size in bits
+            return SettingBits(originalVal, lowestBitInclusive, maxSize, value);
+        }
+
+        public static BlockData.BlockRotation AxisToRotation(AxisDir dir)
+        {
+            if (dir == AxisDir.XMinus)
+            {
+                return BlockData.BlockRotation.Degrees0;
+            }
+            else if(dir == AxisDir.XPlus)
+            {
+                return BlockData.BlockRotation.Degrees180;
+            }
+            else if(dir == AxisDir.ZMinus)
+            {
+                return BlockData.BlockRotation.Degrees90;
+            }
+            else if(dir == AxisDir.ZPlus)
+            {
+                return BlockData.BlockRotation.Degrees270;
+            }
+            else
+            {
+                return BlockData.BlockRotation.Degrees0;
+            }
+        }
 
         public static int PackTwoValuesIntoInt(short a, short b)
         {
@@ -866,6 +1684,7 @@ namespace Blocks
                 //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF);
                 //curPosL = LVector3.FromUnityVector3(resPosF);
 
+
                 if (Vector3.Distance(prevPosF, origin) > maxDist) // too far
                 {
                     return false;
@@ -873,10 +1692,32 @@ namespace Blocks
                 //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF + " with distance " + Vector3.Distance(prevPosF, origin) + " and max distance " + maxDist);
 
 
-                if (IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
+                bool hitBlock;
+
+
+                Vector3 tmpHitPos;
+                if (World.mainWorld.HasNonBlockModel(newCurPosL.Block))
+                {
+                    if (IntersectWithBlockModel(newCurPosL, newCurPosL.Block, prevPosF, dir, World.mainWorld.worldScale * 100, out tmpHitPos))
+                    {
+                        hitBlock = true;
+                    }
+                    else
+                    {
+                        hitBlock = false;
+                    }
+                }
+                else
+                {
+                    tmpHitPos = prevPosF;
+                    hitBlock = true;
+                }
+
+
+                if (hitBlock && IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
                 {
                     hitPos = newCurPosL;
-                    surfaceHitPos = prevPosF;
+                    surfaceHitPos = tmpHitPos;
                     posBeforeHit = new LVector3(newCurPosL.x, newCurPosL.y, newCurPosL.z);
                     posBeforeHit[prevMinD] -= (long)Mathf.Sign(rayDir[prevMinD]);
                     float[] normalArr = new float[] { 0, 0, 0 };
@@ -901,6 +1742,111 @@ namespace Blocks
         }
 
 
+        public static bool IntersectWithBlockModel(LVector3 pos, BlockValue block, Vector3 origin, Vector3 dir, float maxDist, out Vector3 hitPos)
+        {
+            hitPos = Vector3.zero;
+            if (!World.mainWorld.HasNonBlockModel(block))
+            {
+                return true;
+            }
+            else
+            {
+                Vector3 actualOrigin = origin * World.mainWorld.worldScale;
+                dir = dir.normalized;
+                //Debug.Log("trying to intersect custom model with block pos " + pos + " and block " + block);
+                RenderTriangle[] triangles = World.mainWorld.GetTrianglesForBlock(pos);
+                for(int i = 0; i < triangles.Length; i++)
+                {
+                    Vector3 v1 = new Vector3(triangles[i].vertex1.x, triangles[i].vertex1.y, triangles[i].vertex1.z);
+                    Vector3 v2 = new Vector3(triangles[i].vertex2.x, triangles[i].vertex2.y, triangles[i].vertex2.z);
+                    Vector3 v3 = new Vector3(triangles[i].vertex3.x, triangles[i].vertex3.y, triangles[i].vertex3.z);
+
+                    //Debug.Log("triangle has pos " + v1 + " " + v2 + " " + v3 + " and we have origin " + origin + " with dir " + dir);
+                    if (RayTriangleIntersect(origin, dir, v1, v2, v3, maxDist, out hitPos))
+                    {
+                        //Debug.Log("hit triangle!");
+                        return true;
+                    }
+                }
+                //Debug.Log("failed to intersect custom model");
+                return false;
+            }
+        }
+
+
+        static float kEpsilon = 0.00000001f;
+        // modified from https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
+        static bool RayTriangleIntersect(Vector3 orig, Vector3 dir,
+            Vector3 v0, Vector3 v1, Vector3 v2,
+            float t, out Vector3 hitPos)
+        {
+            hitPos = Vector3.zero;
+            // compute plane's normal
+            Vector3 v0v1 = v1 - v0;
+            Vector3 v0v2 = v2 - v0;
+            // no need to normalize
+            Vector3 N = Vector3.Cross(v0v1, v0v2); // N 
+            float area2 = N.magnitude;
+
+            // Step 1: finding P
+
+            // check if ray and plane are parallel ?
+            float NdotRayDirection = Vector3.Dot(N, dir);
+            if (System.Math.Abs(NdotRayDirection) < kEpsilon) // almost 0 
+            {
+                return false; // they are parallel so they don't intersect ! 
+            }
+
+            // compute d parameter using equation 2
+            float d = Vector3.Dot(N, v0);
+
+
+            t = Vector3.Dot((v0 - orig), N.normalized) / Vector3.Dot(dir.normalized, N.normalized);
+
+
+
+            // compute t (equation 3)
+            // t = (Vector3.Dot(N, orig) + d) / NdotRayDirection;
+            // check if the triangle is in behind the ray
+            if (t < 0)
+            {
+                //Debug.Log("the triangle is behind? with t = " + t);
+                return false;
+            }
+            else
+            {
+                //Debug.Log("the triangle is not behind, with t = " + t);
+            }
+
+            // compute the intersection point using equation 1
+            Vector3 P = orig + t * dir;
+
+            //Debug.Log("got intersection point " + P + " with origin " + orig + " and dir " + dir + " and triangle points " + v0 + " " + v1 + " " + v2);
+
+            // Step 2: inside-outside test
+            Vector3 C; // vector perpendicular to triangle's plane 
+
+            // edge 0
+            Vector3 edge0 = v1 - v0;
+            Vector3 vp0 = P - v0;
+            C = Vector3.Cross(edge0, vp0);
+            if (Vector3.Dot(N, C) < 0) return false; // P is on the right side 
+
+            // edge 1
+            Vector3 edge1 = v2 - v1;
+            Vector3 vp1 = P - v1;
+            C = Vector3.Cross(edge1, vp1);
+            if (Vector3.Dot(N, C) < 0) return false; // P is on the right side 
+
+            // edge 2
+            Vector3 edge2 = v0 - v2;
+            Vector3 vp2 = P - v2;
+            C = Vector3.Cross(edge2, vp2);
+            if (Vector3.Dot(N, C) < 0) return false; // P is on the right side; 
+
+            hitPos = orig + dir * t;
+            return true; // this ray hits the triangle 
+        }
 
         // Works by hopping to nearest plane in dir, then looking at block inside midpoint between cur and next. If a block is there, we use the step before cur to determine direction (unless first step, in which case step before next should be right)
         public static bool CustomRaycast(Vector3 origin, Vector3 dir, float maxDist, IsBlockValidForSearch isBlockValid, IsBlockValidForSearch isBlockDesiredResult, out RaycastResults hitResults, int maxSteps = -1)
@@ -1016,12 +1962,34 @@ namespace Blocks
                 //Debug.Log("stepped from " + curPosL + " and cur pos (" + curPosF[0] + "," + curPosF[1] + "," + curPosF[2] + ") to point " + newCurPosL + " and cur pos " + resPosF + " with distance " + Vector3.Distance(prevPosF, origin) + " and max distance " + maxDist);
 
 
+                bool hitBlock;
 
-                if (isBlockDesiredResult(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
+
+                Vector3 tmpHitPos;
+                if (World.mainWorld.HasNonBlockModel(newCurPosL.Block))
+                {
+                    if (IntersectWithBlockModel(newCurPosL, newCurPosL.Block, origin, dir, maxDist, out tmpHitPos))
+                    {
+                        hitBlock = true;
+                    }
+                    else
+                    {
+                        hitBlock = false;
+                    }
+                }
+                else
+                {
+                    tmpHitPos = prevPosF;
+                    hitBlock = true;
+                }
+
+
+
+                if (hitBlock && isBlockDesiredResult(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
                 //if (IsBlockSolid(World.mainWorld[newCurPosL.x, newCurPosL.y, newCurPosL.z]))
                 {
                     hitPos = newCurPosL;
-                    surfaceHitPos = prevPosF;
+                    surfaceHitPos = tmpHitPos;
                     posBeforeHit = new LVector3(newCurPosL.x, newCurPosL.y, newCurPosL.z);
                     posBeforeHit[prevMinD] -= (long)Mathf.Sign(rayDir[prevMinD]);
                     float[] normalArr = new float[] { 0, 0, 0 };
@@ -1039,7 +2007,7 @@ namespace Blocks
                 }
 
 
-                if (!isBlockValid(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
+                if (hitBlock && !isBlockValid(newCurPosL.Block, newCurPosL.x, newCurPosL.y, newCurPosL.z, prevPosLTested.x, prevPosLTested.y, prevPosLTested.z))
                 {
                     return false;
                 }

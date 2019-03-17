@@ -13,6 +13,12 @@ public class Light : Block
         destroyBlock = true;
     }
 
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Light;
+    }
+
+
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = false;
@@ -30,6 +36,12 @@ public class WaterSource : Block
     {
         CreateBlockEntity(Example.Sand, positionOfBlock);
         destroyBlock = true;
+    }
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Sand;
     }
 
     public override void OnTick(BlockData block)
@@ -111,6 +123,12 @@ namespace ExtensionMethods
 
 public class WaterNewWithPressure : Block
 {
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Water;
+    }
+
 
     public short tickId = -1;
     public override void OnTickStart()
@@ -332,6 +350,11 @@ public class Lava : Block
         destroyBlock = false;
     }
 
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Lava;
+    }
+
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = false;
@@ -367,6 +390,12 @@ public class BallTrack : Block
     {
         CreateBlockEntity(Example.BallTrack, positionOfBlock);
         destroyBlock = true;
+    }
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.BallTrack;
     }
 
     public override void OnTick(BlockData block)
@@ -417,6 +446,13 @@ public class BallTrackHorizontalFull : Block
         //CreateBlockEntity(Example.BallTrackHorizontal, positionOfBlock);
         destroyBlock = true;
     }
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.BallTrackZFull;
+    }
+
 
 
     public override void OnTick(BlockData block)
@@ -574,18 +610,146 @@ public class BallTrackHorizontalFull : Block
 }
 
 
+public class RedstoneTorch : Block
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        //CreateBlockEntity(Example.RedstoneTorch, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        if (facePlacedOn == AxisDir.YMinus || facePlacedOn == AxisDir.YPlus || facePlacedOn == AxisDir.None)
+        {
+            return Example.RedstoneTorch;
+        }
+        else
+        {
+            return Example.RedstoneTorchOnSide;
+        }
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
+
+public class Connectable : Block
+{
+    BlockValue notConnected;
+    BlockValue connectedToOne;
+    BlockValue connectedInLine;
+    BlockValue connectedInCorner;
+    BlockValue connectedToThree;
+    BlockValue connectedToFour;
+    public Connectable(BlockValue notConnected, BlockValue connectedToOne, BlockValue connectedInLine, BlockValue connectedInCorner, BlockValue connectedToThree, BlockValue connectedToFour)
+    {
+
+    }
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        throw new System.NotImplementedException();
+    }
+}
+
+public class Redstone : ConnectableBlock
+{
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Redstone, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public static BlockValue[] connectables =
+    {
+        Example.Redstone,
+        Example.RedstoneTorch,
+        Example.RedstoneTorchOnSide
+    };
+
+    public override bool CanConnect()
+    {
+        return true;
+    }
+
+    BlockValue[] cantPlaceOn = new BlockValue[]
+    {
+        Example.Redstone,
+        Example.RedstoneTorch,
+        Example.RedstoneTorchOnSide
+    };
+
+    public override bool CanBePlaced(AxisDir facePlacedOn, LVector3 pos)
+    {
+        BlockValue belowBlock = GetBlockNotRelative(pos.x, pos.y - 1, pos.z);
+        for (int i = 0; i < cantPlaceOn.Length; i++)
+        {
+            if (cantPlaceOn[i] == belowBlock)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+    {
+        for (int i = 0; i < connectables.Length; i++)
+        {
+            if (other == connectables[i])
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        block.rotation = BlockData.BlockRotation.Degrees0;
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Redstone;
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
+
+
 public static class BallTrackUtils
 {
-    public enum AxisDir
-    {
-        YPlus,
-        YMinus,
-        XPlus,
-        XMinus,
-        ZPlus,
-        ZMinus,
-        None
-    }
+   
 
     public static bool CanGoInto(BlockData a, AxisDir aRelativeOutAxis, BlockData b, AxisDir bRelativeInAxis)
     {
@@ -715,6 +879,11 @@ public class BallTrackTurnFull : Block
         destroyBlock = true;
     }
 
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.BallTrackTurnFull;
+    }
 
     public override void OnTick(BlockData block)
     {
@@ -885,6 +1054,12 @@ public class SimpleWater : Block2
         destroyBlock = false;
     }
 
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Water;
+    }
+
     bool IsWater(long x, long y, long z)
     {
         BlockValue block = GetBlockNotRelative(x, y, z);
@@ -946,6 +1121,13 @@ public class Water : Block2
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = false;
+    }
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Water;
     }
 
     bool IsWater(long x, long y, long z)
@@ -1127,6 +1309,13 @@ public class Grass : Block2
         destroyBlock = true;
     }
 
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Grass;
+    }
+
     int numGrassTicks;
     public override void OnTickStart()
     {
@@ -1197,7 +1386,14 @@ public class Leaf : StaticBlock
         }
         destroyBlock = true;
     }
-    
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Leaf;
+    }
+
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
@@ -1221,6 +1417,13 @@ public class Rock : StaticBlock
         {
             CreateBlockEntity(Example.Rock, positionOfBlock);
         }
+    }
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Rock;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -1261,6 +1464,13 @@ public class LargeRock : StaticBlock
         }
     }
 
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.LargeRock;
+    }
+
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
         if (thingBreakingWith.Block == Example.Rock || thingBreakingWith.Block == Example.SharpRock)
@@ -1287,6 +1497,12 @@ public class WetBark : StaticBlock
 {
 
 
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.WetBark;
+    }
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
@@ -1321,6 +1537,12 @@ public class LooseRocks : StaticBlock
         }
     }
 
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.LooseRocks;
+    }
+
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
         if (thingBreakingWith.Block == Example.Pickaxe)
@@ -1348,6 +1570,12 @@ public class Stone : StaticBlock
             CreateBlockEntity(Example.Rock, positionOfBlock);
         }
         destroyBlock = true;
+    }
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Stone;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -1380,6 +1608,13 @@ public class Trunk : StaticBlock
             destroyBlock = true;
         }
     }
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Trunk;
+    }
+
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
@@ -1419,6 +1654,13 @@ public class Chest : BlockWithInventory
         destroyBlock = true;
     }
 
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Chest;
+    }
+
+
     public override int InventorySpace()
     {
         return 16*3;
@@ -1452,6 +1694,14 @@ public class Barrel : BlockWithInventory
     {
         return 8*3;
     }
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Barrel;
+    }
+
 
     public override int NumCraftingOutputs()
     {
@@ -1488,6 +1738,13 @@ public class CraftingTable : BlockWithInventory
         return 1;
     }
 
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.CraftingTable;
+    }
+
     public override void OnTick(BlockData block)
     {
 
@@ -1506,11 +1763,22 @@ public class SimpleBlock : Block
 
     float baseBreakTime;
     Tuple<BlockValue, float>[] breakTimes;
-    public SimpleBlock(float baseBreakTime, params Tuple<BlockValue, float>[] breakTimes)
+    BlockValue block;
+    public SimpleBlock(BlockValue block, float baseBreakTime, params Tuple<BlockValue, float>[] breakTimes)
     {
+        this.block = block;
         this.baseBreakTime = baseBreakTime;
         this.breakTimes = breakTimes;
     }
+
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return block;
+    }
+
 
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -1545,6 +1813,12 @@ public class Bark : Block
         CreateBlockEntity(Example.Bark, positionOfBlock);
     }
 
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Bark;
+    }
 
     System.Random randomGen = new System.Random();
     public override void OnTick(BlockData block)
@@ -1583,8 +1857,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Grass, new Grass(), 64);
         AddCustomBlock(Example.Bark, new Bark(), 64);
         AddCustomBlock(Example.Trunk, new Trunk(), 64);
-        AddCustomBlock(Example.Dirt, new SimpleBlock(2.0f, new Tuple<BlockValue, float>(Example.Shovel, 1.0f)), 64);
-        AddCustomBlock(Example.Clay, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
+        AddCustomBlock(Example.Dirt, new SimpleBlock(Example.Dirt, 2.0f, new Tuple<BlockValue, float>(Example.Shovel, 1.0f)), 64);
+        AddCustomBlock(Example.Clay, new SimpleBlock(Example.Clay, 1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
         AddCustomBlock(Example.Stone, new Stone(), 64);
         AddCustomBlock(Example.Leaf, new Leaf(), 64);
         AddCustomBlock(Example.CraftingTable, new CraftingTable(), 64);
@@ -1592,7 +1866,7 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Rock, new Rock(), 64);
         AddCustomBlock(Example.LargeRock, new LargeRock(), 64);
         AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
-        AddCustomBlock(Example.IronOre, new SimpleBlock(100.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 5.0f)), 64);
+        AddCustomBlock(Example.IronOre, new SimpleBlock(Example.IronOre, 100.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 5.0f)), 64);
         AddCustomBlock(Example.Stick, new SimpleItem(), 64);
         AddCustomBlock(Example.Pickaxe, new SimpleItem(), 64);
         AddCustomBlock(Example.SharpRock, new SimpleItem(), 64);
@@ -1613,8 +1887,11 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Lava, new Lava(), 64);
         AddCustomBlock(Example.BallTrackZFull, new BallTrackHorizontalFull(), 64);
         AddCustomBlock(Example.BallTrackTurnFull, new BallTrackTurnFull(), 64);
-        AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(0.2f), 64);
-        AddCustomBlock(Example.BallTrackTurnEmpty, new SimpleBlock(0.2f), 64);
+        AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(Example.BallTrackZEmpty, 0.2f), 64);
+        AddCustomBlock(Example.BallTrackTurnEmpty, new SimpleBlock(Example.BallTrackTurnEmpty, 0.2f), 64);
+        AddCustomBlock(Example.RedstoneTorch, new RedstoneTorch(), 64);
+        AddCustomBlock(Example.RedstoneTorchOnSide, new RedstoneTorch(), 64);
+        AddCustomBlock(Example.Redstone, new Redstone(), 64);
         //AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 

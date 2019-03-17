@@ -49,6 +49,7 @@ namespace Blocks
         LVector3 chunkPos;
         LVector3 startPathingPos;
 
+        public int redstoneState = 8;
 
         public void Update()
         {
@@ -280,11 +281,18 @@ namespace Blocks
                 {
                     using (BlockData middleClickedOnBlock = World.mainWorld.GetBlockData(hitResults.hitBlock.x, hitResults.hitBlock.y, hitResults.hitBlock.z))
                     {
-                        int rotAngle = (int)middleClickedOnBlock.rotation;
-                        int oldAngle = rotAngle;
-                        rotAngle = (rotAngle + 90) % 360;
-                        middleClickedOnBlock.rotation = (BlockData.BlockRotation)rotAngle;
-                        //Debug.Log("rotating spooker from old rotation of " + oldAngle + " and spooker of " + hitResults.hitBlock + " to new rotation of " + rotAngle + " which is actually " + (BlockData.BlockRotation)rotAngle);
+                        if (middleClickedOnBlock.block == Example.Redstone)
+                        {
+                            middleClickedOnBlock.connectivityFlags = redstoneState;
+                        }
+                        else
+                        {
+                            int rotAngle = 90 * (int)middleClickedOnBlock.rotation;
+                            int oldAngle = rotAngle;
+                            rotAngle = (rotAngle + 90) % 360;
+                            middleClickedOnBlock.rotation = (BlockData.BlockRotation)(rotAngle / 90);
+                            //Debug.Log("rotating spooker from old rotation of " + oldAngle + " and spooker of " + hitResults.hitBlock + " to new rotation of " + rotAngle + " which is actually " + (BlockData.BlockRotation)rotAngle);
+                        }
                     }
                 }
             }
@@ -330,10 +338,15 @@ namespace Blocks
                     {
                         if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
                         {
-                            if (World.mainWorld.AllowedtoPlaceBlock(inventory.blocks[inventoryGui.selection].block))
+                            if (World.mainWorld.AllowedtoPlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.axisHitFrom, hitResults.blockBeforeHit))
                             {
-                                World.mainWorld.PlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit);
-                                World.mainWorld[hitResults.blockBeforeHit] = inventory.blocks[inventoryGui.selection].block;
+                                BlockValue blockPlacing = World.mainWorld.PrePlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit, hitResults.axisHitFrom);
+                                BlockData.BlockRotation rotation = PhysicsUtils.AxisToRotation(hitResults.axisHitFrom);
+                                using (BlockData dat = World.mainWorld.GetBlockData(hitResults.blockBeforeHit.x, hitResults.blockBeforeHit.y, hitResults.blockBeforeHit.z))
+                                {
+                                    dat.block = blockPlacing;
+                                    dat.rotation = rotation;
+                                }
                                 inventory.blocks[inventoryGui.selection].count -= 1;
                                 if (inventory.blocks[inventoryGui.selection].count <= 0)
                                 {

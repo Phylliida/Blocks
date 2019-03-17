@@ -227,8 +227,8 @@ namespace Blocks
         /// Sets the center of the rotation according to the scheme [x, y, z].
         /// </summary>
         /// 
-        [DefaultValue(new float[] { 0, 0, 0 })]
-        public float[] origin;
+        [DefaultValue(new double[] { 0, 0, 0 })]
+        public double[] origin;
 
         /// <summary>
         /// Specifies the direction of rotation, can be "x", "y" or "z".
@@ -240,7 +240,7 @@ namespace Blocks
         /// Specifies the angle of rotation. Can be 45 through -45 degrees in 22.5 degree increments.
         /// </summary>
         [DefaultValue(0)]
-        public float angle;
+        public double angle;
 
         /// <summary>
         /// Specifies whether or not to scale the faces across the whole block. Can be true or false. Defaults to false.
@@ -262,7 +262,8 @@ namespace Blocks
             {
                 return point;
             }
-            Vector3 pivot = new Vector3(origin[0], origin[1], origin[2]);
+            // -16 to 32 -> -1 to 2 (0 through 1 is inside the block)
+            Vector3 pivot = new Vector3((float)origin[0], (float)origin[1], (float)origin[2])/16.0f;
             return RotatePointAroundPivot(point, pivot, ToQuat());
         }
 
@@ -281,12 +282,12 @@ namespace Blocks
             {
                 vecAxis = new Vector3(0, 0, 1);
             }
-            float resAngleInDegrees = angle;
+            float resAngleInDegrees = (float)angle;
             if (limitAngle)
             {
 
                 // -45 to 45 -> 0 to 1
-                float angle01 = Mathf.Clamp01((angle + 45) / 90.0f);
+                float angle01 = Mathf.Clamp01(((float)angle + 45) / 90.0f);
                 // 0 to 1 -> 0 to 3
                 float angle03 = angle01 * 3;
                 // round to nearst int, will result in 0, 1, 2 or 3
@@ -318,12 +319,12 @@ namespace Blocks
         /// <summary>
         /// Start point of a cube according to the scheme [x, y, z]. Values must be between -16 and 32.
         /// </summary>
-        public float[] from;
+        public double[] from;
 
         /// <summary>
         /// Stop point of a cube according to the scheme [x, y, z]. Values must be between -16 and 32.
         /// </summary>
-        public float[] to;
+        public double[] to;
 
         [DefaultValue(null)]
         public string[] fromVars { get; set; }
@@ -909,7 +910,7 @@ namespace Blocks
             }
             else
             {
-                fromPos = new Vector3(from[0], from[1], from[2]);
+                fromPos = new Vector3((float)from[0], (float)from[1], (float)from[2]);
             }
 
 
@@ -923,7 +924,7 @@ namespace Blocks
             }
             else
             {
-                toPos = new Vector3(to[0], to[1], to[2]);
+                toPos = new Vector3((float)to[0], (float)to[1], (float)to[2]);
             }
 
             // -16 to 32 -> -1 to 2
@@ -966,8 +967,8 @@ namespace Blocks
                 BlockModelRotation customRotation = new BlockModelRotation
                 {
                     axis = "y",
-                    angle = -rotationDegrees,
-                    origin = new float[] {0.5f, 0, 0.5f}
+                    angle = rotationDegrees,
+                    origin = new double[] {8, 0, 8}
                 };
                 res = res.ApplyingTransformationToEachVertex(x => { return customRotation.ApplyToPoint(x); });
 
@@ -1032,6 +1033,9 @@ namespace Blocks
         /// Contains all the elements of the model. they can only have cubic forms. If both "parent" and "elements" are set, the "elements" tag overrides the "elements" tag from the previous model.
         /// </summary>
         public BlockModelElement[] elements;
+
+        [DefaultValue(null)]
+        public Dictionary<string, BlockModelElement[]> variants;
 
         string __comment = "";
 
@@ -1148,33 +1152,58 @@ namespace Blocks
 
         BlockModel cachedParent = null;
 
-        public RenderTriangle[] ToRenderTriangles(BlockData.BlockRotation rotation, int state)
+        RotationUtils.RotationVariantCollection collection = null;
+
+        public RenderTriangle[] ToRenderTriangles(BlockData.BlockRotation rotation, int state, int connectionFlags=0)
         {
-            int rotationI = ((int)rotation) / 90;
-            if (cachedStateAlternatives[rotationI].ContainsKey(state))
+            if (variants == null)
             {
-                return cachedStateAlternatives[rotationI][state];
+                int rotationI = ((int)rotation) / 90;
+                if (cachedStateAlternatives[rotationI].ContainsKey(state))
+                {
+                    return cachedStateAlternatives[rotationI][state];
+                }
+                else
+                {
+                    List<RenderTriangle> results = new List<RenderTriangle>();
+                    if (parent != "")
+                    {
+                        if (cachedParent == null)
+                        {
+                            cachedParent = FromJSONFilePath(parent);
+                        }
+                        results.AddRange(cachedParent.ToRenderTriangles(rotation, state));
+                    }
+                    foreach (BlockModelElement element in elements)
+                    {
+                        element.rootModel = this;
+                        results.AddRange(element.ToRenderTriangles(rotation, state));
+                    }
+
+                    RenderTriangle[] actualResults = results.ToArray();
+                    cachedStateAlternatives[rotationI][state] = actualResults;
+                    return actualResults;
+                }
             }
             else
             {
-                List<RenderTriangle> results = new List<RenderTriangle>();
-                if (parent != "")
+                if (parent != "" && cachedParent == null)
                 {
-                    if (cachedParent == null)
-                    {
-                        cachedParent = FromJSONFilePath(parent);
-                    }
-                    results.AddRange(cachedParent.ToRenderTriangles(rotation, state));
+                    cachedParent = FromJSONFilePath(parent);
                 }
-                foreach (BlockModelElement element in elements)
+                if (collection == null)
                 {
-                    element.rootModel = this;
-                    results.AddRange(element.ToRenderTriangles(rotation, state));
+                    collection = new RotationUtils.RotationVariantCollection(variants, this);
                 }
-
-                RenderTriangle[] actualResults = results.ToArray();
-                cachedStateAlternatives[rotationI][state] = actualResults;
-                return actualResults;
+                RotationUtils.RotationVariant renderThing = collection.GetRotationVariant(connectionFlags);
+                if (renderThing != null)
+                {
+                    return renderThing.ToRenderTriangles(rotation, state, cachedParent);
+                }
+                else
+                {
+                    return collection.GetRotationVariant(0).ToRenderTriangles(rotation, state, cachedParent);
+                }
             }
         }
 
@@ -1203,6 +1232,11 @@ namespace Blocks
                     {
                         dependsOnState = true;
                     }
+                }
+
+                if (variants != null)
+                {
+                    dependsOnState = true;
                 }
             }
             if (dependsOnState)
