@@ -1341,7 +1341,7 @@ namespace Blocks
 
         public int state { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState1) { cachedState1 = GetState(wx, wy, wz, cx, cy, cz, BlockState.State); curBlockModifyState1 = world.blockModifyState; } return cachedState1; } set { if (value != state) { wasModified = true; cachedState1 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.State); curBlockModifyState1 = world.blockModifyState; CheckLocalStates(); } } }
         public int lightingState { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState2) { cachedState2 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; } return cachedState2; } set { if (value != lightingState) { wasModified = true; cachedState2 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Lighting); curBlockModifyState2 = world.blockModifyState; CheckLocalStates(); } } }
-        int animationState_ { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState_) { wasModified = true; cachedState3 = value; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
+        int animationState_ { get { if (!isGenerated) { return 0; } if (world.blockModifyState != curBlockModifyState3) { cachedState3 = GetState(wx, wy, wz, cx, cy, cz, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; } return cachedState3; } set { if (value != animationState_) { wasModified = true; cachedState3 = value; cachedNumConnected = false; SetState(wx, wy, wz, cx, cy, cz, value, BlockState.Animation); curBlockModifyState3 = world.blockModifyState; CheckLocalStates(); } } }
 
 
 
@@ -1353,7 +1353,10 @@ namespace Blocks
                 return animState;
             }
             set {
-                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(value, rotationState_);
+
+                short animState, rotState;
+                PhysicsUtils.UnpackValuesFromInt(animationState_, out animState, out rotState);
+                animationState_ = PhysicsUtils.PackTwoValuesIntoInt(value, rotState);
             }
         }
         short rotationState_
@@ -1381,6 +1384,40 @@ namespace Blocks
         }
 
 
+        public int numConnected
+        {
+            get
+            {
+                if (!cachedNumConnected)
+                {
+                    int cflags = connectivityFlags;
+                    int res = 0;
+                    for (int i = 0; i < 24; i++)
+                    {
+                        if (((1 << i) & cflags) != 0)
+                        {
+                            res += 1;
+                        }
+                    }
+                    numConnected_ = res;
+                    cachedNumConnected = true;
+                    return res;
+                }
+                else
+                {
+                    return numConnected_;
+                }
+            }
+            private set
+            {
+
+            }
+        }
+
+
+        int numConnected_;
+        bool cachedNumConnected = false;
+
         public int connectivityFlags
         {
             get
@@ -1396,11 +1433,11 @@ namespace Blocks
             set
             {
 
-
                 ushort curRotVal = (ushort)rotationState_;
                 ushort actualVal = 0;
                 actualVal = actualVal.SettingBits(minRotBitInclusive, maxRotBitExclusive, curRotVal);
                 actualVal = actualVal.SettingBits(minConnectedBitInclusive, maxConnectedBitExclusive, (ushort)value);
+                cachedNumConnected = false;
 
                 animationState_ = PhysicsUtils.PackTwoValuesIntoInt(animationState, (short)actualVal);
             }
@@ -1423,6 +1460,13 @@ namespace Blocks
         public void RotateOffsetRelativeToMe(long offX, long offY, long offZ, out long relativeOffX, out long relativeOffY, out long relativeOffZ)
         {
             PhysicsUtils.RotateOffsetRelativeToRotation(rotation, offX, offY, offZ, out relativeOffX, out relativeOffY, out relativeOffZ);
+        }
+
+
+        public void LocalOffsetToWorldOffset(long relativeOffX, long relativeOffY, long relativeOffZ, out long offsetX, out long offsetY, out long offsetZ)
+        {
+            BlockRotation invertedRotation = PhysicsUtils.DegreesToRotation(360 - PhysicsUtils.RotationToDegrees(rotation));
+            PhysicsUtils.RotateOffsetRelativeToRotation(invertedRotation, relativeOffX, relativeOffY, relativeOffZ, out offsetX, out offsetY, out offsetZ);
         }
 
 
@@ -1622,6 +1666,7 @@ namespace Blocks
             this.curBlockModifyStateBlock = -1;
             this.wasModified = false;
             this.chunkBiomeData = null;
+            this.cachedNumConnected = false;
             this.wx = x;
             this.wy = y;
             this.wz = z;
@@ -1844,7 +1889,7 @@ namespace Blocks
             
         }
 
-        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
         {
             return false;
         }
@@ -1858,7 +1903,7 @@ namespace Blocks
 
     public abstract class Block : ConnectableBlock
     {
-        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
         {
             return false;
         }
@@ -1909,7 +1954,7 @@ namespace Blocks
         }
 
 
-        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
         {
             return false;
         }
@@ -1934,7 +1979,7 @@ namespace Blocks
             return false;
         }
 
-        public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
         {
             return false;
         }
@@ -2000,6 +2045,112 @@ namespace Blocks
             }
         }
 
+        public int GetConnectivityFlag(long offsetX, long offsetY, long offsetZ)
+        {
+            for (int i = 0; i < RotationUtils.NUM_CONNECTIVITY_OFFSETS; i++)
+            {
+
+                long curOffsetX = RotationUtils.CONNECTIVITY_OFFSETS[i * 3];
+                long curOffsetY = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 1];
+                long curOffsetZ = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 2];
+
+                if (offsetX == curOffsetX && offsetY == curOffsetY && offsetZ == curOffsetZ)
+                {
+                    return (1 << i);
+                }
+            }
+            return 0;
+        }
+
+        public void ForceAddConnectedTo(BlockData block, long wx, long wy, long wz)
+        {
+            long offsetX = wx - block.x;
+            long offsetY = wy - block.y;
+            long offsetZ = wz - block.z;
+
+            block.connectivityFlags = block.connectivityFlags | GetConnectivityFlag(offsetX, offsetY, offsetZ);
+        }
+
+        public void UpdateConnections(BlockData block)
+        {
+            int connectedFlags = 0;
+            int numConnected = 0;
+            if (CanConnect())
+            {
+                for (int h = 0; h < RotationUtils.NUM_CONNECTIVITY_OFFSETS; h++)
+                {
+                    int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[h * 3];
+                    int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[h * 3 + 1];
+                    int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[h * 3 + 2];
+
+                    using (BlockData neighborData = world.GetBlockData(block.x + offsetX, block.y + offsetY, block.z + offsetZ))
+                    {
+                        if (CanConnect(block, neighborData, offsetY == 0, numConnected))
+                        {
+                            connectedFlags = connectedFlags | (1 << h);
+                            numConnected += 1;
+
+                            if (offsetY != 0)
+                            {
+                                for (int w = 0; w < RotationUtils.NUM_CONNECTIVITY_OFFSETS; w++)
+                                {
+                                    int offsetX2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3];
+                                    int offsetY2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 1];
+                                    int offsetZ2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 2];
+
+                                    if (offsetX2 == -offsetX && offsetY2 == -offsetY && offsetZ2 == -offsetZ)
+                                    {
+                                        if ((neighborData.connectivityFlags & (1 << w)) == 0)
+                                        {
+                                            world.AddBlockUpdate(block.x + offsetX, block.y + offsetY, block.z + offsetZ, alsoToNeighbors: true);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            block.connectivityFlags = connectedFlags;
+        }
+
+
+        public IEnumerable<BlockData> GetConnectedTo(BlockData block)
+        {
+            int connectivityFlags = block.connectivityFlags;
+            for (int i = 0; i < RotationUtils.NUM_CONNECTIVITY_OFFSETS; i++)
+            {
+                if ((connectivityFlags & (1 << i)) != 0)
+                {
+                    int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[i * 3];
+                    int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 1];
+                    int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 2];
+
+                    using (BlockData n = GetBlockDataNotRelative(block.x+offsetX, block.y +offsetY, block.z+offsetZ)) yield return n;
+                }
+            }
+        }
+
+
+        public IEnumerable<BlockData> GetConnectedToMe(BlockData block)
+        {
+            int connectivityFlags = block.connectivityFlags;
+            for (int i = 0; i < RotationUtils.NUM_CONNECTIVITY_OFFSETS; i++)
+            {
+                int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[i * 3];
+                int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 1];
+                int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[i * 3 + 2];
+
+                using (BlockData n = GetBlockDataNotRelative(block.x - offsetX, block.y - offsetY, block.z - offsetZ))
+                {
+                    if ((n.connectivityFlags & (1 << i)) != 0)
+                    {
+                        yield return n;
+                    }
+                }
+            }
+        }
 
         public IEnumerable<BlockData> GetHorizontalNeighbors(BlockData block)
         {
@@ -2197,7 +2348,7 @@ namespace Blocks
         }
         public abstract void OnTickStart();
         public abstract BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos);
-        public abstract bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar);
+        public abstract bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar);
         public abstract bool CanConnect();
 
         public BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
@@ -3065,6 +3216,92 @@ namespace Blocks
             }
         }
 
+        public void UpdateLighting(long wx, long wy, long wz)
+        {
+            using (BlockData block = world.GetBlockData(wx, wy, wz))
+            {
+                UpdateLighting(block);
+            }
+        }
+
+        public void UpdateLighting(BlockData block)
+        {
+            long wx = block.x;
+            long wy = block.y;
+            long wz = block.z;
+            long x = block.x - chunkSize * cx;
+            long y = block.y - chunkSize * cy;
+            long z = block.z - chunkSize * cz;
+            block.myChunk = this;
+            int skyLighting;
+            int blockLighting;
+            bool touchingSky;
+            bool oldTouchingTransparentOrAir;
+            bool oldMakingBlockLight;
+            GetLightingValues(block.lightingState, out skyLighting, out blockLighting, out touchingSky, out oldTouchingTransparentOrAir, out oldMakingBlockLight);
+            int highestSkyLighting = 0;
+            int highestBlockLighting = 0;
+            // check neighbors to see if we need to trickle their light values
+            bool touchingTransparentOrAir = false;
+            bool iAmAir = block.block == BlockValue.Air;
+            // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
+            if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref negX, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+            if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref negY, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+            if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, ref highestSkyLighting, ref highestBlockLighting, ref negZ, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+
+            if (x == chunkSize - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref posX, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+            if (y == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref posY, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+            if (z == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, ref highestSkyLighting, ref highestBlockLighting, ref posZ, ref touchingTransparentOrAir, iAmAir);
+            else GetHighestLightings(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+
+            bool lightModified = false;
+
+            // neighbors light has changed so we need to trickle their values
+            if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir))
+            {
+                skyLighting = System.Math.Max(skyLighting, highestSkyLighting - 1);
+                blockLighting = System.Math.Max(blockLighting, highestBlockLighting - 1);
+                lightModified = true;
+            }
+
+            if (!touchingSky)
+            {
+                // we produce the light
+                if (highestSkyLighting <= skyLighting && skyLighting > 0)
+                {
+                    skyLighting = System.Math.Max(0, highestSkyLighting - 1);
+                    lightModified = true;
+                }
+            }
+
+            // we produce the light
+            if (highestBlockLighting <= blockLighting && blockLighting > 0)
+            {
+                if (block.block != Example.Sand)
+                {
+                    blockLighting = System.Math.Max(highestBlockLighting - 1, 0);
+                    lightModified = true;
+                }
+            }
+
+
+            if (chunkData.blocksNeedUpdating.Count == 7)
+            {
+                // Debug.Log("block update " + cx + " " + cy + " " + cz + "      " + wx + " " + wy + " " + wz + "       " + x + " " + y + " " + z + " " + touchingTransparentOrAir + " " + oldTouchingTransparentOrAir + " " + World.BlockToString(blockValue));
+            }
+            if (lightModified)
+            {
+                block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir);
+                //numLightUpdated += 1;
+                chunkData.needToBeUpdated = true;
+            }
+        }
+
         public bool Tick(long frameId, bool allowGenerate, bool allowTick, ref int maxMillisInFrame)
         {
 
@@ -3134,121 +3371,12 @@ namespace Blocks
                     //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
                     using (BlockData block = world.GetBlockData(wx, wy, wz))
                     {
-                        block.myChunk = this;
-                        BlockValue blockValue = block.block;
-                        int skyLighting;
-                        int blockLighting;
-                        bool touchingSky;
-                        bool oldTouchingTransparentOrAir;
-                        bool oldMakingBlockLight;
-                        GetLightingValues(block.lightingState, out skyLighting, out blockLighting, out touchingSky, out oldTouchingTransparentOrAir, out oldMakingBlockLight);
-                        int highestSkyLighting = 0;
-                        int highestBlockLighting = 0;
-                        // check neighbors to see if we need to trickle their light values
-                        bool touchingTransparentOrAir = false;
-                        bool iAmAir = block.block == BlockValue.Air;
-                        // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
-                        if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref negX, ref touchingTransparentOrAir, iAmAir);
-                        else                    GetHighestLightings(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-                        if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref negY, ref touchingTransparentOrAir, iAmAir);
-                        else                    GetHighestLightings(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-                        if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, ref highestSkyLighting, ref highestBlockLighting, ref negZ, ref touchingTransparentOrAir, iAmAir);
-                        else                    GetHighestLightings(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-
-                        if (x == chunkSize-1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref posX, ref touchingTransparentOrAir, iAmAir);
-                        else                              GetHighestLightings(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-                        if (y == chunkSize-1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref posY, ref touchingTransparentOrAir, iAmAir);
-                        else                              GetHighestLightings(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-                        if (z == chunkSize-1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, ref highestSkyLighting, ref highestBlockLighting, ref posZ, ref touchingTransparentOrAir, iAmAir);
-                        else                              GetHighestLightings(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-
-                        bool lightModified = false;
-
-                        // neighbors light has changed so we need to trickle their values
-                        if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir))
-                        {
-                            skyLighting = System.Math.Max(skyLighting, highestSkyLighting - 1);
-                            blockLighting = System.Math.Max(blockLighting, highestBlockLighting - 1);
-                            lightModified = true;
-                        }
-
-                        if (!touchingSky)
-                        {
-                            // we produce the light
-                            if (highestSkyLighting <= skyLighting && skyLighting > 0)
-                            {
-                                skyLighting = System.Math.Max(0, highestSkyLighting - 1);
-                                lightModified = true;
-                            }
-                        }
-                        
-                        // we produce the light
-                        if (highestBlockLighting <= blockLighting && blockLighting > 0)
-                        {
-                            if (block.block != Example.Sand)
-                            {
-                                blockLighting = System.Math.Max(highestBlockLighting - 1, 0);
-                                lightModified = true;
-                            }
-                        }
-
-
-                        if (chunkData.blocksNeedUpdating.Count == 7)
-                        {
-                            // Debug.Log("block update " + cx + " " + cy + " " + cz + "      " + wx + " " + wy + " " + wz + "       " + x + " " + y + " " + z + " " + touchingTransparentOrAir + " " + oldTouchingTransparentOrAir + " " + World.BlockToString(blockValue));
-                        }
-                        if (lightModified)
-                        {
-                            block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir);
-                            numLightUpdated += 1;
-                            chunkData.needToBeUpdated = true;
-                        }
-
+                        UpdateLighting(block);
                         BlockOrItem customBlock;
+                        BlockValue blockValue = block.block;
                         if (world.customBlocks.ContainsKey(blockValue, out customBlock))
                         {
                             customBlock.OnTick(block);
-
-                            int connectedFlags = 0;
-                            int numConnected = 0;
-                            if (customBlock.CanConnect())
-                            {
-                                for (int h = 0; h < RotationUtils.NUM_CONNECTIVITY_OFFSETS; h++)
-                                {
-                                    int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[h * 3];
-                                    int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[h * 3+1];
-                                    int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[h * 3+2];
-
-                                    using (BlockData neighborData = world.GetBlockData(wx + offsetX, wy + offsetY, wz + offsetZ))
-                                    {
-                                        if (customBlock.CanConnect(neighborData.block, offsetY == 0, numConnected))
-                                        {
-                                            connectedFlags = connectedFlags | (1 << h);
-                                            numConnected += 1;
-
-                                            if (offsetY != 0)
-                                            {
-                                                for (int w = 0; w < RotationUtils.NUM_CONNECTIVITY_OFFSETS; w++)
-                                                {
-                                                    int offsetX2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3];
-                                                    int offsetY2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 1];
-                                                    int offsetZ2 = RotationUtils.CONNECTIVITY_OFFSETS[w * 3 + 2];
-
-                                                    if (offsetX2 == -offsetX && offsetY2 == -offsetY && offsetZ2 == -offsetZ)
-                                                    {
-                                                        if ((neighborData.connectivityFlags & (1 << w)) == 0)
-                                                        {
-                                                            world.AddBlockUpdate(wx + offsetX, wy + offsetY, wz + offsetZ, alsoToNeighbors: true);
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            block.connectivityFlags = connectedFlags;
                         }
 
                         if (block.needsAnotherTick)
@@ -3351,6 +3479,50 @@ namespace Blocks
                 chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
             }
         }
+
+
+        public void SetNeighborsAsTouchingAir(long x, long y, long z)
+        {
+            long relativeX = x - cx * chunkSize;
+            long relativeY = y - cy * chunkSize;
+            long relativeZ = z - cz * chunkSize;
+            if (relativeX == 0) world.SetTouchingAir(x - 1, y, z, true);
+            else SetTouchingAir(x - 1, y, z, true);
+
+            if (relativeY == 0) world.SetTouchingAir(x, y - 1, z, true);
+            else SetTouchingAir(x, y - 1, z, true);
+
+            if (relativeZ == 0) world.SetTouchingAir(x, y, z - 1, true);
+            else SetTouchingAir(x, y, z - 1, true);
+
+
+            if (relativeX == chunkSize - 1) world.SetTouchingAir(x + 1, y, z, true);
+            else SetTouchingAir(x + 1, y, z, true);
+
+            if (relativeY == chunkSize - 1) world.SetTouchingAir(x, y + 1, z, true);
+            else SetTouchingAir(x, y + 1, z, true);
+
+            if (relativeZ == chunkSize - 1) world.SetTouchingAir(x, y, z + 1, true);
+            else SetTouchingAir(x, y, z + 1, true);
+
+        }
+        public void SetTouchingAir(long x, long y, long z, bool value)
+        {
+            long relativeX = x - cx * chunkSize;
+            long relativeY = y - cy * chunkSize;
+            long relativeZ = z - cz * chunkSize;
+            bool modified;
+            chunkData.SetTouchingAir(relativeX, relativeY, relativeZ, value, out modified);
+
+            // if was not visible and is now, we need to get the right lighting value
+            if (modified && value)
+            {
+                UpdateLighting(x, y, z);
+                chunkData.needToBeUpdated = true;
+            }
+
+        }
+
         public int GetState(long x, long y, long z, BlockState stateType)
         {
             long relativeX = x - cx * chunkSize;
@@ -3375,11 +3547,12 @@ namespace Blocks
                 long relativeZ = z - cz * chunkSize;
                 bool addedUpdate;
 
+                int prev = 0;
 
                 // if we are already generated, do lighting updates on modification
                 if (!generating)
                 {
-                    int prev = chunkData[relativeX, relativeY, relativeZ];
+                    prev = chunkData[relativeX, relativeY, relativeZ];
                     // turning solid into non-solid (less than 0 is transparent, greater than 0 is solid, 0 is empty)
                     if (prev > 0 && value <= 0)
                     {
@@ -3403,6 +3576,22 @@ namespace Blocks
                     }
                 }
                 chunkData.SetBlock(relativeX, relativeY, relativeZ, value, out addedUpdate);
+
+                // after we assigned the value, do some more updates:
+                if (!generating)
+                {
+                    // turning solid into non-solid (less than 0 is transparent, greater than 0 is solid, 0 is empty)
+                    if (prev > 0 && value <= 0)
+                    {
+                        // we need to update "am i touching air" flag immediately (we can't wait for the block update) since it affects rendering
+                        SetNeighborsAsTouchingAir(x, y, z);
+                    }
+                    // turning non-solid into solid
+                    if (prev <= 0 && value > 0)
+                    {
+
+                    }
+                }
                 // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
                 if (!generating && addedUpdate)
                 {
@@ -3633,6 +3822,28 @@ namespace Blocks
             return data[ind * 4];
         }
 
+        public void SetTouchingAir(long i, long j, long k, bool value, out bool modified)
+        {
+            int oldValue = GetState(i, j, k, BlockState.Lighting);
+            bool wasTouchingAir = (oldValue & Chunk.TOUCHING_TRANPARENT_OR_AIR_BIT) != 0;
+            modified = wasTouchingAir != value;
+            // clear the bit
+            int newValue = oldValue & (~Chunk.TOUCHING_TRANPARENT_OR_AIR_BIT);
+            if (value)
+            {
+                // set it to 1 if the value is true
+                newValue = newValue | Chunk.TOUCHING_TRANPARENT_OR_AIR_BIT;
+            }
+            bool a;
+            // update the lighting state if we modified it
+            if (modified)
+            {
+                long ind = to1D(i, j, k);
+                this.data[ind * 4 + (int)BlockState.Lighting] = newValue;
+                //SetState(i, j, k, newValue, BlockState.Lighting, out a);
+            }
+        }
+
         public void SetBlock(long i, long j, long k, int block, out bool addedBlockUpdate, bool forceBlockUpdate = false)
         {
             addedBlockUpdate = false;
@@ -3643,6 +3854,9 @@ namespace Blocks
                 addedBlockUpdate = true;
                 needToBeUpdated = true;
             }
+
+
+
             //if (forceBlockUpdate || data[ind * 4] != block)
             //{
             //    addedBlockUpdate = true;
@@ -4793,10 +5007,6 @@ namespace Blocks
 
         public bool DropBlockOnDestroy(BlockValue block, LVector3 pos, BlockStack thingHolding, Vector3 positionOfBlock, Vector3 posOfOpening)
         {
-            if (World.creativeMode)
-            {
-                return true;
-            }
             //CreateBlockEntity(block, positionOfBlock);
             //return true;
             if (thingHolding == null)
@@ -6480,6 +6690,14 @@ namespace Blocks
             }
         }
 
+        public void SetTouchingAir(long i, long j, long k, bool value)
+        {
+            Chunk chunk = GetChunkAtPos(i, j, k);
+            if (chunk != null && !chunk.generating)
+            {
+                chunk.SetTouchingAir(i, j, k, value);
+            }
+        }
 
         public void AddBlockUpdateToNeighbors(long i, long j, long k)
         {
@@ -8381,7 +8599,10 @@ namespace Blocks
                    try
                    {
 
-                       world.Tick();
+                       if (okToRunTicks)
+                       {
+                           world.Tick();
+                       }
                    }
                    catch (System.Exception e)
                    {
@@ -8405,6 +8626,7 @@ namespace Blocks
 
 
         public int numChunksTotal;
+        bool okToRunTicks = true;
         // Update is called once per frame
         void Update()
         {
@@ -8901,6 +9123,11 @@ namespace Blocks
             world.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
             Vector3 offset = (new Vector3(cx, cy, cz)) * chunkSize * worldScale;
             renderTransform.transform.position += offset;
+            Chunk chunkIn = world.GetChunk(cx, cy, cz);
+            if (chunkIn != null)
+            {
+                chunkIn.SetNeighborsAsTouchingAir(x, y, z);
+            }
 
             int brokenState = (int)Mathf.Clamp(Mathf.Round(howBroken * 8), 0.0f, 8.0f);
             blockBreakingBuffer.SetData(new int[] { (int)(x - cx * chunkSize), (int)(y - cy * chunkSize), (int)(z - cz * chunkSize), brokenState });

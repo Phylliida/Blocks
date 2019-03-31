@@ -1037,6 +1037,16 @@ PrefabInstance:
       propertyPath: blockStack.maxDurability
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114304902586377120, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
 --- !u!4 &369417247 stripped
@@ -1143,7 +1153,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 385057727}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -3.5429735, y: -172.7094, z: -10.076057}
+  m_LocalPosition: {x: -3.5429735, y: 0, z: -10.076057}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 796948562}
@@ -1547,6 +1557,16 @@ PrefabInstance:
       propertyPath: blockStack.maxDurability
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114304902586377120, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
 --- !u!4 &796948562 stripped
@@ -1835,6 +1855,16 @@ PrefabInstance:
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockStack.maxDurability
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114304902586377120, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -2535,6 +2565,16 @@ PrefabInstance:
       propertyPath: blockStack.maxDurability
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114304902586377120, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09abdf0d13befb04d9d8994600fa8510, type: 3}
 --- !u!4 &1441154082 stripped
@@ -2942,6 +2982,16 @@ PrefabInstance:
     - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
         type: 3}
       propertyPath: blockStack.maxDurability
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114964554502675630, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 114304902586377120, guid: 09abdf0d13befb04d9d8994600fa8510,
+        type: 3}
+      propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []

@@ -2,10 +2,43 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using Blocks.ExtensionMethods;
 
 namespace Blocks
 {
+    public struct SplitInt
+    {
+        public uint rawVal;
+        public int numPieces;
+        public int sizeOfEachPieceInBits;
+
+        public uint this[int i]
+        {
+            get
+            {
+                int startIInclusive = i * sizeOfEachPieceInBits;
+                int endIExclusive = (i + 1) * sizeOfEachPieceInBits;
+                return rawVal.GetBits(startIInclusive, endIExclusive);
+            }
+            set
+            {
+                int startIInclusive = i * sizeOfEachPieceInBits;
+                int endIExclusive = (i + 1) * sizeOfEachPieceInBits;
+                rawVal = rawVal.SettingBits(startIInclusive, endIExclusive, value);
+            }
+        }
+
+        public SplitInt(uint rawVal, int numPieces)
+        {
+            this.rawVal = rawVal;
+            this.numPieces = numPieces;
+            sizeOfEachPieceInBits = (sizeof(int) * 8) / numPieces;
+            if (sizeOfEachPieceInBits == 0)
+            {
+                throw new System.Exception("Cannot fit more than 32 pieces in a single int (ints are only 32 bits wide)");
+            }
+        }
+    }
 
     public class DoEveryMS
     {
@@ -743,6 +776,10 @@ namespace Blocks
                     //Debug.Log("does not have cached " + rotationFlags);
                     int mergedFlags = 0;
                     RotationVariant merged = null;
+                    if (collection.ContainsKey(0) && collection[0].allowAppend)
+                    {
+                        merged = collection[0];
+                    }
                     // we could not find one, try merging
                     foreach (RotationVariant variant in baseVariants)
                     {
@@ -828,6 +865,22 @@ namespace Blocks
 
     namespace ExtensionMethods
     {
+
+        public static class ListExtensionMethods
+        {
+            public static bool Contains<T>(this T[] arr, T item)
+            {
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    if (arr[i].Equals(item))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
         public static class IntBitFiddleExtensions
         {
             /// <summary>

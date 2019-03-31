@@ -11,8 +11,8 @@
     {
         "connectedToNone": [
             {  
-                "from": [ 7, 0, 7 ],
-                "to": [ 9, 1, 9 ],
+                "fromVars": [ "7", "state", "7" ],
+                "toVars": [ "9", "state+1", "9" ],
                 "shade": false,
                 "texture": "base"
             }

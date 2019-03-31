@@ -39,6 +39,11 @@ namespace Blocks
 
         bool hasInventory = false;
 
+        public bool HoldingSomethingWithMouse()
+        {
+            return (playerUsing != null && playerUsing.blocksHoldingWithMouse != null && playerUsing.blocksHoldingWithMouse.count > 0);
+        }
+
         private void Update()
         {
 
@@ -79,9 +84,10 @@ namespace Blocks
             }
 
             ShowInventory(numRows, maxItems);
+
             if (playerUsing.mouseLook.allowedToCapture)
             {
-                if (playerUsing.blocksHoldingWithMouse != null)
+                if (HoldingSomethingWithMouse())
                 {
                     ThrowStuff();
 
@@ -92,7 +98,7 @@ namespace Blocks
 
             bool inventoryModified = false;
             // click when not capturing
-            if (playerUsing.blocksHoldingWithMouse == null)
+            if (!HoldingSomethingWithMouse())
             {
                 if (Input.GetMouseButtonDown(0) && displaying)
                 {
@@ -133,7 +139,7 @@ namespace Blocks
                 }
             }
 
-            else if (playerUsing.blocksHoldingWithMouse != null && playerUsing.holdingWithMouseEntity != null && displaying)
+            else if (HoldingSomethingWithMouse() && playerUsing.holdingWithMouseEntity != null && displaying)
             {
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;
@@ -273,7 +279,7 @@ namespace Blocks
                 }
             }
 
-            if (playerUsing.blocksHoldingWithMouse != null && displaying && playerUsing.holdingWithMouseEntity != null)
+            if (HoldingSomethingWithMouse() && displaying && playerUsing.holdingWithMouseEntity != null)
             {
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;

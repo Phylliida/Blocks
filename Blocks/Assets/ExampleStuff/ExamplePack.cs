@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Blocks;
 using ExtensionMethods;
+using Blocks.ExtensionMethods;
 
 public class Light : Block
 {
@@ -618,9 +619,60 @@ public class RedstoneTorch : Block
         destroyBlock = true;
     }
 
+    public BlockData GetBlockAttachedTo(BlockData block)
+    {
+        if (block.block == Example.RedstoneTorchOnSide)
+        {
+            return GetBlockDataRelative(block, -1, 0, 0);
+        }
+        else
+        {
+            return GetBlockDataRelative(block, 0, -1, 0);
+        }
+    }
+
     public override void OnTick(BlockData block)
     {
+        bool activated = true;
+        using (BlockData attachedTo = GetBlockAttachedTo(block))
+        {
+            if (RedstoneUtil.GetMaxPowerIntoBlock(attachedTo) > 0)
+            {
+                activated = false;
+            }
+        }
 
+        RedstonePower myPower;
+        if (activated)
+        {
+            myPower = new RedstonePower(15);
+            myPower.SetAllPower(15);
+            using (BlockData attachedTo = GetBlockAttachedTo(block))
+            {
+                long offsetX = attachedTo.x - block.x;
+                long offsetY = attachedTo.y - block.y;
+                long offsetZ = attachedTo.z - block.z;
+
+                // don't power the block we are attached to
+                myPower.SetPower(offsetX, offsetY, offsetZ, 0);
+            }
+        }
+        else
+        {
+            myPower = new RedstonePower(0);
+            myPower.SetAllPower(0);
+        }
+
+        int myResPower = (int)myPower.RawValue;
+
+        if (block.state != myResPower)
+        {
+            block.state = myResPower;
+            foreach (BlockData neighbor in GetConnectedToMe(block))
+            {
+                World.mainWorld.AddBlockUpdate(neighbor.x, neighbor.y, neighbor.z);
+            }
+        }
     }
 
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
@@ -642,37 +694,143 @@ public class RedstoneTorch : Block
 }
 
 
-public class Connectable : Block
+
+
+public class Observer : Block
 {
-    BlockValue notConnected;
-    BlockValue connectedToOne;
-    BlockValue connectedInLine;
-    BlockValue connectedInCorner;
-    BlockValue connectedToThree;
-    BlockValue connectedToFour;
-    public Connectable(BlockValue notConnected, BlockValue connectedToOne, BlockValue connectedInLine, BlockValue connectedInCorner, BlockValue connectedToThree, BlockValue connectedToFour)
-    {
-
-    }
-
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        throw new System.NotImplementedException();
+        destroyBlock = true;
+        //CreateBlockEntity(Example.Observer, positionOfBlock);
     }
 
     public override void OnTick(BlockData block)
     {
-        throw new System.NotImplementedException();
+        RedstonePower myPower = new RedstonePower(0);
+        long offX, offY, offZ;
+        block.LocalOffsetToWorldOffset(0, 0, -1, out offX, out offY, out offZ);
+        if (myPower.GetPower(0, 0, 0) == 0)
+        {
+            block.needsAnotherTick = true;
+            myPower.SetPower(0, 0, 0, 15);
+            myPower.SetPower(offX, offY, offZ, 15);
+        }
+        else
+        {
+            block.needsAnotherTick = false;
+            myPower.SetAllPower(0);
+        }
+        int resState = (int)myPower.RawValue;
+
+        if (resState != block.state)
+        {
+            block.state = resState;
+        }
     }
 
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
-        throw new System.NotImplementedException();
+        return BlockValue.Air;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
-        throw new System.NotImplementedException();
+        return 0.1f;
+    }
+}
+
+
+public struct RedstonePower
+{
+    SplitInt val;
+
+    public uint RawValue
+    {
+        get
+        {
+            return val.rawVal;
+        }
+        set
+        {
+            val.rawVal = value;
+        }
+    }
+    public uint GetPower(long offsetX, long offsetY, long offsetZ)
+    {
+        if (offsetX < 0) return val[0];
+        else if (offsetX > 0) return val[1];
+        else if (offsetZ < 0) return val[2];
+        else if (offsetZ > 0) return val[3];
+        else if (offsetY < 0) return val[4];
+        else if (offsetY > 0) return val[5];
+        else return val[6]; // default (when all offsets are 0) is val[6]
+    }
+
+    public void SetPower(long offsetX, long offsetY, long offsetZ, uint value)
+    {
+        if (offsetX < 0) val[0] = value;
+        else if (offsetX > 0) val[1] = value;
+        else if (offsetZ < 0) val[2] = value;
+        else if (offsetZ > 0) val[3] = value;
+        else if (offsetY < 0) val[4] = value;
+        else if (offsetY > 0) val[5] = value;
+        else val[6] = value; // default (when all offsets are 0) is val[6]
+    }
+
+    public void SetAllPower(uint power)
+    {
+        val[0] = power;
+        val[1] = power;
+        val[2] = power;
+        val[3] = power;
+        val[4] = power;
+        val[5] = power;
+        val[6] = power;
+    }
+
+    public RedstonePower(uint val)
+    {
+        this.val = new SplitInt(val, 7);
+    }
+}
+
+
+public static class RedstoneUtil
+{
+
+    public static BlockValue[] mightBeProducingRedstonePower = new BlockValue[]
+    {
+        Example.RedstoneTorch,
+        Example.RedstoneTorchOnSide,
+        Example.Redstone
+    };
+
+    public static uint GetMaxPowerIntoBlock(BlockData block)
+    {
+        uint maxPowerIntoMe = 0;
+        for (int i = 0; i < RotationUtils.NUM_CONNECTIVITY_OFFSETS; i++)
+        {
+            int offsetX = RotationUtils.CONNECTIVITY_OFFSETS[i * 3];
+            int offsetY = RotationUtils.CONNECTIVITY_OFFSETS[i * 3+1];
+            int offsetZ = RotationUtils.CONNECTIVITY_OFFSETS[i * 3+2];
+
+            int connectFlag = (1 << i);
+            // use negative offset since we these are actually our neighbor's offsets
+            using (BlockData neighbor = World.mainWorld.GetBlockData(block.x - offsetX, block.y - offsetY, block.z - offsetZ))
+            {
+                // if it is a redstone component and is connected to us
+                if (mightBeProducingRedstonePower.Contains(neighbor.block) && ((neighbor.connectivityFlags & connectFlag) != 0))
+                {
+                    RedstonePower neighborPower = new RedstonePower((uint)neighbor.state);
+                    uint powerToMe = neighborPower.GetPower(offsetX, offsetY, offsetZ);
+                    if (powerToMe > 0)
+                    {
+                        maxPowerIntoMe = System.Math.Max(powerToMe - 1, maxPowerIntoMe);
+                    }
+                }
+            }
+        }
+        return maxPowerIntoMe;
     }
 }
 
@@ -681,6 +839,20 @@ public class Redstone : ConnectableBlock
 
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
+        // temporairly set us to air so our neighbors think we are gone for connectivity reasons
+        block.block = BlockValue.Air;
+        foreach (BlockData connectedTo in GetConnectedTo(block))
+        {
+            if (connectedTo.block == Example.Redstone)
+            {
+                OnTick(connectedTo);
+            }
+        }
+        // set us back to what we were
+        block.block = Example.Redstone;
+
+
+
         CreateBlockEntity(Example.Redstone, positionOfBlock);
         destroyBlock = true;
     }
@@ -704,34 +876,143 @@ public class Redstone : ConnectableBlock
         Example.RedstoneTorchOnSide
     };
 
+
+    BlockValue[] producesPower = new BlockValue[]
+    {
+        Example.RedstoneTorch,
+        Example.RedstoneTorchOnSide
+    };
+
+
+
     public override bool CanBePlaced(AxisDir facePlacedOn, LVector3 pos)
     {
         BlockValue belowBlock = GetBlockNotRelative(pos.x, pos.y - 1, pos.z);
-        for (int i = 0; i < cantPlaceOn.Length; i++)
+        if (cantPlaceOn.Contains(belowBlock))
         {
-            if (cantPlaceOn[i] == belowBlock)
-            {
-                return false;
-            }
+
         }
         return true;
     }
 
-    public override bool CanConnect(BlockValue other, bool onSameYPlane, int numConnectedSoFar)
+    public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
     {
-        for (int i = 0; i < connectables.Length; i++)
+        if (!onSameYPlane)
         {
-            if (other == connectables[i])
+            long offsetX = other.x - block.x;
+            long offsetY = other.y - block.y;
+            long offsetZ = other.z - block.z;
+            
+            // check if we are going down, is there a block in the way?
+            if (offsetY < 0 && GetBlockNotRelative(block.x+offsetX, block.y, block.z+offsetZ) != BlockValue.Air)
             {
-                return true;
+                return false;
             }
+            // check if we are going up, is there a block in the way?
+            else if(offsetY > 0 && GetBlockNotRelative(block.x, other.y, block.z) != BlockValue.Air)
+            {
+                return false;
+            }
+        }
+        if (connectables.Contains(other.block))
+        {
+            return true;
         }
         return false;
     }
 
+    static uint producedPower = 15;
     public override void OnTick(BlockData block)
     {
+        UpdateConnections(block);
+
+        int numConnected = block.numConnected;
+
+        // redstone doesn't do a half line, it extends to a single line if only connected to one
+        if (numConnected == 1)
+        {
+            foreach (BlockData connectedTo in GetConnectedTo(block))
+            {
+                long offsetX = connectedTo.x - block.x;
+                long offsetY = connectedTo.y - block.y;
+                long offsetZ = connectedTo.z - block.z;
+                // force connected to other side
+                ForceAddConnectedTo(block, block.x - offsetX, block.y, block.z - offsetZ);
+            }
+        }
+
         block.rotation = BlockData.BlockRotation.Degrees0;
+        uint maxPower = 0;
+        int conFlags = block.connectivityFlags;
+        int prevState = block.state;
+        if (producesPower.Contains(block.block))
+        {
+            maxPower = producedPower;
+        }
+        foreach (BlockData connectedTo in GetConnectedTo(block))
+        {
+            if (RedstoneUtil.mightBeProducingRedstonePower.Contains(connectedTo.block))
+            {
+                long offsetX = connectedTo.x - block.x;
+                long offsetY = connectedTo.y - block.y;
+                long offsetZ = connectedTo.z - block.z;
+
+                RedstonePower neighborPower = new RedstonePower((uint)connectedTo.state);
+                uint neighborPowerToMe = neighborPower.GetPower(-offsetX,-offsetY,-offsetZ); // negative because we are going from them to us instead of us to them
+
+                if (neighborPowerToMe > 0)
+                {
+                    maxPower = System.Math.Max(neighborPowerToMe - 1, maxPower);
+                }
+            }
+        }
+
+        // set out power values along connected directions
+        RedstonePower myPower = new RedstonePower(0);
+        uint powerValue = maxPower;
+        myPower.SetPower(0, 0, 0, powerValue); // set default value to it
+        foreach (BlockData connectedTo in GetConnectedTo(block))
+        {
+            long offsetX = connectedTo.x - block.x;
+            long offsetY = connectedTo.y - block.y;
+            long offsetZ = connectedTo.z - block.z;
+
+            myPower.SetPower(offsetX, offsetY, offsetZ, powerValue);
+        }
+
+        bool modified = false;
+        int myResState = (int)myPower.RawValue;
+        if (myResState != block.state)
+        {
+            modified = true;
+            block.state = myResState;
+        }
+
+        block.animationState = (short)powerValue;
+        //Debug.LogWarning("updating " + block.x + " " + block.y + " " + block.z + " with connections " + conFlags + " cur power " + powerValue + " and prev state " + prevState + " and res state " + myResState);
+
+        foreach (BlockData connectedTo in GetConnectedTo(block))
+        {
+            //Debug.LogWarning("i have neighbor " + connectedTo.x + " " + connectedTo.y + " " + connectedTo.z + " " + block.x + " " + block.y + " " + block.z);
+
+            if ((modified) && connectedTo.block == Example.Redstone)
+            {
+                //Debug.LogWarning("recursing " + connectedTo.x + " " + connectedTo.y + " " + connectedTo.z + " " + block.x + " " + block.y + " " + block.z);
+                OnTick(connectedTo);
+                //world.AddBlockUpdate(connectedTo.x, connectedTo.y, connectedTo.z);
+            }
+            else if(modified)
+            {
+                World.mainWorld.AddBlockUpdate(connectedTo.x, connectedTo.y, connectedTo.z);
+                foreach (BlockData neighbor in GetNeighbors(connectedTo, includingDown: false))
+                {
+                    if (neighbor.block != Example.Redstone && RedstoneUtil.mightBeProducingRedstonePower.Contains(neighbor.block))
+                    {
+                        World.mainWorld.AddBlockUpdate(neighbor.x, neighbor.y, neighbor.z);
+                    }
+                }
+            }
+        }
     }
 
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
@@ -1889,9 +2170,9 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.BallTrackTurnFull, new BallTrackTurnFull(), 64);
         AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(Example.BallTrackZEmpty, 0.2f), 64);
         AddCustomBlock(Example.BallTrackTurnEmpty, new SimpleBlock(Example.BallTrackTurnEmpty, 0.2f), 64);
-        AddCustomBlock(Example.RedstoneTorch, new RedstoneTorch(), 64);
-        AddCustomBlock(Example.RedstoneTorchOnSide, new RedstoneTorch(), 64);
-        AddCustomBlock(Example.Redstone, new Redstone(), 64);
+        //AddCustomBlock(Example.RedstoneTorch, new RedstoneTorch(), 64);
+        //AddCustomBlock(Example.RedstoneTorchOnSide, new RedstoneTorch(), 64);
+        //AddCustomBlock(Example.Redstone, new Redstone(), 64);
         //AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 

@@ -21,7 +21,7 @@ namespace Blocks
             }
         }
         int block_;
-        public int count;
+        public int count = 0;
         public int durability = 0;
         public int maxDurability = 0;
         public string blockName;

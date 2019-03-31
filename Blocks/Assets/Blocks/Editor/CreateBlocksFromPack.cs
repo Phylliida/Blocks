@@ -55,6 +55,13 @@ namespace Blocks
 
                 myScript.packs = packs.ToArray();
             }
+
+            bool currentlyProfiling = UnityEngine.Profiling.Profiler.enabled;
+            string profilingStr = currentlyProfiling ? "Stop Profiling" : "Start Profiling";
+            if (GUILayout.Button(profilingStr))
+            {
+                UnityEngine.Profiling.Profiler.enabled = !currentlyProfiling;
+            }
         }
     }
 }

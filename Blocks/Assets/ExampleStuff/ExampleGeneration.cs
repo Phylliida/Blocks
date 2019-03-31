@@ -12,7 +12,7 @@ public class ExampleGeneration : GenerationClass
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
-    bool isFlatland = true;
+    bool isFlatland = false;
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
@@ -32,10 +32,10 @@ public class ExampleGeneration : GenerationClass
         }
         else
         {
-            world.AddChunkPropertyEvent(new ChunkPropertyEvent(100.0f, OnTree, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(200.0f, OnTree, 1));
             world.AddChunkPropertyEvent(new ChunkPropertyEvent(2600.0f, OnLavaTube, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2000.0f, OnRiver, 1));
-            //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
             world.AddWorldGenerationEvent(new WorldGenerationEvent(100.0f, OnCave, 2));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));

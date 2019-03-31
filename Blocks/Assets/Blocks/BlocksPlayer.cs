@@ -25,6 +25,7 @@ namespace Blocks
         public InventoryGui inventoryGui;
         public float reachRange = 6.0f;
 
+        
         public BlockStack blocksHoldingWithMouse = null;
         public BlockEntity holdingWithMouseEntity = null;
         int blockPlacing;
