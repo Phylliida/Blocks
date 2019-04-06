@@ -17,6 +17,24 @@ namespace Blocks
         float jumpSpeed = 14.0f;
 
 
+
+        string id_ = "";
+        public string uid
+        {
+            get
+            {
+                if (id_ == "")
+                {
+                    id_ = System.Guid.NewGuid().ToString();
+                }
+                return id_;
+            }
+            set
+            {
+                id_ = value;
+            }
+        }
+
         public float reachRange = 6.0f;
         public int inventorySize = 0;
         public Inventory inventory;

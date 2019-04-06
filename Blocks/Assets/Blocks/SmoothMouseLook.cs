@@ -4,7 +4,6 @@ using System.Collections;
 using System.Collections.Generic;
 namespace Blocks
 {
-    [AddComponentMenu("Camera-Control/Smooth Mouse Look")]
     public class SmoothMouseLook : MonoBehaviour
     {
 

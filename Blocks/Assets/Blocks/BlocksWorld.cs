@@ -3649,6 +3649,8 @@ namespace Blocks
             this.chunkSize_2 = chunkSize * chunkSize;
             this.chunkSize_3 = chunkSize * chunkSize * chunkSize;
             this.data = data;
+            this.blocksNeedUpdating = new IntegerSet(chunkSize * chunkSize * chunkSize);
+            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSize * chunkSize * chunkSize);
         }
 
         public void WriteToFile(string path)
@@ -3688,9 +3690,26 @@ namespace Blocks
                         skipAhead = true;
                     }
                     // if we are not a whildcard, assign us and also assign the chunk internal states 
-                    else if (data[i] != (int)BlockValue.Wildcard)
+                    else if (data[i] != (int)BlockValue.Wildcard && data[i] != chunkData[i])
                     {
                         chunkData[i] = data[i];
+                        blocksNeedUpdatingNextFrame.Add(i / 4);
+                        int localX, localY, localZ;
+                        to3D(i / 4, out localX, out localY, out localZ);
+                        long wx = chunk.cx * chunkSize + localX;
+                        long wy = chunk.cy * chunkSize + localY;
+                        long wz = chunk.cz * chunkSize + localZ;
+                        if (chunkData[i] > 0 && data[i] <= 0 && (localX == 0 || localX == chunkSize-1 || localY == 0 || localY == chunkSize-1 || localZ == 0 || localZ == chunkSize-1))
+                        {
+                            if (localX == 0) chunk.world.CheckIfTouchingAir(wx - 1, wy, wz);
+                            if (localY == 0) chunk.world.CheckIfTouchingAir(wx, wy - 1, wz);
+                            if (localZ == 0) chunk.world.CheckIfTouchingAir(wx, wy, wz - 1);
+                            if (localX == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx + 1, wy, wz);
+                            if (localY == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx, wy + 1, wz);
+                            if (localZ == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx, wy, wz + 1);
+
+                            //chunk.world.AddBlockUpdateToNeighbors(chunk.cx * chunkSize + localX, chunk.cy * chunkSize + localY, chunk.cz * chunkSize + localZ);
+                        }
                     }
                     // otherwise this is wildcard, skip to next block (only 3 instead of 4 because i++ is default in loop)
                     else
@@ -3707,6 +3726,7 @@ namespace Blocks
                     chunkData[i] = data[i];
                 }
             }
+            needToBeUpdated = true;
         }
 
         long curFrame = -1;
@@ -4447,16 +4467,56 @@ namespace Blocks
         Animation = 3
     }
 
+
+    [System.Serializable]
+    public class WorldGenOptions
+    {
+        public int seed;
+        public string versionString;
+        public WorldGenOptions(int seed, string versionString)
+        {
+            this.seed = seed;
+            this.versionString = versionString;
+        }
+        public WorldGenOptions()
+        {
+
+        }
+    }
+
     public class World : BlockGetter
     {
-        public static bool creativeMode = false;
+        static bool creativeMode_;
+        public static bool creativeMode {
+            get
+            {
+                if (mainWorld != null && mainWorld.blocksWorld != null)
+                {
+                    return mainWorld.blocksWorld.creativeMode;
+                }
+                else
+                {
+                    return creativeMode_;
+                }
+            }
+            set
+            {
+                if (mainWorld != null && mainWorld.blocksWorld != null)
+                {
+                    mainWorld.blocksWorld.creativeMode = value;
+                }
+                creativeMode_ = value;
+            }
+        }
         public static World mainWorld;
+        public static WorldGenOptions worldGenOptions;
         public const int maxAnimFrames = 64;
         public const int numBlocks = 64;
         public const int numBreakingFrames = 10;
 
-
-
+        public static bool needToGenerate = true;
+        public static string currentWorldDir = "";
+        public static string VERSION_STRING = "0.1";
 
         public BlocksWorld blocksWorld;
 
@@ -4481,6 +4541,44 @@ namespace Blocks
                 x = block.x;
                 y = block.y;
                 z = block.z;
+
+                blocks = new int[inventory.blocks.Length];
+                counts = new int[inventory.blocks.Length];
+                durabilities = new int[inventory.blocks.Length];
+                maxDurabilities = new int[inventory.blocks.Length];
+                for (int i = 0; i < blocks.Length; i++)
+                {
+                    if (inventory.blocks[i] != null)
+                    {
+                        blocks[i] = inventory.blocks[i].block;
+                        counts[i] = inventory.blocks[i].count;
+                        durabilities[i] = inventory.blocks[i].durability;
+                        maxDurabilities[i] = inventory.blocks[i].maxDurability;
+                    }
+                }
+            }
+        }
+
+
+        [System.Serializable]
+        public class EntityData
+        {
+            public float posX, posY, posZ;
+            public int[] blocks;
+            public int[] counts;
+            public int[] durabilities;
+            public int[] maxDurabilities;
+
+            public EntityData()
+            {
+
+            }
+
+            public EntityData(MovingEntity movingEntity, Inventory inventory)
+            {
+                this.posX = movingEntity.transform.position.x;
+                this.posY = movingEntity.transform.position.y;
+                this.posZ = movingEntity.transform.position.z;
 
                 blocks = new int[inventory.blocks.Length];
                 counts = new int[inventory.blocks.Length];
@@ -4535,6 +4633,36 @@ namespace Blocks
             }
         }
 
+        [System.Serializable]
+        public class SavedEntityInfo
+        {
+            public string playerName;
+            public string entityUid;
+            public EntityData playerData;
+            public bool isPlayer;
+
+            public SavedEntityInfo(BlocksPlayer player)
+            {
+                playerData = new EntityData(player.GetComponent<MovingEntity>(), player.GetComponent<MovingEntity>().inventory);
+                playerName = player.name;
+                entityUid = player.GetComponent<MovingEntity>().uid;
+                isPlayer = true;
+            }
+
+
+            public SavedEntityInfo(MovingEntity entity)
+            {
+                playerData = new EntityData(entity, entity.inventory);
+                entityUid = entity.uid;
+                isPlayer = false;
+            }
+
+            public SavedEntityInfo()
+            {
+
+            }
+        }
+
         public class SavedStructureCollection
         {
             public SavedStructure[] savedStructures;
@@ -4550,6 +4678,45 @@ namespace Blocks
             }
 
         }
+
+        public static string ROOT_SAVE_DIR = "C:/Users/yams/Desktop/yams/prog/unity/Blocks/repo/Blocks/Saves";
+
+
+        [System.Serializable]
+        public class SavedEntityInfoCollection
+        {
+            public SavedEntityInfo[] infos;
+
+            public SavedEntityInfoCollection()
+            {
+
+            }
+
+            public SavedEntityInfoCollection(SavedEntityInfo[] infos)
+            {
+                this.infos = infos;
+            }
+        }
+        public SavedEntityInfoCollection GetEntityInfos()
+        {
+            List<SavedEntityInfo> savedInfos = new List<SavedEntityInfo>();
+
+            foreach (MovingEntity movingEntity in GameObject.FindObjectsOfType<MovingEntity>())
+            {
+                if (movingEntity.GetComponent<BlocksPlayer>() != null)
+                {
+                    savedInfos.Add(new SavedEntityInfo(movingEntity.GetComponent<BlocksPlayer>()));
+                }
+                else
+                {
+                    savedInfos.Add(new SavedEntityInfo(movingEntity));
+                }
+            }
+
+            return new SavedEntityInfoCollection(savedInfos.ToArray());
+        }
+
+        bool allowedToGenerate = true;
         public void Save(string rootDir)
         {
             DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
@@ -4564,7 +4731,10 @@ namespace Blocks
             {
                 Directory.CreateDirectory(chunksDirInfo.FullName);
             }
-            foreach (Chunk chunk in allChunks)
+            allowedToGenerate = false;
+            List<Chunk> curAllChunks = new List<Chunk>(allChunks);
+            allowedToGenerate = true;
+            foreach (Chunk chunk in curAllChunks)
             {
                 string chunkName = chunk.cx + "." + chunk.cy + "." + chunk.cz + ".dat";
                 chunk.chunkData.WriteToFile(chunksDir + "/" + chunkName);
@@ -4575,6 +4745,8 @@ namespace Blocks
             string inventoriesPath = cleanedRootDir + "/blockInventories.json";
             File.WriteAllText(inventoriesPath, Newtonsoft.Json.JsonConvert.SerializeObject(GetBlockInventories()));
 
+            string entityInfosPath = cleanedRootDir + "/entityInfos.json";
+            File.WriteAllText(entityInfosPath, Newtonsoft.Json.JsonConvert.SerializeObject(GetEntityInfos()));
 
             string structurePath = cleanedRootDir + "/generatingStructures.json";
 
@@ -4588,6 +4760,15 @@ namespace Blocks
 
             File.WriteAllText(structurePath, Newtonsoft.Json.JsonConvert.SerializeObject(savedStructuresCollection));
 
+
+            if (worldGenOptions == null)
+            {
+                Debug.LogWarning("Warning in saving: no world gen options object exists, using default");
+                worldGenOptions = new WorldGenOptions();
+            }
+
+            string worldGenOptionsPath = cleanedRootDir + "/worldGenOptions.json";
+            File.WriteAllText(worldGenOptionsPath, Newtonsoft.Json.JsonConvert.SerializeObject(worldGenOptions));
 
         }
 
@@ -4611,8 +4792,6 @@ namespace Blocks
             Debug.Log("loading config json from file " + configJson);
             BlockValue.LoadIdConfigFromJsonString(configJson);
             Debug.Log("done loading config json from file " + configJson);
-
-
 
 
 
@@ -4702,6 +4881,8 @@ namespace Blocks
                                 Chunk spruce = GetOrGenerateChunk(cx, cy, cz);
                                 spruce.generating = false;
                                 spruce.chunkData.ReadFromFile(fInfo.FullName);
+                                World.mainWorld.blocksTouchingSky.GeneratedChunk(spruce);
+                                spruce.touchingSkyChunk = blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
                             }
                         }
                     }
@@ -4741,6 +4922,44 @@ namespace Blocks
                 }
             }
 
+
+            string entityInfosPath = cleanedRootDir + "/entityInfos.json";
+            if (!File.Exists(entityInfosPath))
+            {
+                Debug.LogWarning("in loading world, entity infos json " + entityInfosPath + " does not exist, placing all entities at default position with empty inventories");
+            }
+            else
+            {
+                SavedEntityInfoCollection savedEntityInfos = Newtonsoft.Json.JsonConvert.DeserializeObject<SavedEntityInfoCollection>(File.ReadAllText(entityInfosPath));
+                foreach (SavedEntityInfo savedEntityInfo in savedEntityInfos.infos)
+                {
+                    if (savedEntityInfo.isPlayer)
+                    {
+                        foreach (BlocksPlayer player in GameObject.FindObjectsOfType<BlocksPlayer>())
+                        {
+                            if (player.name == savedEntityInfo.playerName)
+                            {
+                                player.transform.position = new Vector3(savedEntityInfo.playerData.posX, savedEntityInfo.playerData.posY, savedEntityInfo.playerData.posZ);
+                                Inventory newResInventory = new Inventory(savedEntityInfo.playerData.blocks.Length);
+
+                                for (int i = 0; i < savedEntityInfo.playerData.blocks.Length; i++)
+                                {
+                                    newResInventory.blocks[i] = new BlockStack(savedEntityInfo.playerData.blocks[i], savedEntityInfo.playerData.counts[i], savedEntityInfo.playerData.durabilities[i], savedEntityInfo.playerData.maxDurabilities[i]);
+                                }
+                                player.inventory = newResInventory;
+                                player.GetComponent<MovingEntity>().uid = savedEntityInfo.entityUid;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning("haven't set up reloading non player entities yet, they are just deleted for now");
+                    }
+                }
+            }
+
+            
 
 
             Debug.Log("done loading chunks");
@@ -5087,11 +5306,19 @@ namespace Blocks
 
         public World(BlocksWorld blocksWorld, int chunkSize, BlocksPack blocksPack)
         {
+            blocksWorld.creativeMode = creativeMode_;
             this.chunkSize = chunkSize;
             this.worldGeneration = blocksPack.customGeneration;
             this.customBlocks = blocksPack.customBlocks;
             this.blocksTouchingSky = new BlocksTouchingSky(this);
             stackableSize = new Dictionary<int, int>();
+
+            if (World.worldGenOptions == null)
+            {
+                Debug.LogWarning("world gen options are null, using default");
+                World.worldGenOptions = new WorldGenOptions();
+            }
+            Simplex.Noise.Seed = (int)World.worldGenOptions.seed;
 
 
             foreach (KeyValuePair<BlockValue, BlockOrItem> customBlock in customBlocks)
@@ -5183,20 +5410,41 @@ namespace Blocks
             maxCapacities[(int)Example.Bedrock] = 6;
             this.worldGeneration.world = this;
             this.worldGeneration.blockGetter = this;
-            this.worldGeneration.OnGenerationInit();
-            RunWorldGenerationEvents(-10, -10, -10, 20);
-            GenerateChunk(0, 0, 0);
-            //return;
-            int viewDist = 0;
-            for (int i = -viewDist; i <= viewDist; i++)
+
+            if (World.currentWorldDir == "" || World.currentWorldDir == null)
             {
-                for (int j = viewDist; j >= -viewDist; j--)
+                World.currentWorldDir = Path.Combine(World.ROOT_SAVE_DIR, "Untitled World");
+            }
+            if (needToGenerate)
+            {
+                string worldName = new DirectoryInfo(World.currentWorldDir).Name;
+                int num = 1;
+                while ((new DirectoryInfo(World.currentWorldDir)).Exists)
                 {
-                    for (int k = -viewDist; k <= viewDist; k++)
+                    num += 1;
+                    World.currentWorldDir = Path.Combine(World.ROOT_SAVE_DIR, worldName + num);
+                }
+
+                this.worldGeneration.OnGenerationInit();
+                RunWorldGenerationEvents(-10, -10, -10, 20);
+                GenerateChunk(0, 0, 0);
+                //return;
+                int viewDist = 0;
+                for (int i = -viewDist; i <= viewDist; i++)
+                {
+                    for (int j = viewDist; j >= -viewDist; j--)
                     {
-                        GenerateChunk(i, j, k);
+                        for (int k = -viewDist; k <= viewDist; k++)
+                        {
+                            GenerateChunk(i, j, k);
+                        }
                     }
                 }
+            }
+            else
+            {
+                this.worldGeneration.OnGenerationInit();
+                Load(World.currentWorldDir);
             }
 
         }
@@ -6690,6 +6938,18 @@ namespace Blocks
             }
         }
 
+        public void CheckIfTouchingAir(long i, long j, long k)
+        {
+            if (this[i - 1, j, k] < 0 || this[i, j - 1, k] < 0 || this[i, j, k - 1] < 0 || this[i + 1, j, k] < 0 || this[i, j + 1, k] < 0 || this[i, j, k - 1] < 0)
+            {
+                SetTouchingAir(i, j, k, true);
+            }
+            else
+            {
+                SetTouchingAir(i, j, k, false);
+            }
+        }
+
         public void SetTouchingAir(long i, long j, long k, bool value)
         {
             Chunk chunk = GetChunkAtPos(i, j, k);
@@ -7037,6 +7297,10 @@ namespace Blocks
 
         public void RunTick(Chunk chunk, bool allowGenerate, bool allowTick, ref int maxTickSteps, ref int numGenerated, int maxGenerating)
         {
+            if (!allowedToGenerate)
+            {
+                allowGenerate = false;
+            }
             if (chunk.Tick(frameId, allowGenerate, allowTick, ref maxTickSteps))
             {
                 numGenerated += 1;
@@ -8581,6 +8845,9 @@ namespace Blocks
         // Use this for initialization
         void Start()
         {
+
+
+            creativeMode = World.creativeMode;
 
             SetupRendering();
 

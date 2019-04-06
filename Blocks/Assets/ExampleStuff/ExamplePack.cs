@@ -2157,8 +2157,8 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
         AddCustomBlock(Example.Chest, new Chest(), 64);
         //AddCustomBlock(Example.Barrel, new Barrel(), 64);
-        //AddCustomBlock(Example.Sand, new SimpleBlock(1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
-        AddCustomBlock(Example.Sand, new WaterSource(), 64);
+        AddCustomBlock(Example.Sand, new SimpleBlock(Example.Sand, 1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
+        //AddCustomBlock(Example.Sand, new WaterSource(), 64);
         AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
         //AddCustomBlock(Example.Water, new Water(), 64);

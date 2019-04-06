@@ -5,11 +5,11 @@ using UnityEngine;
 
 namespace Blocks
 {
-
     public class BlocksPlayer : MonoBehaviour
     {
         public SmoothMouseLook mouseLook;
         public MovingEntity body;
+        public MenuManager menuManager;
         public Camera mainCamera;
         public Inventory inventory
         {
@@ -32,9 +32,10 @@ namespace Blocks
 
 
         bool showingHotbarOnly = true;
-        int hotbarSize = 8;
+        public int hotbarSize = 8;
         public void Start()
         {
+            menuManager = FindObjectOfType<MenuManager>();
             body.inventorySize = 16;
             body.inventory = new Inventory(body.inventorySize);
             inventoryGui.playerUsing = this;
@@ -54,6 +55,13 @@ namespace Blocks
 
         public void Update()
         {
+
+            // don't do anything if paused
+            if (menuManager.paused)
+            {
+                return;
+            }
+
             /*
             float modAmount = World.mainWorld.chunkSize*World.mainWorld.blocksWorld.worldScale*8.0f;
             transform.position = new Vector3(
@@ -151,6 +159,9 @@ namespace Blocks
                     }
                 }
             }
+
+
+            /*
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 paused = true;
@@ -174,25 +185,48 @@ namespace Blocks
                 }
                 showingHotbarOnly = !showingHotbarOnly;
             }
+            */
+
+            MenuManager.MenuStatus currentMenu = menuManager.CurrentMenu;
 
 
-            if (showingHotbarOnly)
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                if (currentMenu == MenuManager.MenuStatus.Hotbar)
+                {
+                    menuManager.ShowPlayerInventory(this);
+                }
+                else
+                {
+                    menuManager.HidePlayerInventory();
+                }
+            }
+
+            showingHotbarOnly = currentMenu == MenuManager.MenuStatus.Hotbar;
+            /*
+            if (currentMenu == MenuManager.MenuStatus.MainMenu)
             {
                 World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = false;
-                mouseLook.allowedToCapture = true;
-                mouseLook.capturing = true;
-                inventoryGui.numRows = 1;
-                inventoryGui.maxItems = hotbarSize;
-                inventoryGui.screenOffset.y = -Screen.height / 2.0f + 100.0f;
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = null;
             }
-            else
+            else if(currentMenu == MenuManager.MenuStatus.Inventory)
             {
-                World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = false;
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = null;
                 mouseLook.allowedToCapture = false;
                 inventoryGui.maxItems = -1;
                 inventoryGui.numRows = 4;
                 inventoryGui.screenOffset.y = -Screen.height / 2.0f + 300.0f;
             }
+            else if(currentMenu == MenuManager.MenuStatus.BlockInventory)
+            {
+                World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                mouseLook.allowedToCapture = false;
+            }
+            else if(currentMenu == MenuManager.MenuStatus.Hotbar)
+            {
+            }
+            */
 
             int maxSelection = Mathf.Max(inventory.capacity, inventoryGui.maxItems);
             if (Input.GetKeyDown(KeyCode.Alpha1) && 1 <= maxSelection - 1) inventoryGui.selection = 1 - 1;
@@ -327,13 +361,15 @@ namespace Blocks
                             World.mainWorld.blocksWorld.blockInventories[hitResults.hitBlock] = blockInventory;
                         }
                         */
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+
+                        menuManager.ShowBlockInventory(this, hitResults.hitBlock);
+                        //World.mainWorld.blocksWorld.otherObjectInventoryGui.playerUsing = this;
+                        //World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
                         showingHotbarOnly = false;
-                        mouseLook.allowedToCapture = false;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 300);
-                        World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
+                        //mouseLook.allowedToCapture = false;
+                        //World.mainWorld.blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
+                        //World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 300);
+                        //World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
                     }
                     else if (inventoryGui != null && inventory != null && inventory.blocks[inventoryGui.selection] != null && inventory.blocks[inventoryGui.selection].count > 0)
                     {
