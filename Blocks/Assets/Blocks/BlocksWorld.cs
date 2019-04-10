@@ -1171,9 +1171,9 @@ namespace Blocks
         {
             get
             {
-                int skyLighting, blockLighting;
+                int skyLighting, blockLighting,touchingSkyFlags;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
                 return blockLighting;
             }
             private set
@@ -1186,10 +1186,25 @@ namespace Blocks
         {
             get
             {
-                int skyLighting, blockLighting;
+                int skyLighting, blockLighting, touchingSkyFlags;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
                 return skyLighting;
+            }
+            private set
+            {
+
+            }
+        }
+
+        public int touchingSkyFlags
+        {
+            get
+            {
+                int skyLighting, blockLighting, touchingSkyFlags;
+                bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
+                return touchingSkyFlags;
             }
             private set
             {
@@ -1201,9 +1216,9 @@ namespace Blocks
         {
             get
             {
-                int skyLighting, blockLighting;
+                int skyLighting, blockLighting, touchingSkyFlags;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
                 return touchingSky;
             }
             private set
@@ -1216,9 +1231,9 @@ namespace Blocks
         {
             get
             {
-                int skyLighting, blockLighting;
+                int skyLighting, blockLighting, touchingSkyFlags;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
 
                 if (makingBlockLight)
                 {
@@ -1231,17 +1246,17 @@ namespace Blocks
             }
             set
             {
-                int skyLighting, blockLighting;
+                int skyLighting, blockLighting, touchingSkyFlags;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight);
+                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
 
                 if (value > 0)
                 {
-                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, makingBlockLight: true, producedLight: value);
+                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: true, producedLight: value);
                 }
                 else
                 {
-                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, makingBlockLight: false, producedLight: 0);
+                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: false, producedLight: 0);
                 }
             }
         }
@@ -3050,6 +3065,16 @@ namespace Blocks
 
         public const int MAKING_BLOCK_LIGHT_BIT = 1 << 10;
         public const int TOUCHING_TRANPARENT_OR_AIR_BIT = 1 << 9;
+
+        // bottom, top
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NY = 1 << 11;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PY = 1 << 12;
+        // front, back
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NZ = 1 << 13;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PZ = 1 << 14;
+        // left, right
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NX = 1 << 15;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PX = 1 << 16;
         public const int TOUCHING_SKY_BIT = 1 << 8;
         public const int SKY_LIGHTING_MASK = 0xF0;
         public const int BLOCK_LIGHTING_MASK = 0xF;
@@ -3065,7 +3090,7 @@ namespace Blocks
         /// <param name="makingBlockLight"></param>
         /// <param name="producedLight"></param>
         /// <returns></returns>
-        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir, bool makingBlockLight=false, int producedLight=0)
+        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir, int touchingTransparentOrAirFlags, bool makingBlockLight=false, int producedLight=0)
         {
             int res = 0;
             if (touchingSky)
@@ -3092,19 +3117,19 @@ namespace Blocks
             }
 
 
-            res = res | (skyLighting << 4) | blockLighting;
+            res = res | (skyLighting << 4) | blockLighting  | (touchingTransparentOrAirFlags);
 
             
 
             return res;
         }
 
-        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight)
+        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int touchingSkyFlags)
         {
             int producedLight;
-            GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out producedLight);
+            GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLight);
         }
-        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int producedLighting)
+        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int touchingSkyFlags, out int producedLighting)
         {
             if ((lightingState & TOUCHING_SKY_BIT) != 0)
             {
@@ -3132,6 +3157,9 @@ namespace Blocks
             // block lighting is bits 0-3
             blockLighting = (lightingState & BLOCK_LIGHTING_MASK);
 
+            // 0x3F is 0b111111 (six ones)
+            touchingSkyFlags = (lightingState & (0x3F << 11));
+
             // produced lighting is bits 12-15
             if (makingBlockLight)
             {
@@ -3148,19 +3176,27 @@ namespace Blocks
         }
 
 
-        public void GetHighestLightings(long x, long y, long z, ref int curHighestSkyLight, ref int curHighestBlockLight, ref bool touchingTransparentOrAir, bool iAmAir)
+        public void GetHighestLightings(long x, long y, long z, int offsetFlag, ref int curHighestSkyLight, ref int curHighestBlockLight, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
         {
             int lightingState = chunkData.GetState(x, y, z, BlockState.Lighting);
             if (!IsSolid(chunkData.GetBlock(x,y,z)))
             {
                 touchingTransparentOrAir = true;
+                // set the flag to one
+                touchingSkyFlags |= offsetFlag;
+            }
+            else
+            {
+                // set that flag to zero by anding with bitwise not of it
+                touchingSkyFlags = ((~offsetFlag) & touchingSkyFlags);
             }
             int neighborSkyLighting;
             int neighborBlockLighting;
+            int neighborTouchingSkyFlags;
             bool neighborTouchingSky;
             bool neighborTouchingTransparentOrAir;
             bool neighborMakingBlockLight;
-            GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight);
+            GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight, out neighborTouchingSkyFlags);
 
             if (!IsSolid(chunkData.GetBlock(x,y,z)) || (iAmAir && (neighborMakingBlockLight || neighborTouchingSky)))
             {
@@ -3177,7 +3213,7 @@ namespace Blocks
             return block > 0;
         }
 
-        public void GetHighestLightingsOutsideChunk(long wx, long wy, long wz, ref int curHighestSkyLight, ref int curHighestBlockLight,ref Chunk chunk, ref bool touchingTransparentOrAir, bool iAmAir)
+        public void GetHighestLightingsOutsideChunk(long wx, long wy, long wz, int offsetFlag, ref int curHighestSkyLight, ref int curHighestBlockLight,ref Chunk chunk, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
         {
             if (chunk == null)
             {
@@ -3189,13 +3225,22 @@ namespace Blocks
                 if(!IsSolid(chunk[wx, wy, wz]))
                 {
                     touchingTransparentOrAir = true;
+                    // set the flag to one
+                    touchingSkyFlags |= offsetFlag;
                 }
+                else
+                {
+                    // set that flag to zero by anding with bitwise not of it
+                    touchingSkyFlags = ((~offsetFlag) & touchingSkyFlags);
+                }
+
                 int neighborSkyLighting;
                 int neighborBlockLighting;
+                int neighborTouchingSkyFlags;
                 bool neighborTouchingSky;
                 bool neighborTouchingTransparentOrAir;
                 bool neighborMakingBlockLight;
-                GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight);
+                GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight, out neighborTouchingSkyFlags);
                 if (!IsSolid(chunk[wx, wy, wz]) || (iAmAir && (neighborMakingBlockLight || neighborTouchingSky)))
                 {
                     curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
@@ -3224,6 +3269,26 @@ namespace Blocks
             }
         }
 
+        public void UpdateTouchingNeighbors(long wx, long wy, long wz, long x, long y, long z, ref int highestSkyLighting, ref int highestBlockLighting, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
+        {
+
+            // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
+            if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NX, ref highestSkyLighting, ref highestBlockLighting, ref negX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x - 1, y, z, TOUCHING_TRANPARENT_OR_AIR_BIT_NX, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NY, ref highestSkyLighting, ref highestBlockLighting, ref negY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x, y - 1, z, TOUCHING_TRANPARENT_OR_AIR_BIT_NY, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, ref negZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x, y, z - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+
+            if (x == chunkSize - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, ref posX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x + 1, y, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (y == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, ref posY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x, y + 1, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (z == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, ref posZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            else GetHighestLightings(x, y, z + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+
+        }
+
         public void UpdateLighting(BlockData block)
         {
             long wx = block.x;
@@ -3235,31 +3300,27 @@ namespace Blocks
             block.myChunk = this;
             int skyLighting;
             int blockLighting;
+            int touchingSkyFlags;
             bool touchingSky;
             bool oldTouchingTransparentOrAir;
             bool oldMakingBlockLight;
-            GetLightingValues(block.lightingState, out skyLighting, out blockLighting, out touchingSky, out oldTouchingTransparentOrAir, out oldMakingBlockLight);
+            int oldTouchingSkyFlags;
+            GetLightingValues(block.lightingState, out skyLighting, out blockLighting, out touchingSky, out oldTouchingTransparentOrAir, out oldMakingBlockLight, out touchingSkyFlags);
             int highestSkyLighting = 0;
             int highestBlockLighting = 0;
+            oldTouchingSkyFlags = touchingSkyFlags;
             // check neighbors to see if we need to trickle their light values
             bool touchingTransparentOrAir = false;
             bool iAmAir = block.block == BlockValue.Air;
-            // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
-            if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref negX, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x - 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-            if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref negY, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x, y - 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-            if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, ref highestSkyLighting, ref highestBlockLighting, ref negZ, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x, y, z - 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
 
-            if (x == chunkSize - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, ref highestSkyLighting, ref highestBlockLighting, ref posX, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x + 1, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-            if (y == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, ref highestSkyLighting, ref highestBlockLighting, ref posY, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x, y + 1, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
-            if (z == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, ref highestSkyLighting, ref highestBlockLighting, ref posZ, ref touchingTransparentOrAir, iAmAir);
-            else GetHighestLightings(x, y, z + 1, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir);
+            UpdateTouchingNeighbors(wx, wy, wz, x, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
             bool lightModified = false;
+
+            if (touchingSkyFlags != oldTouchingSkyFlags)
+            {
+                lightModified = true;
+            }
 
             // neighbors light has changed so we need to trickle their values
             if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir))
@@ -3296,7 +3357,7 @@ namespace Blocks
             }
             if (lightModified)
             {
-                block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir);
+                block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags);
                 //numLightUpdated += 1;
                 chunkData.needToBeUpdated = true;
             }
@@ -3506,19 +3567,44 @@ namespace Blocks
             else SetTouchingAir(x, y, z + 1, true);
 
         }
+
+
+
+
         public void SetTouchingAir(long x, long y, long z, bool value)
         {
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
             bool modified;
+
+            int skyLighting, blockLighting, touchingSkyFlags;
+            bool touchingSky, touchingTransparentOrAir, makingBlockLight;
+            GetLightingValues(chunkData.GetState(relativeX, relativeY, relativeZ, BlockState.Lighting), out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags);
+            int highestSkyLighting = 0;
+            int highestBlockLighting = 0;
+            int oldTouchingSkyFlags = touchingSkyFlags;
+            bool oldTouchingTransparentOrAir = touchingTransparentOrAir;
+            // check neighbors to see if we need to trickle their light values
+            bool iAmAir = chunkData.GetBlock(relativeX, relativeY, relativeZ) == BlockValue.Air;
+
             chunkData.SetTouchingAir(relativeX, relativeY, relativeZ, value, out modified);
+            touchingTransparentOrAir = false;
+            UpdateTouchingNeighbors(x, y, z, relativeX, relativeY, relativeZ, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+
+            if (touchingSkyFlags != oldTouchingSkyFlags || oldTouchingTransparentOrAir != touchingTransparentOrAir)
+            {
+                touchingTransparentOrAir = value;
+                bool addedUpdate;
+                chunkData.SetState(relativeX, relativeY, relativeZ, PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags), BlockState.Lighting, out addedUpdate);
+                chunkData.needToBeUpdated = true;
+            }
 
             // if was not visible and is now, we need to get the right lighting value
             if (modified && value)
             {
-                UpdateLighting(x, y, z);
-                chunkData.needToBeUpdated = true;
+                //UpdateLighting(x, y, z);
+                //chunkData.needToBeUpdated = true;
             }
 
         }
