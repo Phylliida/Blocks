@@ -475,6 +475,18 @@ namespace Blocks
 
     public class ChunkRenderer
     {
+
+        public enum RenderStatus
+        {
+            None,
+            HasTriangles,
+            StoredToComputeBuffer
+        }
+
+        public RenderStatus renderStatus = RenderStatus.None;
+        public List<RenderTriangle> triangles = null;
+        
+
         Chunk chunk;
         int chunkSize;
         public bool hasCustomBlocks = false;
@@ -508,7 +520,14 @@ namespace Blocks
             if (Thread.CurrentThread != World.mainWorld.helperThread)
             {
                 //drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
-                drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
+                if (World.DO_CPU_RENDER)
+                {
+                    drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Default); // modified to be GPUMemory
+                }
+                else
+                {
+                    drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append); // modified to be GPUMemory
+                }
             }
 
             if (chunk.cx % 2 == 0 && chunk.cy % 2 == 0 && chunk.cz % 2 == 0)
@@ -543,7 +562,8 @@ namespace Blocks
         {
             if (needToFinishSync)
             {
-                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRenderedCubesCombinedNotTransparent, out numRendereredCubesTransparent);
+                int numAllowedToRender = 1;
+                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRenderedCubesCombinedNotTransparent, out numRendereredCubesTransparent, ref numAllowedToRender);
                 needToFinishSync = false;
                 chunk.world.blocksWorld.RenderChunk(chunk, false);
             }
@@ -568,12 +588,11 @@ namespace Blocks
             {
                 InitStuff();
             }
-            if (chunk.chunkData.needToBeUpdated && numAllowedToDoFullRender > 0)
+            if (chunk.chunkData.needToBeUpdated && (numAllowedToDoFullRender > 0 || (chunk.chunkRenderer.triangles != null && renderStatus == RenderStatus.HasTriangles)) && chunk.threadRenderingMe == -1)
             {
-                numAllowedToDoFullRender -= 1;
                 chunk.chunkData.needToBeUpdated = false;
                 chunk.world.blocksWorld.MakeChunkTrisAsync(chunk);
-                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent);
+                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent, ref numAllowedToDoFullRender);
 
                 //numRendereredCubesNotTransparent = 0;
                 //numRendereredCubesTransparent = 0;
@@ -715,16 +734,32 @@ namespace Blocks
 
         public void CombineAndRenderChildrenDrawData()
         {
-            combinedDrawDataNotTransparent.SetCounterValue(0);
+            if (World.DO_CPU_RENDER)
+            {
+
+            }
+            else
+            {
+                combinedDrawDataNotTransparent.SetCounterValue(0);
+            }
+            int curOffset = 0;
             for (int i = 0; i < otherChunks.Length; i++)
             {
-                chunk.world.blocksWorld.MakeChunkTrisForCombined(otherChunks[i].chunk, combinedDrawDataNotTransparent);
+                curOffset += chunk.world.blocksWorld.MakeChunkTrisForCombined(otherChunks[i].chunk, combinedDrawDataNotTransparent, curOffset);
             }
 
-            int[] args = new int[] { 0 };
-            ComputeBuffer.CopyCount(combinedDrawDataNotTransparent, chunk.world.argBuffer, 0);
-            chunk.world.argBuffer.GetData(args);
-            numRenderedCubesCombinedNotTransparent = args[0];
+            if (World.DO_CPU_RENDER)
+            {
+                numRenderedCubesCombinedNotTransparent = curOffset;
+            }
+            else
+            {
+                int[] args = new int[] { 0 };
+                ComputeBuffer.CopyCount(combinedDrawDataNotTransparent, chunk.world.argBuffer, 0);
+                chunk.world.argBuffer.GetData(args);
+                numRenderedCubesCombinedNotTransparent = args[0];
+            }
+
             combiningDrawData = true;
         }
 
@@ -2617,7 +2652,7 @@ namespace Blocks
 
     public class Chunk
     {
-
+        public int threadRenderingMe = -1;
         public DoEveryMS needToDoAnotherTick = new DoEveryMS(10);
         public List<PathingNode> pathingNodes = new List<PathingNode>();
         public List<PathingChunk> pathingChunks = new List<PathingChunk>();
@@ -3066,15 +3101,17 @@ namespace Blocks
         public const int MAKING_BLOCK_LIGHT_BIT = 1 << 10;
         public const int TOUCHING_TRANPARENT_OR_AIR_BIT = 1 << 9;
 
+        public const int OFFSET_FOR_TOUCHING_TRANSPARENT_OR_AIR_BIT_SIDES = 16;
         // bottom, top
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NY = 1 << 11;
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PY = 1 << 12;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NY = 1 << 16;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PY = 1 << 17;
         // front, back
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NZ = 1 << 13;
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PZ = 1 << 14;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NZ = 1 << 18;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PZ = 1 << 19;
         // left, right
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NX = 1 << 15;
-        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PX = 1 << 16;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_NX = 1 << 20;
+        public const int TOUCHING_TRANPARENT_OR_AIR_BIT_PX = 1 << 21;
+
         public const int TOUCHING_SKY_BIT = 1 << 8;
         public const int SKY_LIGHTING_MASK = 0xF0;
         public const int BLOCK_LIGHTING_MASK = 0xF;
@@ -3158,7 +3195,7 @@ namespace Blocks
             blockLighting = (lightingState & BLOCK_LIGHTING_MASK);
 
             // 0x3F is 0b111111 (six ones)
-            touchingSkyFlags = (lightingState & (0x3F << 11));
+            touchingSkyFlags = (lightingState & (0x3F << OFFSET_FOR_TOUCHING_TRANSPARENT_OR_AIR_BIT_SIDES));
 
             // produced lighting is bits 12-15
             if (makingBlockLight)
@@ -3323,7 +3360,7 @@ namespace Blocks
             }
 
             // neighbors light has changed so we need to trickle their values
-            if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir))
+            if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir) || (touchingSkyFlags != oldTouchingSkyFlags))
             {
                 skyLighting = System.Math.Max(skyLighting, highestSkyLighting - 1);
                 blockLighting = System.Math.Max(blockLighting, highestBlockLighting - 1);
@@ -3341,7 +3378,7 @@ namespace Blocks
             }
 
             // we produce the light
-            if (highestBlockLighting <= blockLighting && blockLighting > 0)
+            if (highestBlockLighting <= blockLighting && blockLighting > 0 && oldMakingBlockLight)
             {
                 if (block.block != Example.Sand)
                 {
@@ -3514,6 +3551,8 @@ namespace Blocks
 
 
                 //Debug.Log("updated " + chunkData.blocksNeedUpdating.Count + " blocks with " + numLightUpdated + " lighting updates " + cx + " " + cy + " " + cz);
+
+
             }
 
 
@@ -3573,6 +3612,10 @@ namespace Blocks
 
         public void SetTouchingAir(long x, long y, long z, bool value)
         {
+
+            UpdateLighting(x, y, z);
+            return;
+
             long relativeX = x - cx * chunkSize;
             long relativeY = y - cy * chunkSize;
             long relativeZ = z - cz * chunkSize;
@@ -3592,11 +3635,16 @@ namespace Blocks
             touchingTransparentOrAir = false;
             UpdateTouchingNeighbors(x, y, z, relativeX, relativeY, relativeZ, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
+            if (makingBlockLight)
+            {
+                highestBlockLighting = 15;
+            }
+
             if (touchingSkyFlags != oldTouchingSkyFlags || oldTouchingTransparentOrAir != touchingTransparentOrAir)
             {
                 touchingTransparentOrAir = value;
                 bool addedUpdate;
-                chunkData.SetState(relativeX, relativeY, relativeZ, PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags), BlockState.Lighting, out addedUpdate);
+                chunkData.SetState(relativeX, relativeY, relativeZ, PackLightingValues(highestSkyLighting, highestBlockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags), BlockState.Lighting, out addedUpdate);
                 chunkData.needToBeUpdated = true;
             }
 
@@ -3628,6 +3676,7 @@ namespace Blocks
             }
             set
             {
+                this.threadRenderingMe = 100; // so we don't get renders until we are done 
                 long relativeX = x - cx * chunkSize;
                 long relativeY = y - cy * chunkSize;
                 long relativeZ = z - cz * chunkSize;
@@ -3661,6 +3710,7 @@ namespace Blocks
                         }
                     }
                 }
+
                 chunkData.SetBlock(relativeX, relativeY, relativeZ, value, out addedUpdate);
 
                 // after we assigned the value, do some more updates:
@@ -3684,6 +3734,9 @@ namespace Blocks
                     world.AddBlockUpdateToNeighbors(x, y, z);
                     chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
                 }
+
+                // we are all done with fiddling, allow other render threads to update us now
+                this.threadRenderingMe = -1;
             }
         }
 
@@ -4572,6 +4625,9 @@ namespace Blocks
 
     public class World : BlockGetter
     {
+
+        public static bool DO_CPU_RENDER = true;
+
         static bool creativeMode_;
         public static bool creativeMode {
             get
@@ -6676,6 +6732,7 @@ namespace Blocks
         static int numWaiting = 0;
 
         public Thread helperThread;
+        public Thread helperThread2;
 
         Chunk GetChunkf(long[] pos)
         {
@@ -7145,14 +7202,15 @@ namespace Blocks
 
             List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist();
 
+            int tmp = 0;
             foreach (Tuple<Chunk, long> chunkAndDist in chunksToRender)
             {
+                numAllowedToDoFullRender = 0;
                 Chunk chunk = chunkAndDist.a;
                 int prev = numAllowedToDoFullRender;
                 long timeBefore = PhysicsUtils.millis();
-                if (chunkAndDist.b < 2)
+                if (chunkAndDist.b < 1)
                 {
-                    int tmp = 100000;
                     if(chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
                     {
                         //chunk.chunkRenderer.FinishRenderSync(chunk);
@@ -8104,6 +8162,17 @@ namespace Blocks
 
     public class BlocksWorld : MonoBehaviour
     {
+
+        public enum ProfileType
+        {
+            Generation,
+            Tick
+        }
+
+
+        public ProfileType profileType;
+        public bool doProfile = false;
+
         public int chunkRenderDist = 3;
         [HideInInspector]
         public Material debugLineMaterial;
@@ -8582,9 +8651,30 @@ namespace Blocks
 
             cubeTris = defaultCubeTris.ToArray();
 
+            for (int i = 0; i < cubeTris.Length; i++)
+            {
+                Debug.Log(i + " " + cubeTris[i].vertex1.x + " " + cubeTris[i].vertex1.y + " " + cubeTris[i].vertex1.z + " " +
+                    cubeTris[i].vertex2.x + " " + cubeTris[i].vertex2.y + " " + cubeTris[i].vertex2.z + " " +
+                    cubeTris[i].vertex3.x + " " + cubeTris[i].vertex3.y + " " + cubeTris[i].vertex3.z + " ");
+            }
+
             blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4);
             cubeOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             cubeOffsets.SetData(triOffsets);
+            cubeOffsetsDefault = new List<Vector3>();
+            cubeUVOffsetsDefault = new List<Vector2>();
+
+            for (int i = 0;i < triOffsets.Length/4; i++)
+            {
+                Vector3 cur = new Vector3(triOffsets[i * 4], triOffsets[i * 4 + 1], triOffsets[i * 4 + 2]);
+                cubeOffsetsDefault.Add(cur);
+            }
+
+            for (int i = 0; i < texOffsets.Length / 4; i++)
+            {
+                Vector2 cur = new Vector2(triOffsets[i * 4], triOffsets[i * 4 + 1]);
+                cubeUVOffsetsDefault.Add(cur);
+            }
             cubeNormals = new ComputeBuffer(36, sizeof(float) * 4);
             cubeNormals.SetData(vertNormals);
             uvOffsets = new ComputeBuffer(36, sizeof(float) * 4);
@@ -8861,6 +8951,9 @@ namespace Blocks
             //}
         }
 
+        public List<Vector3> cubeOffsetsDefault;
+        public List<Vector2> cubeUVOffsetsDefault;
+
         void LoadMaterials()
         {
             if (!triMaterial)
@@ -8954,7 +9047,14 @@ namespace Blocks
 
                        if (okToRunTicks)
                        {
-                           world.Tick();
+                           if (doProfile && profileType == ProfileType.Tick)
+                           {
+                               world.Tick();
+                           }
+                           else
+                           {
+                               world.Tick();
+                           }
                        }
                    }
                    catch (System.Exception e)
@@ -8966,8 +9066,64 @@ namespace Blocks
                }
            });
 
-            world.helperThread.Priority = System.Threading.ThreadPriority.Lowest;
+            if (World.DO_CPU_RENDER)
+            {
+                int NUM_RENDER_THREADS = 4;
+                for (int i = 0;i < NUM_RENDER_THREADS; i++)
+                {
+                    world.helperThread2 = new Thread(() =>
+                    {
+                        while (threadKeepGoing)
+                        {
+                            try
+                            {
+
+                                if (okToRunTicks)
+                                {
+                                    List<Tuple<Chunk, long>> allChunksHere = world.GetChunksCloserThanRenderDist();
+
+                                    if (i > 1)
+                                    {
+                                        allChunksHere.Shuffle();
+                                    }
+                                    foreach (Tuple<Chunk, long> chunk in allChunksHere)
+                                    {
+                                        if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles)
+                                        {
+                                            chunk.a.threadRenderingMe = i;
+                                            int numTris;
+                                            List<RenderTriangle> renderTriangles = world.blocksWorld.MakeChunkTrisInCPU(chunk.a, null, out numTris);
+                                            chunk.a.chunkRenderer.triangles = renderTriangles;
+                                            chunk.a.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.HasTriangles;
+                                            chunk.a.threadRenderingMe = -1;
+                                        }
+                                    }
+                                }
+                            }
+                            catch (System.Exception e)
+                            {
+                                Debug.LogError(e);
+                            }
+                            Thread.Sleep(1);
+                        }
+                    });
+
+                    if (i == 0)
+                    {
+                        world.helperThread2.Priority = System.Threading.ThreadPriority.Normal;
+                    }
+                    else
+                    {
+
+                        world.helperThread2.Priority = System.Threading.ThreadPriority.Lowest;
+                    }
+                    world.helperThread2.Start();
+                }
+            }
+
+            world.helperThread.Priority = System.Threading.ThreadPriority.Normal;
             world.helperThread.Start();
+
         }
 
 
@@ -9044,33 +9200,152 @@ namespace Blocks
         int curChunkBlockDataCombinedI = 0;
 
 
-        public void MakeChunkTrisForCombined(Chunk chunk,  ComputeBuffer drawData)
+        public List<RenderTriangle> MakeChunkTrisInCPU(Chunk chunk, ComputeBuffer drawData, out int numTris, int offsetInDrawData = 0)
         {
-            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
-            renderTransform.transform.position += offset;
+            int numAllowedToDoFullRender = 1;
+            return MakeChunkTrisInCPU(chunk, drawData, out numTris, ref numAllowedToDoFullRender, offsetInDrawData: offsetInDrawData);
+        }
 
-            ComputeBuffer curChunkBlockData = chunkBlockDatasForCombined[curChunkBlockDataCombinedI];
-            curChunkBlockDataCombinedI = (curChunkBlockDataCombinedI + 1) % chunkBlockDatasForCombined.Length;
-            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
 
-            for (int i = 0; i < 2; i++)
+        public List<RenderTriangle> MakeChunkTrisInCPU(Chunk chunk, ComputeBuffer drawData, out int numTris, ref int numAllowedToDoFullRender, int offsetInDrawData = 0)
+        {
+            if (drawData != null && chunk.chunkRenderer.triangles != null) // if we aren't making this on a seperate thread (drawData will be null in that case) and a seperate thread has already made our triangles for us, we don't need to!
             {
-                cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
-                cullBlocksShader.SetFloat("ptCloudScale", worldScale);
-                cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
-                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
-                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+                List<RenderTriangle> cachedTriangles = chunk.chunkRenderer.triangles;
+                if (cachedTriangles != null) // check needed due to multithreading
+                {
+                    numTris = cachedTriangles.Count;
+                    drawData.SetData<RenderTriangle>(cachedTriangles);
+                    //chunk.chunkRenderer.triangles = null; // set to null since we done now
+                    chunk.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.StoredToComputeBuffer; // set it to up to date now
+                    return cachedTriangles;
+                }
             }
-            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
-            cullBlocksShader.SetBuffer(0, "DrawingThings", drawData);
-            cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
 
-            renderTransform.transform.position -= offset;
+            if (drawData != null)
+            {
+                Debug.Log("doing full render in render thread");
+            }
+
+            numAllowedToDoFullRender -= 1;
+
+
+            RenderTriangle[] defaultCubeTris = World.defaultCubeTris;
+            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+
+            Matrix4x4 offsetMatrix = Matrix4x4.TRS(offset, Quaternion.identity, Vector3.one);
+
+            int[] chunkData = chunk.chunkData.GetRawData();
+            int i = 0;
+            int blockValue, blockState, blockLightingState, blockAnimState,lightingTouchingFlags;
+            List<RenderTriangle> triangles = new List<RenderTriangle>();
+            for (int z = 0; z < chunkSize; z++)
+            {
+                for (int y = 0; y < chunkSize; y++)
+                {
+                    for (int x = 0; x < chunkSize; x++)
+                    {
+                        blockValue = chunkData[i++];
+                        blockState = chunkData[i++];
+                        blockLightingState = chunkData[i++];
+                        blockAnimState = chunkData[i++];
+                        lightingTouchingFlags = blockLightingState >> Chunk.OFFSET_FOR_TOUCHING_TRANSPARENT_OR_AIR_BIT_SIDES;
+
+                        if (blockValue > 0 && ((blockLightingState & Chunk.TOUCHING_TRANPARENT_OR_AIR_BIT) != 0))
+                        {
+                            for (int k = 0; k < defaultCubeTris.Length; k++)
+                            {
+                                int blah = k/2;
+                                int spook = 1 << blah;
+                                int touching = lightingTouchingFlags & spook;
+                                // cull hidden faces
+                                if (touching != 0)
+                                {
+                                    Vector3 blockPos = new Vector3(x, y, z);
+                                    RenderTriangle cur = new RenderTriangle();
+                                    cur.state1 = blockValue;
+                                    cur.state2 = blockState;
+                                    cur.state3 = blockLightingState;
+                                    cur.state4 = blockAnimState;
+                                    cur.vertex1 = Util.MakeFloat4(offsetMatrix.MultiplyPoint(new Vector3(defaultCubeTris[k].vertex1.x + blockPos.x, defaultCubeTris[k].vertex1.y + blockPos.y, defaultCubeTris[k].vertex1.z + blockPos.z) * worldScale));
+                                    cur.vertex2 = Util.MakeFloat4(offsetMatrix.MultiplyPoint(new Vector3(defaultCubeTris[k].vertex2.x + blockPos.x, defaultCubeTris[k].vertex2.y + blockPos.y, defaultCubeTris[k].vertex2.z + blockPos.z) * worldScale));
+                                    cur.vertex3 = Util.MakeFloat4(offsetMatrix.MultiplyPoint(new Vector3(defaultCubeTris[k].vertex3.x + blockPos.x, defaultCubeTris[k].vertex3.y + blockPos.y, defaultCubeTris[k].vertex3.z + blockPos.z) * worldScale));
+
+                                    float yOffset = (Mathf.Abs(blockValue) - 1) / 64.0f;
+                                    //yOffset = 18.0f/64.0f;
+
+                                    cur.uv1 = Util.MakeFloat2(defaultCubeTris[k].uv1.x, defaultCubeTris[k].uv1.y + yOffset);
+                                    cur.uv2 = Util.MakeFloat2(defaultCubeTris[k].uv2.x, defaultCubeTris[k].uv2.y + yOffset);
+                                    cur.uv3 = Util.MakeFloat2(defaultCubeTris[k].uv3.x, defaultCubeTris[k].uv3.y + yOffset);
+
+                                    triangles.Add(cur);
+                                }
+                                    
+                            }
+                        }
+                        else if(blockValue < 0 && ((blockLightingState & Chunk.TOUCHING_TRANPARENT_OR_AIR_BIT) != 0))
+                        {
+                            Vector3 blockPos = new Vector3(x, y, z);
+                            RenderTriangle template = new RenderTriangle();
+                            template.state1 = blockValue;
+                            template.state2 = blockState;
+                            template.state3 = blockLightingState;
+                            template.state4 = blockAnimState;
+                            triangles.AddRange(world.GetTrianglesForBlock(blockValue, blockAnimState, template, blockPos, offsetMatrix));
+                        }
+                    }
+                }
+            }
+
+            if (drawData != null)
+            {
+                drawData.SetData<RenderTriangle>(triangles, 0, offsetInDrawData, triangles.Count);
+            }
 
 
 
-            //cullBlocksShader.SetBuffer(2, "NonCubePositions", )
+            numTris = triangles.Count;
+
+            return triangles;
+        }
+
+        public int MakeChunkTrisForCombined(Chunk chunk,  ComputeBuffer drawData, int offsetInDrawData)
+        {
+            if (World.DO_CPU_RENDER)
+            {
+                int numTris;
+                MakeChunkTrisInCPU(chunk, drawData, out numTris, offsetInDrawData:offsetInDrawData);
+                return numTris;
+            }
+            else
+            {
+                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                renderTransform.transform.position += offset;
+
+                ComputeBuffer curChunkBlockData = chunkBlockDatasForCombined[curChunkBlockDataCombinedI];
+                curChunkBlockDataCombinedI = (curChunkBlockDataCombinedI + 1) % chunkBlockDatasForCombined.Length;
+                curChunkBlockData.SetData(chunk.chunkData.GetRawData());
+
+                for (int i = 0; i < 2; i++)
+                {
+                    cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                    cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                    cullBlocksShader.SetFloat("ptCloudScale", worldScale);
+                    cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                    cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                    cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+                }
+                // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+                cullBlocksShader.SetBuffer(0, "DrawingThings", drawData);
+                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+
+                renderTransform.transform.position -= offset;
+
+                //cullBlocksShader.SetBuffer(2, "NonCubePositions", )
+
+                return 0;
+            }
+
         }
 
 
@@ -9078,192 +9353,212 @@ namespace Blocks
         {
             //int[] args = new int[] { 0 };
 
-            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
-            renderTransform.transform.position += offset;
-
-            chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
-
-            curChunkBlockDataI = 0;
-            ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
-            ComputeBuffer curNotCubePositions = nonCubePositions[curChunkBlockDataI];
-            chunk.indexUsingInBatch = curChunkBlockDataI;
-            curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
-            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
-
-            for (int i = 0; i  < 2; i++)
+            if (World.DO_CPU_RENDER)
             {
-                cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
-                cullBlocksShader.SetFloat("ptCloudScale", worldScale);
-                cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
-                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
-                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
-                cullBlocksShader.SetBuffer(2, "DataIn", curChunkBlockData);
-            }
-            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
-            cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-            cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
-
-            curNotCubePositions.SetCounterValue(0);
-            cullBlocksShader.SetBuffer(2, "NonCubePositions", curNotCubePositions);
-            cullBlocksShader.Dispatch(2, chunkSize / 8, chunkSize / 8, chunkSize / 8);
-
-
-
-
-
-            /*
-            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
-            world.argBuffer.GetData(args);
-            numNotTransparent = args[0];
-            float[] resVals = new float[numNotTransparent*(4+4+4+2)];
-            //Debug.Log("got num not transparent = " + numNotTransparent + " (" + (numNotTransparent / 36) + ")");
-
-            chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
-            //chunkBlockData.SetData(chunk.chunkData.GetRawData());
-            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
-            cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
-            cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
-            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
-            world.argBuffer.GetData(args);
-            numTransparent = args[0];
-            */
-
-            renderTransform.transform.position -= offset;
-        }
-
-
-
-        public void FinishChunkTrisSync(Chunk chunk, out int numNotTransparent, out int numTransparent)
-        {
-
-            int[] args = new int[] { 0 };
-            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
-            renderTransform.transform.position += offset;
-
-            /*
-
-            chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
-
-            ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
-            curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
-            curChunkBlockData.SetData(chunk.chunkData.GetRawData());
-
-            for (int i = 0; i < 2; i++)
-            {
-                cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
-                cullBlocksShader.SetFloat("ptCloudScale", worldScale);
-                cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
-                cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
-                cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
-            }
-            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
-            cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-            cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
-            */
-            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
-            world.argBuffer.GetData(args);
-            numNotTransparent = args[0];
-
-            ComputeBuffer curNonCubePositions = nonCubePositions[chunk.indexUsingInBatch];
-
-            ComputeBuffer.CopyCount(curNonCubePositions, world.argBuffer, 0);
-            world.argBuffer.GetData(args);
-            int numNonCubes = args[0];
-
-
-
-            if (numNonCubes > 0)
-            {
-                //Debug.Log("drawing custom model " + chunk.cx + " " + chunk.cy + " " + chunk.cz);
-                int[] nonCubePositions = new int[numNonCubes];
-                chunk.chunkRenderer.hasCustomBlocks = true;
-                curNonCubePositions.GetData(nonCubePositions);
-
-                List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
-
-                //Debug.Log("got " + numNonCubes + " non cubes for a total of " + bonusTriangles.Count + " bonus triangles");
-                /*
-                RenderTriangle[] prevTriangles = new RenderTriangle[numNotTransparent];
-                for (int i = 0; i < prevTriangles.Length; i++)
-                {
-                    prevTriangles[i] = new RenderTriangle();
-                    prevTriangles[i].vertex1 = new Float4();
-                    prevTriangles[i].vertex2 = new Float4();
-                    prevTriangles[i].vertex3 = new Float4();
-                    prevTriangles[i].uv1 = new Float2();
-                    prevTriangles[i].uv2 = new Float2();
-                    prevTriangles[i].uv3 = new Float2();
-                }
-                */
-
-
-                //chunk.chunkRenderer.drawDataNotTransparent.GetStructData(prevTriangles);
-                //bonusTriangles.AddRange(prevTriangles);
-
-
-                
-                int[] rawData = chunk.chunkData.GetRawData();
-                RenderTriangle template = new RenderTriangle();
-                for (int i = 0; i < nonCubePositions.Length; i++)
-                {
-                    int pos = nonCubePositions[i] * 4;
-                    int blockId = rawData[pos];
-                    template.state1 = rawData[pos];
-                    template.state2 = rawData[pos + 1];
-                    template.state3 = rawData[pos + 2];
-                    template.state4 = rawData[pos + 3];
-
-                    int lx, ly, lz;
-                    chunk.chunkData.to3D(nonCubePositions[i], out lx, out ly, out lz);
-                    Vector3 blockPos = new Vector3(lx, ly, lz);
-                    int stateForBlockAnim = rawData[pos + 3];
-
-
-                    bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, stateForBlockAnim, template, blockPos, renderTransform.localToWorldMatrix));
-                }
-
-
-
-                helperForCustomBlocks.SetStructData(bonusTriangles.ToArray());
-
-                cullBlocksShader.SetBuffer(3, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-                cullBlocksShader.SetBuffer(3, "ThingsToAddToDrawingThings", helperForCustomBlocks);
-
-                cullBlocksShader.Dispatch(3, bonusTriangles.Count, 1, 1);
-
-                RenderTriangle[] resTriangles = bonusTriangles.ToArray();
-                //chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue((uint)resTriangles.Length);
-                //chunk.chunkRenderer.drawDataNotTransparent.SetStructData(resTriangles);
-                numNotTransparent += bonusTriangles.Count;
 
             }
             else
             {
 
-                chunk.chunkRenderer.hasCustomBlocks = false;
+                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                renderTransform.transform.position += offset;
+
+                chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
+
+                curChunkBlockDataI = 0;
+                ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
+                ComputeBuffer curNotCubePositions = nonCubePositions[curChunkBlockDataI];
+                chunk.indexUsingInBatch = curChunkBlockDataI;
+                curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
+                curChunkBlockData.SetData(chunk.chunkData.GetRawData());
+
+                for (int i = 0; i < 2; i++)
+                {
+                    cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                    cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                    cullBlocksShader.SetFloat("ptCloudScale", worldScale);
+                    cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                    cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                    cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+                    cullBlocksShader.SetBuffer(2, "DataIn", curChunkBlockData);
+                }
+                // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+                cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+
+                curNotCubePositions.SetCounterValue(0);
+                cullBlocksShader.SetBuffer(2, "NonCubePositions", curNotCubePositions);
+                cullBlocksShader.Dispatch(2, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+
+
+                /*
+                ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
+                world.argBuffer.GetData(args);
+                numNotTransparent = args[0];
+                float[] resVals = new float[numNotTransparent*(4+4+4+2)];
+                //Debug.Log("got num not transparent = " + numNotTransparent + " (" + (numNotTransparent / 36) + ")");
+
+                chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
+                //chunkBlockData.SetData(chunk.chunkData.GetRawData());
+                // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+                cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
+                cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
+                world.argBuffer.GetData(args);
+                numTransparent = args[0];
+                */
+
+                renderTransform.transform.position -= offset;
+
             }
 
 
-            //float[] resVals = new float[numNotTransparent * (4 + 4 + 4 + 2)];
-            //Debug.Log("got num not transparent = " + numNotTransparent + " (" + (numNotTransparent / 36) + ")");
 
-            /*
-            chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
-            //chunkBlockData.SetData(chunk.chunkData.GetRawData());
-            // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
-            cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
-            cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
-            ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
-            world.argBuffer.GetData(args);
-            numTransparent = args[0];
-            */
 
-            //// new: I added this tmp and commented out the above
-            numTransparent = 0;
 
-            renderTransform.transform.position -= offset;
+        }
+
+
+
+        public void FinishChunkTrisSync(Chunk chunk, out int numNotTransparent, out int numTransparent, ref int numAllowedToDoFullRender)
+        {
+
+            if (World.DO_CPU_RENDER)
+            {
+                MakeChunkTrisInCPU(chunk, chunk.chunkRenderer.drawDataNotTransparent, out numNotTransparent, numAllowedToDoFullRender: ref numAllowedToDoFullRender);
+                numTransparent = 0;
+            }
+            else
+            {
+
+                int[] args = new int[] { 0 };
+                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                renderTransform.transform.position += offset;
+
+                /*
+
+                chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
+
+                ComputeBuffer curChunkBlockData = chunkBlockDatas[curChunkBlockDataI];
+                curChunkBlockDataI = (curChunkBlockDataI + 1) % chunkBlockDatas.Length;
+                curChunkBlockData.SetData(chunk.chunkData.GetRawData());
+
+                for (int i = 0; i < 2; i++)
+                {
+                    cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                    cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                    cullBlocksShader.SetFloat("ptCloudScale", worldScale);
+                    cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                    cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
+                    cullBlocksShader.SetBuffer(1, "DataIn", curChunkBlockData);
+                }
+                // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+                cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                */
+                ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
+                world.argBuffer.GetData(args);
+                numNotTransparent = args[0];
+
+                ComputeBuffer curNonCubePositions = nonCubePositions[chunk.indexUsingInBatch];
+
+                ComputeBuffer.CopyCount(curNonCubePositions, world.argBuffer, 0);
+                world.argBuffer.GetData(args);
+                int numNonCubes = args[0];
+
+
+
+                if (numNonCubes > 0)
+                {
+                    //Debug.Log("drawing custom model " + chunk.cx + " " + chunk.cy + " " + chunk.cz);
+                    int[] nonCubePositions = new int[numNonCubes];
+                    chunk.chunkRenderer.hasCustomBlocks = true;
+                    curNonCubePositions.GetData(nonCubePositions);
+
+                    List<RenderTriangle> bonusTriangles = new List<RenderTriangle>();
+
+                    //Debug.Log("got " + numNonCubes + " non cubes for a total of " + bonusTriangles.Count + " bonus triangles");
+                    /*
+                    RenderTriangle[] prevTriangles = new RenderTriangle[numNotTransparent];
+                    for (int i = 0; i < prevTriangles.Length; i++)
+                    {
+                        prevTriangles[i] = new RenderTriangle();
+                        prevTriangles[i].vertex1 = new Float4();
+                        prevTriangles[i].vertex2 = new Float4();
+                        prevTriangles[i].vertex3 = new Float4();
+                        prevTriangles[i].uv1 = new Float2();
+                        prevTriangles[i].uv2 = new Float2();
+                        prevTriangles[i].uv3 = new Float2();
+                    }
+                    */
+
+
+                    //chunk.chunkRenderer.drawDataNotTransparent.GetStructData(prevTriangles);
+                    //bonusTriangles.AddRange(prevTriangles);
+
+
+
+                    int[] rawData = chunk.chunkData.GetRawData();
+                    RenderTriangle template = new RenderTriangle();
+                    for (int i = 0; i < nonCubePositions.Length; i++)
+                    {
+                        int pos = nonCubePositions[i] * 4;
+                        int blockId = rawData[pos];
+                        template.state1 = rawData[pos];
+                        template.state2 = rawData[pos + 1];
+                        template.state3 = rawData[pos + 2];
+                        template.state4 = rawData[pos + 3];
+
+                        int lx, ly, lz;
+                        chunk.chunkData.to3D(nonCubePositions[i], out lx, out ly, out lz);
+                        Vector3 blockPos = new Vector3(lx, ly, lz);
+                        int stateForBlockAnim = rawData[pos + 3];
+
+
+                        bonusTriangles.AddRange(world.GetTrianglesForBlock(blockId, stateForBlockAnim, template, blockPos, renderTransform.localToWorldMatrix));
+                    }
+
+
+
+                    helperForCustomBlocks.SetStructData(bonusTriangles.ToArray());
+
+                    cullBlocksShader.SetBuffer(3, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
+                    cullBlocksShader.SetBuffer(3, "ThingsToAddToDrawingThings", helperForCustomBlocks);
+
+                    cullBlocksShader.Dispatch(3, bonusTriangles.Count, 1, 1);
+
+                    RenderTriangle[] resTriangles = bonusTriangles.ToArray();
+                    //chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue((uint)resTriangles.Length);
+                    //chunk.chunkRenderer.drawDataNotTransparent.SetStructData(resTriangles);
+                    numNotTransparent += bonusTriangles.Count;
+
+                }
+                else
+                {
+
+                    chunk.chunkRenderer.hasCustomBlocks = false;
+                }
+
+
+                //float[] resVals = new float[numNotTransparent * (4 + 4 + 4 + 2)];
+                //Debug.Log("got num not transparent = " + numNotTransparent + " (" + (numNotTransparent / 36) + ")");
+
+                /*
+                chunk.chunkRenderer.drawDataTransparent.SetCounterValue(0);
+                //chunkBlockData.SetData(chunk.chunkData.GetRawData());
+                // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
+                cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
+                cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
+                world.argBuffer.GetData(args);
+                numTransparent = args[0];
+                */
+
+                //// new: I added this tmp and commented out the above
+                numTransparent = 0;
+
+                renderTransform.transform.position -= offset;
+            }
         }
 
         public Queue<Tuple<LVector3, float>> blocksBreaking = new Queue<Tuple<LVector3, float>>();

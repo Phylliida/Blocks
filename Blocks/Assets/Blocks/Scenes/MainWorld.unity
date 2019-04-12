@@ -649,6 +649,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab09a5a7eecbbe546a447adad67753f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  profileType: 1
+  doProfile: 0
   chunkRenderDist: 10
   debugLineMaterial: {fileID: 0}
   skyLightLevel: 1
@@ -677,7 +679,7 @@ MonoBehaviour:
     packRootDir: C:\Users\yams\Desktop\yams\prog\unity\Blocks\repo\Blocks\BlockSpecs\Example
     packTexture: {fileID: 2027049917}
   otherObjectInventoryGui: {fileID: 1234048945}
-  ticksPerSecond: 300000
+  ticksPerSecond: 30
   blocksPack: {fileID: 324794739}
   players: []
   playerPositions: []
@@ -5471,12 +5473,12 @@ PrefabInstance:
     - target: {fileID: 7533686971479533703, guid: a89c16a1e7b068d40a2c40e20a567574,
         type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -300
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7533686971479533703, guid: a89c16a1e7b068d40a2c40e20a567574,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -825.58234
+      value: 0.0000076293945
       objectReference: {fileID: 0}
     - target: {fileID: 7533686972339550526, guid: a89c16a1e7b068d40a2c40e20a567574,
         type: 3}

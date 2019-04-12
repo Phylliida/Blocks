@@ -868,6 +868,8 @@ namespace Blocks
 
         public static class ListExtensionMethods
         {
+            public static System.Random randomGen = new System.Random();
+
             public static bool Contains<T>(this T[] arr, T item)
             {
                 for (int i = 0; i < arr.Length; i++)
@@ -878,6 +880,17 @@ namespace Blocks
                     }
                 }
                 return false;
+            }
+
+            public static void Shuffle<T>(this List<T> arr)
+            {
+                for (int i = 1; i < arr.Count; i++)
+                {
+                    int shuffleTo = randomGen.Next(0, i);
+                    T tmp = arr[i];
+                    arr[i] = arr[shuffleTo];
+                    arr[shuffleTo] = tmp;
+                }
             }
         }
 
