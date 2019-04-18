@@ -23,7 +23,7 @@ public class Light : Block
     public override void OnTick(BlockData block)
     {
         block.needsAnotherTick = false;
-        block.lightingState = block.lightingState | 15 | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT;
+        block.lightingState = block.lightingState | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT | (15 << Blocks.Chunk.OFFSET_FOR_PRODUCED_LIGHT) | 15;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -1661,9 +1661,13 @@ public class Leaf : StaticBlock
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         CreateBlockEntity(Example.Stick, positionOfBlock);
-        if (Random.value < 0.2f)
+        if (random.NextDouble() < 0.2f)
         {
             CreateBlockEntity(Example.Stick, positionOfBlock);
+        }
+        if (random.NextDouble() < 0.05f)
+        {
+            CreateBlockEntity(Example.Sapling, positionOfBlock);
         }
         destroyBlock = true;
     }
@@ -1679,6 +1683,168 @@ public class Leaf : StaticBlock
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
         return 0.7f;
+    }
+}
+
+
+public class Sapling : StaticBlock
+{
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Sapling, positionOfBlock);
+        destroyBlock = true;
+    }
+
+
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Sapling;
+    }
+
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.7f;
+    }
+
+    public override void OnRandomTick(BlockData block)
+    {
+        if (random.NextDouble() < 0.02f)
+        {
+            if(TryMakeTree(block))
+            {
+
+            }
+        }
+        block.needsAnotherTick = true;
+    }
+
+
+
+    bool TreeOverridable(BlockValue value)
+    {
+        return value == BlockValue.Air || value == Example.Sapling || value == Example.Trunk;
+    }
+
+    public bool TryMakeTree(BlockData basePos)
+    {
+        long x = basePos.x;
+        long y = basePos.y;
+        long z = basePos.z;
+        int treeHeight = (int)System.Math.Round(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
+        bool checkingButNotMaking = true;
+        for (int w = 0; w < 2; w++)
+        {
+            if (w == 0)
+            {
+                checkingButNotMaking = true;
+            }
+            else
+            {
+                checkingButNotMaking = false;
+            }
+            for (int i = 0; i < treeHeight; i++)
+            {
+                if (i == 0)
+                {
+                    if (checkingButNotMaking)
+                    {
+                        if (!TreeOverridable(GetBlockRelative(basePos, 0, i, 0)))
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        SetBlockRelative(basePos, 0, i, 0, Example.Trunk);
+                        using (BlockData trunkData = GetBlockDataRelative(basePos, 0, i, 0))
+                        {
+                            trunkData.state = 4;
+                            trunkData.lightingState = 0;
+                            trunkData.animationState = 0;
+                        }
+                    }
+                    continue;
+                }
+                float pAlong = (i + 1) / (float)(treeHeight);
+
+                float maxWidth = 3.0f;
+                float topWidth = 0.5f;
+                float bottomWidth = 0.2f;
+                float decreasePoint = 0.3f;
+
+                float p;
+                float minVal;
+                float maxVal;
+                if (pAlong < decreasePoint)
+                {
+                    minVal = bottomWidth;
+                    maxVal = maxWidth;
+                    p = (decreasePoint - pAlong) / decreasePoint;
+                }
+                else
+                {
+                    minVal = maxWidth;
+                    maxVal = topWidth;
+                    p = 1 - (pAlong - decreasePoint) / (1.0f - decreasePoint);
+                }
+
+                float width = minVal * p + maxVal * (1 - p);
+                int widthI = (int)System.Math.Floor(width);
+
+
+                bool addedLeaf = false;
+                for (int j = -widthI; j <= widthI; j++)
+                {
+                    for (int k = -widthI; k <= widthI; k++)
+                    {
+                        if (System.Math.Sqrt(j * j + k * k) <= width)
+                        {
+                            if (j != 0 || k != 0)
+                            {
+                                addedLeaf = true;
+                            }
+                            if (checkingButNotMaking)
+                            {
+                                if (!TreeOverridable(GetBlockRelative(basePos, j, i, k)))
+                                {
+                                    return false;
+                                }
+                            }
+                            else
+                            {
+                                SetBlockRelative(basePos, j, i, k, Example.Leaf);
+                            }
+                        }
+                    }
+                }
+                if (addedLeaf)
+                {
+                    if (checkingButNotMaking)
+                    {
+                        if (!TreeOverridable(GetBlockRelative(basePos, 0, i, 0)))
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        SetBlockRelative(basePos, 0, i, 0, Example.Trunk);
+                        using (BlockData trunkData = GetBlockDataRelative(basePos, 0, i, 0))
+                        {
+                            trunkData.state = 4;
+                            trunkData.lightingState = 0;
+                            trunkData.animationState = 0;
+                        }
+                    }
+                }
+
+            }
+
+        }
+
+        return true;
     }
 }
 
@@ -1787,7 +1953,7 @@ public class WetBark : StaticBlock
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
-        if (Random.value < 0.8)
+        if (random.NextDouble() < 0.8)
         {
             CreateBlockEntity(Example.String, positionOfBlock + Random.insideUnitSphere*0.1f);
         }
@@ -2142,6 +2308,7 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Clay, new SimpleBlock(Example.Clay, 1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
         AddCustomBlock(Example.Stone, new Stone(), 64);
         AddCustomBlock(Example.Leaf, new Leaf(), 64);
+        AddCustomBlock(Example.Sapling, new Sapling(), 64);
         AddCustomBlock(Example.CraftingTable, new CraftingTable(), 64);
         AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
         AddCustomBlock(Example.Rock, new Rock(), 64);

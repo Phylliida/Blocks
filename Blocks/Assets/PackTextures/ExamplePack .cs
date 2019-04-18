@@ -30,12 +30,14 @@ namespace Example_pack {
         public static BlockValue Leaf = new BlockValue(false, "Leaf", "Example");
         public static BlockValue Light = new BlockValue(true, "Light", "Example");
         public static BlockValue LooseRocks = new BlockValue(false, "LooseRocks", "Example");
+        public static BlockValue Observer = new BlockValue(false, "Observer", "Example");
         public static BlockValue Pickaxe = new BlockValue(true, "Pickaxe", "Example");
         public static BlockValue Redstone = new BlockValue(true, "Redstone", "Example");
         public static BlockValue RedstoneTorch = new BlockValue(true, "RedstoneTorch", "Example");
         public static BlockValue RedstoneTorchOnSide = new BlockValue(true, "RedstoneTorchOnSide", "Example");
         public static BlockValue Rock = new BlockValue(true, "Rock", "Example");
         public static BlockValue Sand = new BlockValue(false, "Sand", "Example");
+        public static BlockValue Sapling = new BlockValue(true, "Sapling", "Example");
         public static BlockValue SharpRock = new BlockValue(true, "SharpRock", "Example");
         public static BlockValue Shovel = new BlockValue(true, "Shovel", "Example");
         public static BlockValue Stick = new BlockValue(true, "Stick", "Example");

@@ -64,6 +64,173 @@ namespace Blocks
             }
             return hash;
         }
+
+
+        public bool HasEnoughAirToFitHere(GetRelativeBlock blockGetter)
+        {
+            return HasEnoughAirAbove((rx, ry, rz) =>
+            {
+                return blockGetter(rx, ry - 1, rz);
+            });
+        }
+
+        public bool HasEnoughAirAbove(GetRelativeBlock blockGetter)
+        {
+            if (neededSizeSide == 1 && neededSizeForward == 1)
+            {
+                for (int i = 0; i < neededSizeUp; i++)
+                {
+                    if(blockGetter(0,i+1, 0) != BlockValue.Air)
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                for (int x = 0; x < neededSizeSide; x++)
+                {
+                    for (int z = 0; z < neededSizeForward; z++)
+                    {
+                        for (int i = 0; i < neededSizeUp; i++)
+                        {
+                            if (blockGetter(x, i + 1, z) != BlockValue.Air)
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        public bool CanJumpBetween(PathNode blockFrom, PathNode blockTo, GetRelativeBlock blockGetterFrom, GetRelativeBlock blockGetterTo)
+        {
+            if (CanStandOn(blockGetterFrom) && CanStandOn(blockGetterTo))
+            {
+                long xDist = Math.Abs(blockFrom.pos.x - blockTo.pos.x);
+                long yDist = Math.Abs(blockFrom.pos.y - blockTo.pos.y);
+                long zDist = Math.Abs(blockFrom.pos.z - blockTo.pos.z);
+                long xzDist = xDist + zDist;
+                if (blockFrom.pos.y == blockTo.pos.y)
+                {
+                    // easy, walk
+                    if (xzDist == 1)
+                    {
+                        return true;
+                    }
+                    // check for things in the way: todo
+                    else
+                    {
+                        Debug.LogWarning("Warning: unimplemented walking diagonally in CanJumpBetween, for now this is just returning false");
+                        return false;
+                    }
+                }
+                // falling, doable, make sure we can actually do that fall
+                else if(blockFrom.pos.y > blockTo.pos.y)
+                {
+                    for (int y = 1; y <= yDist; y++)
+                    {
+                        if (!HasEnoughAirAbove((rx, ry, rz) => { return blockGetterTo(rx, ry + y, rz);}))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                // jumping, see if we can make the jump
+                else // if(blockFrom.pos.y < blockTo.pos.y) // this condition is implied and c# things we haven't covered all the cases if we write it
+                {
+                    // we can't jump that high
+                    if (yDist > jumpHeight)
+                    {
+                        return false;
+                    }
+                    // we can jump that high, make sure there isn't stuff in the way
+                    for (int y = 1; y <= yDist; y++)
+                    {
+                        if (!HasEnoughAirAbove((rx, ry, rz) => { return blockGetterFrom(rx, ry + y, rz); }))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public bool TryGetRelativeBlockYAboveThatWeCanStandOn(GetRelativeBlock blockGetter, int heightToLookUp, out int yBlockAbove)
+        {
+            yBlockAbove = 0;
+            for (int y = 0; y <= heightToLookUp; y++)
+            {
+                if (CanStandOn((rx, ry, rz) =>
+                {
+                    return blockGetter(rx, ry + y, rz);
+                }))
+                {
+                    yBlockAbove = y;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        public bool TryGetRelativeBlockYBelowThatWeCanStandOn(GetRelativeBlock blockGetter, int heightToLookDown, out int yBlockBelow)
+        {
+            yBlockBelow = 0;
+            for (int y = 0; y >= -heightToLookDown; y--)
+            {
+                if (CanStandOn((rx, ry, rz) =>
+                {
+                    return blockGetter(rx, ry + y, rz);
+                }))
+                {
+                    yBlockBelow = y;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public bool CanStandOn(GetRelativeBlock blockGetter)
+        {
+            if (neededSizeSide == 1 && neededSizeForward == 1)
+            {
+                if (blockGetter(0,0,0) != BlockValue.Air)
+                {
+                    return HasEnoughAirAbove(blockGetter);
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // just needs at least one
+                for (int x = 0; x < neededSizeSide; x++)
+                {
+                    for (int z = 0; z < neededSizeForward; z++)
+                    {
+                        if (blockGetter(x, 0, z) != BlockValue.Air)
+                        {
+                            // check if has air in the whole area we need to breathe in
+                            return HasEnoughAirAbove(blockGetter);
+                        }
+                    }
+                }
+
+
+                return false;
+            }
+        }
     }
 
     public class PathingResult
@@ -124,6 +291,402 @@ namespace Blocks
 
     }
 
+
+    public enum PathingRegionType2
+    {
+        Falling,
+        Walking
+    }
+
+
+    public delegate BlockValue GetRelativeBlock(int relativeX, int relativeY, int relativeZ);
+
+    public enum ExpandFlags
+    {
+        PosY = (1 << 0),
+        NegY = (1 << 1),
+        PosX = (1 << 2),
+        NegX = (1 << 3),
+        PosZ = (1 << 4),
+        NegZ = (1 << 5),
+        Horizontal = XAxis | ZAxis,
+        Vertical = YAxis,
+        All6Neighbors = Horizontal | Vertical,
+        XAxis = PosX | NegX,
+        YAxis = PosY | NegY,
+        ZAxis = PosZ | NegZ,
+        Up = PosY,
+        Down = NegY
+    }
+
+    public enum RegionSettingsFlags
+    {
+        /// <summary>
+        /// Pathing will try to see if we can start a chunk from any air blocks via calling IsValidToStartPathingRegion on them, no spawning from other pathing regions is required
+        /// </summary>
+        DefaultCheckAirBlocks = (1 << 0),
+        /// <summary>
+        /// Pathing will try to see if we can start a chunk from any air blocks via calling IsValidToStartPathingRegion on them, no spawning from other pathing regions is required
+        /// </summary>
+        DefaultCheckSolidBlocks = (1 << 1),
+        /// <summary>
+        /// Pathing will never call IsValidToStartPathingRegion unless logic from another pathing region calls tryToMakeNewRegion with this region type
+        /// </summary>
+        DefaultCheckNoBlocks = (1 << 2),
+
+        /// <summary>
+        /// Pathing will try to see if we can start a chunk from any blocks via calling IsValidToStartPathingRegion on them, no spawning from other pathing regions is required
+        /// This is equivalent to DefaultCheckAirBlocks | DefaultCheckSolidBlocks
+        /// </summary>
+        DefaultCheckAllBlocks = DefaultCheckAirBlocks | DefaultCheckSolidBlocks
+    }
+
+
+    public delegate void TryToExpand(ExpandFlags flags);
+
+    public delegate void TryToExpandCustom(int relativeX, int relativeY, int relativeZ);
+
+    public delegate void TryToMakeNewRegion(PathingRegionType2 regionType, bool canTraverseInto, bool canTraverseFrom, int relativeX, int relativeY, int relativeZ);
+
+
+    public abstract class CustomRegion
+    {
+        public abstract bool IsValidToStartPathingRegion(PathNode block, GetRelativeBlock getRelativeBlock, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeNewRegion);
+
+        public abstract bool IsValidToExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeOrConnectToRegion);
+
+        public abstract RegionSettingsFlags GetSettings();
+
+    }
+
+
+    public class Pathing3
+    {
+        public static Dictionary<PathingRegionType2, CustomRegion> pathingRegions = new Dictionary<PathingRegionType2, CustomRegion>();
+
+        public static List<CustomRegion> customRegionSolidBlocks = new List<CustomRegion>();
+        public static List<CustomRegion> customRegionAirBlocks = new List<CustomRegion>();
+        public static void SetupPathing()
+        {
+            if (pathingRegions.Count == 0)
+            {
+                pathingRegions[PathingRegionType2.Walking] = new WalkingRegion();
+                pathingRegions[PathingRegionType2.Falling] = new FallingRegion();
+
+                foreach (KeyValuePair<PathingRegionType2, CustomRegion> cur in pathingRegions)
+                {
+                    if ((cur.Value.GetSettings() & RegionSettingsFlags.DefaultCheckAirBlocks) != 0)
+                    {
+                        customRegionAirBlocks.Add(cur.Value);
+                    }
+                    if ((cur.Value.GetSettings() & RegionSettingsFlags.DefaultCheckSolidBlocks) != 0)
+                    {
+                        customRegionSolidBlocks.Add(cur.Value);
+                    }
+                }
+            }
+        }
+
+        public static void DoPathing()
+        {
+            SetupPathing();
+
+
+
+
+
+
+        }
+
+
+    }
+
+    public class PathingChunk3
+    {
+        public PathingNodeBlockChunk locationSpec;
+        public MobilityCriteria mobilityCriteria;
+        public PatchingNodeBlockChunkData data;
+        public Chunk chunk;
+        public World world;
+        public PathingChunk3(Chunk chunk, MobilityCriteria mobilityCriteria)
+        {
+            this.locationSpec = new PathingNodeBlockChunk(chunk.world,
+                chunk.cx * chunk.world.chunkSize,
+                chunk.cy * chunk.world.chunkSize,
+                chunk.cz * chunk.world.chunkSize,
+                chunk.cx * chunk.world.chunkSize + chunk.world.chunkSize - 1,
+                chunk.cy * chunk.world.chunkSize + chunk.world.chunkSize - 1,
+                chunk.cz * chunk.world.chunkSize + chunk.world.chunkSize - 1);
+            this.chunk = chunk;
+            this.world = chunk.world;
+            this.data = new PatchingNodeBlockChunkData(locationSpec);
+            this.mobilityCriteria = mobilityCriteria;
+        }
+
+
+        HashSet<Chunk> chunksDependingOn = new HashSet<Chunk>();
+        public GetRelativeBlock GetRelativeBlockGetter(long x, long y, long z)
+        {
+            return (rx, ry, rz) =>
+            {
+                long curX = rx + x;
+                long curY = ry + y;
+                long curZ = rz + z;
+
+                if (curX < 0 || curX >= locationSpec.xWidth ||
+                  curY < 0 || curY >= locationSpec.yWidth ||
+                  curZ < 0 || curZ >= locationSpec.zWidth)
+                {
+                    Chunk chunkDependingOn = world.GetChunkAtPos(curX + locationSpec.minX, curY + locationSpec.minY, curZ + locationSpec.minZ);
+                    if (!chunksDependingOn.Contains(chunkDependingOn))
+                    {
+                        chunksDependingOn.Add(chunkDependingOn);
+                    }
+
+                    return chunkDependingOn[curX + locationSpec.minX, curY + locationSpec.minY, curZ + locationSpec.minZ];
+                }
+                else
+                {
+                    return locationSpec[(int)curX, (int)curY, (int)curZ];
+                }
+            };
+        }
+        
+        List<PathNode> ExpandFlagsToNodes(ExpandFlags expandFlags, PathNode curNode)
+        {
+            long wx = curNode.pos.x;
+            long wy = curNode.pos.y;
+            long wz = curNode.pos.z;
+
+            List<PathNode> result = new List<PathNode>();
+
+            if ((expandFlags & ExpandFlags.NegX) != 0) result.Add(new PathNode(new LVector3(wx - 1, wy, wz), curNode));
+            if ((expandFlags & ExpandFlags.PosX) != 0) result.Add(new PathNode(new LVector3(wx + 1, wy, wz), curNode));
+            if ((expandFlags & ExpandFlags.NegY) != 0) result.Add(new PathNode(new LVector3(wx, wy - 1, wz), curNode));
+            if ((expandFlags & ExpandFlags.PosY) != 0) result.Add(new PathNode(new LVector3(wx, wy + 1, wz), curNode));
+            if ((expandFlags & ExpandFlags.NegZ) != 0) result.Add(new PathNode(new LVector3(wx, wy, wz - 1), curNode));
+            if ((expandFlags & ExpandFlags.PosZ) != 0) result.Add(new PathNode(new LVector3(wx, wy, wz + 1), curNode));
+
+            return result;
+        }
+
+        void TryToStartNode(CustomRegion customRegion, long relX, long relY, long relZ)
+        {
+            List<PathNode> nodesToExpandTo = new List<PathNode>();
+            List<Tuple<CustomRegion, PathNode>> customRegionsToMake = new List<Tuple<CustomRegion, PathNode>>();
+            PathNode curNode = new PathNode(new LVector3(relX + locationSpec.minX, relY + locationSpec.minY, relZ + locationSpec.minZ), null);
+            if (customRegion.IsValidToStartPathingRegion(curNode, GetRelativeBlockGetter(relX, relY, relZ), mobilityCriteria,
+                // Try to expand
+                (expandFlags) =>
+                {
+                    nodesToExpandTo.AddRange(ExpandFlagsToNodes(expandFlags, curNode));
+                },
+                // Try to expand custom
+                (rx, ry, rz) =>
+                {
+                    // if rx = 1, what we actually want is wx + 1
+                    long offsetX = rx - relX;
+                    long offsetY = ry - relY;
+                    long offsetZ = rz - relZ;
+                    nodesToExpandTo.Add(new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode));
+                },
+                // Try to make new custom region
+                (regionType, canTraverseInto, canTraverseFrom, rx, ry, rz) =>
+                {
+                    // if rx = 1, what we actually want is wx + 1
+                    long offsetX = rx - relX;
+                    long offsetY = ry - relY;
+                    long offsetZ = rz - relZ;
+                    PathNode customRegionNode = new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode);
+                    customRegionsToMake.Add(new Tuple<CustomRegion, PathNode>(Pathing3.pathingRegions[regionType], customRegionNode));
+                })
+            )
+            {
+
+            }
+        }
+
+        public bool OutsidePathingChunk(int relX, int relY, int relZ)
+        {
+            return relX < 0 || relX >= locationSpec.xWidth ||
+              relY < 0 || relY >= locationSpec.yWidth ||
+              relZ < 0 || relZ >= locationSpec.zWidth;
+        }
+
+        public void InitChunk()
+        {
+
+            // reset values to zero
+            for (int x = 0; x < locationSpec.xWidth; x++)
+            {
+                for (int y = 0; y < locationSpec.yWidth; y++)
+                {
+                    for (int z = 0; z < locationSpec.zWidth; z++)
+                    {
+                        data[x, y, z] = 0;
+                    }
+                }
+            }
+
+            for (int x = 0; x < locationSpec.xWidth; x++)
+            {
+                for (int y = 0; y < locationSpec.yWidth; y++)
+                {
+                    for (int z = 0; z < locationSpec.zWidth; z++)
+                    {
+                        BlockValue curBlock = locationSpec[x, y, z];
+                        if (curBlock == BlockValue.Air)
+                        {
+                            foreach (CustomRegion customRegion in Pathing3.customRegionAirBlocks)
+                            {
+                            }
+                        }
+                        else
+                        {
+                            foreach (CustomRegion customRegion in Pathing3.customRegionSolidBlocks)
+                            {
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
+
+
+    public class WalkingRegion : CustomRegion
+    {
+        public override RegionSettingsFlags GetSettings()
+        {
+            return RegionSettingsFlags.DefaultCheckSolidBlocks;
+        }
+
+        public override bool IsValidToExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeOrConnectToRegion)
+        {
+            bool isValid = false;
+            if (mobilityCriteria.CanStandOn(getRelativeBlock))
+            {
+                int yStandOnPrev;
+                /*
+                int offsetX = (int)(prevBlock.pos.x - block.pos.x); // if block is at 4, prev is at 2, offset will be 2-4 = -2 This means that adding offset will give us what we want, since 0 will become -2 which is correct relative to block
+                int offsetY = (int)(prevBlock.pos.y - block.pos.y);
+                int offsetZ = (int)(prevBlock.pos.z - block.pos.z);
+                */
+
+                if (mobilityCriteria.TryGetRelativeBlockYAboveThatWeCanStandOn(getRelativeBlockToPrev, mobilityCriteria.jumpHeight, out yStandOnPrev))
+                {
+                    // we moved over on flat ground, easy
+                    if (yStandOnPrev == 0)
+                    {
+                        isValid = true;
+                    }
+                    // we trickled from something that is below the actual one (so we need to jump), check that there is nothing in the way and that we can make that jump in both directions
+                    else
+                    {
+                        PathNode blockFrom = new PathNode(prevBlock.pos + new LVector3(0, yStandOnPrev, 0), null);
+                        PathNode blockTo = block;
+
+                        GetRelativeBlock getRelativeTo = (rx, ry, rz) =>
+                        {
+                            return getRelativeBlockToPrev(rx, ry + yStandOnPrev, rz);
+                        };
+
+                        // make sure we can actually traverse that in both directions
+                        if (mobilityCriteria.CanJumpBetween(blockFrom, blockTo, getRelativeBlock, getRelativeTo) &&
+                            mobilityCriteria.CanJumpBetween(blockTo, blockFrom, getRelativeTo, getRelativeBlock))
+                        {
+                            isValid = true;
+                        }
+                    }
+                }
+            }
+            else if(block.pos.x == prevBlock.pos.x && block.pos.z == prevBlock.pos.z && getRelativeBlock(0,0,0) != BlockValue.Air)
+            {
+                isValid = true;
+            }
+
+            if (isValid)
+            {
+                tryToExpand(ExpandFlags.All6Neighbors);
+            }
+            else
+            {
+                // if they are stairs we can jump up and down on, no need to make falling regions, that'll just bloat the number of the regions and slow down pathing
+                bool simpleStairs = false;
+                if (mobilityCriteria.HasEnoughAirAbove(getRelativeBlock))
+                {
+                    for (int y = -1; y >= -mobilityCriteria.jumpHeight; y--)
+                    {
+                        if (mobilityCriteria.CanStandOn((rx,ry,rz) =>
+                        {
+                            return getRelativeBlock(rx, ry + y, rz);
+                        }))
+                        {
+                            simpleStairs = true;
+                            break;
+                        }
+                    }
+                }
+                // we can actually fall here and not get back this way, make a falling region
+                if (!simpleStairs)
+                {
+                    tryToMakeOrConnectToRegion(PathingRegionType2.Falling, true, false, 0, 0, 0);
+                }
+            }
+            return isValid;
+        }
+
+        public override bool IsValidToStartPathingRegion(PathNode block, GetRelativeBlock getRelativeBlock, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeNewRegion)
+        {
+            return mobilityCriteria.CanStandOn(getRelativeBlock);
+        }
+    }
+
+
+    public class FallingRegion : CustomRegion
+    {
+        public override RegionSettingsFlags GetSettings()
+        {
+            return RegionSettingsFlags.DefaultCheckNoBlocks; // only spawn from walking regions
+        }
+
+        public override bool IsValidToExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeOrConnectToRegion)
+        {
+            bool isValid = false;
+            // we can stand there, connect to standing region there
+            if (mobilityCriteria.CanStandOn(getRelativeBlock))
+            {
+                tryToMakeOrConnectToRegion(PathingRegionType2.Walking, true, false, 0, 0, 0);
+            }
+            else
+            {
+                isValid = mobilityCriteria.HasEnoughAirToFitHere(getRelativeBlock);
+                if (!isValid)
+                {
+                    Debug.LogWarning("warning: falling region cannot fall anymore but didn't hit standing region, how did this happen? (could have to do with this unit being fat, the mobility criteria is " + mobilityCriteria + ")");
+                }
+            }
+            if (isValid)
+            {
+                tryToExpand(ExpandFlags.Down);
+            }
+            return isValid;
+        }
+
+        public override bool IsValidToStartPathingRegion(PathNode block, GetRelativeBlock getRelativeBlock, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeNewRegion)
+        {
+            // make sure we can't stand there (otherwise we can't fall) and make sure we can fit there to fall
+            bool isValid = !mobilityCriteria.CanStandOn(getRelativeBlock) && mobilityCriteria.HasEnoughAirToFitHere(getRelativeBlock);
+            if (isValid)
+            {
+                tryToExpand(ExpandFlags.Down);
+            }
+            return isValid;
+        }
+    }
 
 
 
