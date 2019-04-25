@@ -603,10 +603,15 @@ namespace Blocks
                 {
                     if (myMesh != null)
                     {
-                        myMesh.Dispose();
-                        myMesh = null;
+                        //myMesh.Dispose();
+                        //myMesh = null;
                     }
-                    myMesh = TrianglesToMesh(chunk.chunkRenderer.triangles);
+                    if (prevMesh != null)
+                    {
+                        prevMesh.Dispose();
+                        prevMesh = null;
+                    }
+                    //myMesh = TrianglesToMesh(chunk.chunkRenderer.triangles);
                 }
                 numRendereredCubesTransparent = 0;
                 numRendereredCubesNotTransparent = chunk.chunkRenderer.triangles.Count;
@@ -837,7 +842,8 @@ namespace Blocks
             return result;
         }
 
-        BlocksMesh myMesh;
+        public BlocksMesh prevMesh;
+        public BlocksMesh myMesh;
         int numTimesRenderedAfterFinishedTriangles = 0;
 
         public void CombineAndRenderChildrenDrawData()
@@ -2992,6 +2998,7 @@ namespace Blocks
         public void Generate()
         {
             generating = true;
+            world.blocksWorld.generationsThisFrame += 1;
             long baseX = cx * chunkSizeX;
             long baseY = cy * chunkSizeY;
             long baseZ = cz * chunkSizeX;
@@ -8440,6 +8447,7 @@ namespace Blocks
 
         public void MoveDataToGPU()
         {
+            World.mainWorld.blocksWorld.drawDataMovedToGPUMemoryThisFrame += 1;
             List<MeshVertex> meshVertices = new List<MeshVertex>(vertices.Length);
 
             for (int i = 0; i < vertices.Length; i++)
@@ -8485,8 +8493,10 @@ namespace Blocks
             {
                 MoveDataToGPU();
             }
+            World.mainWorld.blocksWorld.drawCallsThisFrame += 1;
             mat.SetBuffer("meshData", drawData);
             mat.SetPass(0);
+            World.mainWorld.blocksWorld.trianglesDrawnThisFrame += (vertices.Length / 3);
             Graphics.DrawProcedural(MeshTopology.Triangles, vertices.Length);
         }
 
@@ -8514,7 +8524,20 @@ namespace Blocks
     public class BlocksWorld : MonoBehaviour
     {
 
+
+        public TimeSeries ticksPerFrameTimeSeries;
+        public TimeSeries generationsPerFrameTimeSeries;
+        public TimeSeries rendersPerFrameTimeSeries;
+        public TimeSeries drawCallsTimeSeries;
+        public TimeSeries drawDataMovedToMemoryTimeSeries;
+        public TimeSeries trianglesDrawnPerFrameTimeSeries;
+
         public int lightingTicksThisFrame = 0;
+        public int generationsThisFrame = 0;
+        public int rendersThisFrame = 0;
+        public int drawCallsThisFrame = 0;
+        public int drawDataMovedToGPUMemoryThisFrame = 0;
+        public long trianglesDrawnThisFrame = 0;
         public static Material currentPassMat;
 
         public enum ProfileType
@@ -9013,9 +9036,9 @@ namespace Blocks
 
             for (int i = 0; i < cubeTris.Length; i++)
             {
-                Debug.Log(i + " " + cubeTris[i].vertex1.x + " " + cubeTris[i].vertex1.y + " " + cubeTris[i].vertex1.z + " " +
-                    cubeTris[i].vertex2.x + " " + cubeTris[i].vertex2.y + " " + cubeTris[i].vertex2.z + " " +
-                    cubeTris[i].vertex3.x + " " + cubeTris[i].vertex3.y + " " + cubeTris[i].vertex3.z + " ");
+                //Debug.Log(i + " " + cubeTris[i].vertex1.x + " " + cubeTris[i].vertex1.y + " " + cubeTris[i].vertex1.z + " " +
+                //    cubeTris[i].vertex2.x + " " + cubeTris[i].vertex2.y + " " + cubeTris[i].vertex2.z + " " +
+                //    cubeTris[i].vertex3.x + " " + cubeTris[i].vertex3.y + " " + cubeTris[i].vertex3.z + " ");
             }
 
             blockBreakingBuffer = new ComputeBuffer(1, sizeof(int) * 4);
@@ -9466,13 +9489,19 @@ namespace Blocks
                                     }
                                     foreach (Tuple<Chunk, long> chunk in allChunksHere)
                                     {
-                                        if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles)
+                                        if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
                                         {
                                             chunk.a.threadRenderingMe = i;
                                             int numTris;
                                             List<RenderTriangle> renderTriangles = world.blocksWorld.MakeChunkTrisInCPU(chunk.a, null, out numTris);
                                             chunk.a.chunkRenderer.triangles = renderTriangles;
+                                            chunk.a.chunkRenderer.prevMesh = chunk.a.chunkRenderer.myMesh; // store prev mesh object so it can be disposed (if needed), this must be done on the render thread because of disposing of compute buffers
+                                            if (renderTriangles.Count > 0) // only make a mesh if it is not empty
+                                            {
+                                                chunk.a.chunkRenderer.myMesh = chunk.a.chunkRenderer.TrianglesToMesh(chunk.a.chunkRenderer.triangles);
+                                            }
                                             chunk.a.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.HasTriangles;
+                                            rendersThisFrame += 1;
                                             chunk.a.threadRenderingMe = -1;
                                         }
                                     }
@@ -9517,8 +9546,18 @@ namespace Blocks
         // Update is called once per frame
         void Update()
         {
-            Debug.Log(lightingTicksThisFrame + " lighting ticks this frame");
+            generationsPerFrameTimeSeries.Push(generationsThisFrame);
+            ticksPerFrameTimeSeries.Push(lightingTicksThisFrame);
+            rendersPerFrameTimeSeries.Push(rendersThisFrame);
+            drawCallsTimeSeries.Push(drawCallsThisFrame);
+            drawDataMovedToMemoryTimeSeries.Push(drawDataMovedToGPUMemoryThisFrame);
+            trianglesDrawnPerFrameTimeSeries.Push((float)trianglesDrawnThisFrame/(float)drawCallsThisFrame);
             lightingTicksThisFrame = 0;
+            generationsThisFrame = 0;
+            rendersThisFrame = 0;
+            drawCallsThisFrame = 0;
+            drawDataMovedToGPUMemoryThisFrame = 0;
+            trianglesDrawnThisFrame = 0;
             players = FindObjectsOfType<BlocksPlayer>();
 
             playerPositions = new Vector3[players.Length];
