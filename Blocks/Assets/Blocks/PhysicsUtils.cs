@@ -78,9 +78,13 @@ namespace Blocks
     // We can get around unity's limitation by moving the world around, which while that is supported by moving the rendering root, I don't like it because multiplayer/multiple entities could cause weird issues
     // so we will just do this, and accept that rendering rounding error will happen for now
     // we could use doubles here, but unity does everything with floats and so I'll stick with floats to avoid the annoyance of always having to remember to worry about precision issues when converting
+
+    /*
     public class PVector3
     {
-        public static float chunkSize = 16.0f;
+        public static float chunkSizeX = 16.0f;
+        public static float chunkSizeY = 16.0f;
+        public static float chunkSizeZ = 16.0f;
 
         public long cx, cy, cz;
         public float lx, ly, lz;
@@ -93,7 +97,7 @@ namespace Blocks
 
         public Vector3 ToVec()
         {
-            return new Vector3(chunkSize * cx + lx, chunkSize * cy + ly, chunkSize * cz + lz);
+            return new Vector3(chunkSizeX * cx + lx, chunkSizeY * cy + ly, chunkSizeZ * cz + lz);
         }
 
         public long chunk(int d)
@@ -135,7 +139,7 @@ namespace Blocks
             }
         }
     }
-
+    */
 
     public class PathNode
     {
@@ -1608,9 +1612,9 @@ namespace Blocks
             my = y;
             mz = z;
             return;
-            //mx = GoodMod(x, BlocksWorld.chunkSize * 1);
-            //my = GoodMod(y, BlocksWorld.chunkSize * 1);
-            //mz = GoodMod(z, BlocksWorld.chunkSize * 1);
+            //mx = GoodMod(x, BlocksWorld.chunkSizeX * 1);
+            //my = GoodMod(y, BlocksWorld.chunkSizeY * 1);
+            //mz = GoodMod(z, BlocksWorld.chunkSizeZ * 1);
         }
 
         // fixes issues with a being negative giving negative answers, this is the mathematical mod I prefer

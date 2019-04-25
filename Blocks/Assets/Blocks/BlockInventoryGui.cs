@@ -7,10 +7,11 @@ namespace Blocks
 {
     public class Recipe
     {
+        public float timeToFinish;
         BlockValue[,] recipe;
         BlockValue[] unorderedRecipe;
         public BlockStack result;
-        public Recipe(BlockValue[,] recipe, BlockStack result)
+        public Recipe(BlockValue[,] recipe, BlockStack result, float timeToFinish=0)
         {
             this.recipe = recipe;
             this.unordered = false;
@@ -18,10 +19,25 @@ namespace Blocks
         }
 
 
-        public Recipe(BlockValue[] recipe, BlockStack result)
+        bool IsEmptyBlockStack(BlockStack blockStack)
+        {
+            return blockStack == null || (blockStack.Block == BlockValue.Air && blockStack.count == 0);
+        }
+
+
+        public Recipe(BlockValue[] recipe, BlockStack result, bool unordered=true, float timeToFinish=0)
         {
             this.unorderedRecipe = recipe;
-            this.unordered = true;
+            this.unordered = unordered;
+            // if not unordered, then it's just a single row
+            if (!unordered)
+            {
+                this.recipe = new BlockValue[recipe.Length, 1];
+                for (int i = 0;i < recipe.Length; i++)
+                {
+                    this.recipe[i, 0] = recipe[i];
+                }
+            }
             this.result = result;
         }
 
@@ -55,7 +71,7 @@ namespace Blocks
                 }
                 for (int i = 0; i < maxBlocks; i++)
                 {
-                    if (inventory.blocks[i] != null)
+                    if (!IsEmptyBlockStack(inventory.blocks[i]))
                     {
                         bool foundMatch = false;
                         for (int j = 0; j < unorderedRecipe.Length; j++)
@@ -84,7 +100,7 @@ namespace Blocks
                             inventory.blocks[matches[i]].count -= 1;
                             if (inventory.blocks[matches[i]].count <= 0)
                             {
-                                inventory.blocks[matches[i]] = null;
+                                inventory.blocks[matches[i]] = new BlockStack(BlockValue.Air, 0);
                             }
                         }
                     }
@@ -115,34 +131,34 @@ namespace Blocks
                                     int index = x + y * nColumns;
                                     BlockStack cur = inventory.blocks[index];
                                     BlockValue recipeCur = recipe[recipe.GetLength(0) - j - 1, i];
-                                    if (cur == null)
+                                    if (IsEmptyBlockStack(cur))
                                     {
                                         if (recipeCur == BlockValue.Air)
                                         {
-                                            Debug.Log(x + " " + y + "inventory empty here and recipe is too, recipeCur=" + World.BlockToString((int)recipeCur));
+                                            //Debug.Log(x + " " + y + "inventory empty here and recipe is too, recipeCur=" + World.BlockToString((int)recipeCur));
                                             numMatches += 1;
                                         }
                                         else
                                         {
-                                            Debug.Log(x + " " + y + "inventory empty here and recipe is not, recipeCur=" + World.BlockToString((int)recipeCur));
+                                            //Debug.Log(x + " " + y + "inventory empty here and recipe is not, recipeCur=" + World.BlockToString((int)recipeCur));
                                         }
                                     }
-                                    else if (cur != null)
+                                    else if (!IsEmptyBlockStack(cur))
                                     {
                                         if (cur.block == recipeCur)
                                         {
-                                            Debug.Log(x + " " + y + "same: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
+                                            //Debug.Log(x + " " + y + "same: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
                                             numMatches += 1;
                                         }
                                         else
                                         {
-                                            Debug.Log(x + " " + y + "different: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
+                                            //Debug.Log(x + " " + y + "different: inventory is " + World.BlockToString(cur.block) + " and recipe is " + World.BlockToString((int)recipeCur));
                                         }
                                     }
                                 }
                             }
                         }
-                        Debug.Log("got num matches " + numMatches + " with top left x=" + topLeftX + " and topLeftY=" + topLeftY);
+                        //Debug.Log("got num matches " + numMatches + " with top left x=" + topLeftX + " and topLeftY=" + topLeftY);
                         if (numMatches == numMatchesNeeded)
                         {
                             bool hasExtraStuff = false;
@@ -151,7 +167,7 @@ namespace Blocks
                                 for (int y = 0; y < nRows; y++)
                                 {
                                     int index = x + y * nColumns;
-                                    if (inventory.blocks[index] != null)
+                                    if (!IsEmptyBlockStack(inventory.blocks[index]))
                                     {
                                         hasExtraStuff = true;
                                         break;
@@ -168,7 +184,7 @@ namespace Blocks
                                 for (int y = 0; y < topLeftY; y++)
                                 {
                                     int index = x + y * nColumns;
-                                    if (inventory.blocks[index] != null)
+                                    if (!IsEmptyBlockStack(inventory.blocks[index]))
                                     {
                                         hasExtraStuff = true;
                                         break;
@@ -181,12 +197,12 @@ namespace Blocks
                             }
                             if (hasExtraStuff)
                             {
-                                Debug.Log("matches recipe but has extra stuff");
+                                //Debug.Log("matches recipe but has extra stuff");
                                 return false;
                             }
                             else
                             {
-                                Debug.Log("matches recipe completely");
+                                //Debug.Log("matches recipe completely");
 
 
                                 if (useResources)
@@ -198,12 +214,12 @@ namespace Blocks
                                             int x = topLeftX + i;
                                             int y = topLeftY + j;
                                             int index = x + y * nColumns;
-                                            if (inventory.blocks[index] != null)
+                                            if (!IsEmptyBlockStack(inventory.blocks[index]))
                                             {
                                                 inventory.blocks[index].count -= 1;
                                                 if (inventory.blocks[index].count <= 0)
                                                 {
-                                                    inventory.blocks[index] = null;
+                                                    inventory.blocks[index] = new BlockStack(BlockValue.Air, 0);
                                                 }
                                             }
                                         }

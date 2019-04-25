@@ -212,6 +212,10 @@ namespace Blocks
             BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
             foreach (BlockEntity blockEntity in entities)
             {
+                if (!blockEntity.enabled)
+                {
+                    continue;
+                }
                 if (!blockEntity.pullable || (blockEntity.playerThrowing != null && blockEntity.playerThrowing == this))
                 {
                     continue;

@@ -327,7 +327,8 @@ namespace Blocks
         {
 
             Inventory blockInventory;
-            if (blocksWorld.world.BlockHasInventory(block, out blockInventory))
+            BlockOrItem customBlock;
+            if (blocksWorld.world.BlockHasInventory(block, out blockInventory) && blocksWorld.blocksPack.customBlocks.ContainsKey(block.BlockV, out customBlock))
             {
                 ShowPlayerInventory(playerUsing);
                 blockShowing = block;
@@ -337,6 +338,9 @@ namespace Blocks
                 blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
                 blocksWorld.otherObjectInventoryGui.inventory = blockInventory;
                 blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 300);
+                blocksWorld.otherObjectInventoryGui.customBlockOwner = customBlock;
+                blocksWorld.otherObjectInventoryGui.customBlockOwnerPosition = block;
+                blocksWorld.otherObjectInventoryGui.numRows = customBlock.NumInventoryRows();
                 showingInventory = true;
                 showingBlockInventory = true;
             }

@@ -198,11 +198,11 @@ namespace Blocks
             largestIdMag += 1;
             if (transparent)
             {
-                AddNewBlock(-largestIdMag, name, packName);
+                AddNewBlockDelayed(-largestIdMag, name, packName);
             }
             else
             {
-                AddNewBlock(largestIdMag, name, packName);
+                AddNewBlockDelayed(largestIdMag, name, packName);
             }
         }
 
@@ -234,7 +234,7 @@ namespace Blocks
         public BlockValue(int id, string name = "", string packName = "")
         {
             this.name = name;
-            AddNewBlock(id, name, packName);
+            AddNewBlockDelayed(id, name, packName);
         }
 
         public const int animFrames = 64;
@@ -266,6 +266,22 @@ namespace Blocks
 
         public const int initialSize = 64;
 
+
+        static List<Tuple<BlockValue, int, string, string>> delayedAddBlocks = new List<Tuple<BlockValue, int, string, string>>();
+        void AddNewBlockDelayed(int id, string name, string packName = "")
+        {
+            delayedAddBlocks.Add(new Tuple<BlockValue, int, string, string>(this, id, name, packName));
+        }
+
+        public static void FinishAddNewBlocks()
+        {
+            foreach (Tuple<BlockValue, int, string, string> delayedAdd in delayedAddBlocks)
+            {
+                delayedAdd.a.AddNewBlock(delayedAdd.b, delayedAdd.c, delayedAdd.d); 
+            }
+            delayedAddBlocks.Clear();
+        }
+
         void AddNewBlock(int id, string name, string packName = "")
         {
             this.name = name;
@@ -280,6 +296,11 @@ namespace Blocks
                 allBlocks = new BlockValue[initialSize];
                 nameToBlockId = new Dictionary<string, int>();
                 largestIdMag = 2;
+                SetupTexture();
+            }
+
+            if (allBlocksTexture == null)
+            {
                 SetupTexture();
             }
             nameToBlockId[name] = id;
@@ -561,8 +582,14 @@ namespace Blocks
 
         public static BlockValue[] allBlocks;
 
-        public static BlockValue Air = new BlockValue(0, "Air");
-        public static BlockValue Wildcard = new BlockValue(-1, "Wildcard");
+        public static BlockValue Air = null;
+        public static BlockValue Wildcard = null;
+
+        public static void SetupAirAndWildcard()
+        {
+            Air = new BlockValue(0, "Air");
+            Wildcard = new BlockValue(-1, "Wildcard");
+        }
     }
 
 

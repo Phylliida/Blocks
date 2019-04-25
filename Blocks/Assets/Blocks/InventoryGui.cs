@@ -12,15 +12,23 @@ namespace Blocks
     public class InventoryGui : MonoBehaviour
     {
 
-        public BlocksPlayer playerUsing;
+        bool IsEmptyBlockStack(BlockStack blockStack)
+        {
+            return blockStack == null || (blockStack.Block == BlockValue.Air && blockStack.count == 0);
+        }
 
+        public BlocksPlayer playerUsing;
+        MenuManager menuManager;
         // Use this for initialization
         void Start()
         {
-
+            menuManager = FindObjectOfType<MenuManager>();
         }
 
         public int selection = 0;
+
+        public BlockOrItem customBlockOwner = null;
+        public LVector3 customBlockOwnerPosition = LVector3.Invalid;
 
         public Inventory inventory;
         public bool displaying = false;
@@ -41,11 +49,38 @@ namespace Blocks
 
         public bool HoldingSomethingWithMouse()
         {
-            return (playerUsing != null && playerUsing.blocksHoldingWithMouse != null && playerUsing.blocksHoldingWithMouse.count > 0);
+            return (playerUsing != null && !IsEmptyBlockStack(playerUsing.blocksHoldingWithMouse) && playerUsing.blocksHoldingWithMouse.count > 0);
         }
 
         private void Update()
         {
+            if (inventory != null && menuManager.CurrentMenu != MenuManager.MenuStatus.BlockInventory && menuManager.CurrentMenu != MenuManager.MenuStatus.Inventory && !menuManager.paused && customBlockOwnerPosition != LVector3.Invalid && customBlockOwner != null)
+            {
+                if (customBlockOwner.ReturnsItemsWhenDeselected() && playerUsing != null)
+                {
+                    for (int i = 0; i < inventory.blocks.Length; i++)
+                    {
+                        if (inventory.blocks[i].Block != BlockValue.Air && inventory.blocks[i].count > 0)
+                        {
+                            if (playerUsing.inventory.CanAddBlock(inventory.blocks[i]))
+                            {
+                                if (playerUsing.inventory.TryToAddBlock(inventory.blocks[i]))
+                                {
+                                }
+                                else
+                                {
+                                    World.mainWorld.CreateBlockEntity(inventory.blocks[i], (new LVector3(0, 1, 0) + customBlockOwnerPosition).BlockCentertoUnityVector3());
+                                }
+                                inventory.blocks[i] = new BlockStack(BlockValue.Air, 0);
+                            }
+                        }
+                    }
+                    playerUsing = null;
+                    customBlockOwner = null;
+                    customBlockOwnerPosition = LVector3.Invalid;
+                }
+            }
+
 
             if (inventory == null || !displaying || playerUsing == null)
             {
@@ -90,10 +125,10 @@ namespace Blocks
                 if (HoldingSomethingWithMouse())
                 {
                     ThrowStuff();
-
                 }
                 return;
             }
+
 
 
             bool inventoryModified = false;
@@ -107,13 +142,13 @@ namespace Blocks
                         if (i < inventory.blocks.Length)
                         {
                             //Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
-                            if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.blocks[i] != null)
+                            if (MouseIntersectsBlockEntity(blockItems[i]) && !IsEmptyBlockStack(inventory.blocks[i]))
                             {
                                 //Debug.Log("got dat boi");
                                 playerUsing.blocksHoldingWithMouse = inventory.blocks[i].Copy();
-                                playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
+                                playerUsing.holdingWithMouseEntity = MakeNewBlockEntity(inFront: true);
                                 playerUsing.holdingWithMouseEntity.Stack = inventory.blocks[i];
-                                inventory.blocks[i] = null;
+                                inventory.blocks[i] = new BlockStack(BlockValue.Air, 0);
                                 inventoryModified = true;
                                 //playerUsing.mouseLook.allowedToCapture = false;
                                 break;
@@ -123,13 +158,13 @@ namespace Blocks
                         {
                             int ind = i - inventory.blocks.Length;
                             //Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
-                            if (MouseIntersectsBlockEntity(blockItems[i]) && inventory.resultBlocks[ind] != null)
+                            if (MouseIntersectsBlockEntity(blockItems[i]) && !IsEmptyBlockStack(inventory.resultBlocks[ind]))
                             {
                                 //Debug.Log("got dat boi");
                                 playerUsing.blocksHoldingWithMouse = inventory.resultBlocks[ind].Copy();
-                                playerUsing.holdingWithMouseEntity = MakeNewBlockEntity();
+                                playerUsing.holdingWithMouseEntity = MakeNewBlockEntity(inFront: true);
                                 playerUsing.holdingWithMouseEntity.Stack = inventory.resultBlocks[ind].Copy();
-                                inventory.resultBlocks[ind] = null;
+                                inventory.resultBlocks[ind] = new BlockStack(BlockValue.Air, 0);
                                 inventoryModified = true;
                                 //playerUsing.mouseLook.allowedToCapture = false;
                                 break;
@@ -141,133 +176,156 @@ namespace Blocks
 
             else if (HoldingSomethingWithMouse() && playerUsing.holdingWithMouseEntity != null && displaying)
             {
+                int prevCount = playerUsing.blocksHoldingWithMouse.count;
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;
                 //Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
-                playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
+                playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, -0.02f);
                 if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
                 {
                     //bool foundCollision = false;
-                    for (int i = 0; i < blockItems.Count && i < inventory.blocks.Length; i++)
+                    for (int i = 0; i < blockItems.Count; i++)
                     {
-                        if (MouseIntersectsBlockEntity(blockItems[i]))
+                        if (i < inventory.blocks.Length)
                         {
-                            //foundCollision = true;
-                            bool letGo = false;
-                            if (inventory.blocks[i] == null)
+
+                            if (MouseIntersectsBlockEntity(blockItems[i]))
                             {
-                                // right click, drop one
-                                if (Input.GetMouseButtonDown(1))
+                                //foundCollision = true;
+                                bool letGo = false;
+                                if (IsEmptyBlockStack(inventory.blocks[i]))
                                 {
-                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
-                                    inventory.blocks[i].count = 1;
-                                    inventoryModified = true;
-                                    if (playerUsing.blocksHoldingWithMouse.count == 1)
-                                    {
-                                        letGo = true;
-                                    }
-                                    else
-                                    {
-                                        playerUsing.blocksHoldingWithMouse.count -= 1;
-                                    }
-                                }
-                                // left click, put all
-                                else if (Input.GetMouseButtonDown(0))
-                                {
-                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
-                                    inventoryModified = true;
-                                    letGo = true;
-                                }
-                            }
-                            else
-                            {
-                                if (inventory.blocks[i].block == playerUsing.blocksHoldingWithMouse.block)
-                                {
-                                    int numMaxStack = 1;
-                                    if (World.stackableSize.ContainsKey(playerUsing.blocksHoldingWithMouse.block))
-                                    {
-                                        numMaxStack = World.stackableSize[playerUsing.blocksHoldingWithMouse.block];
-                                    }
                                     // right click, drop one
                                     if (Input.GetMouseButtonDown(1))
                                     {
-                                        // can fit some in, put 1 in
-                                        if (inventory.blocks[i].count < numMaxStack)
+                                        inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
+                                        inventory.blocks[i].count = 1;
+                                        inventoryModified = true;
+                                        if (playerUsing.blocksHoldingWithMouse.count == 1)
                                         {
-                                            // we are only holding one, put it all in
-                                            if (playerUsing.blocksHoldingWithMouse.count == 1)
-                                            {
-                                                inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
-                                                inventoryModified = true;
-                                                letGo = true;
-                                                playerUsing.blocksHoldingWithMouse = null;
-                                            }
-                                            // put 1 in and leave rest of stack in hand
-                                            else
-                                            {
-                                                inventory.blocks[i].count += 1;
-                                                inventoryModified = true;
-                                                playerUsing.blocksHoldingWithMouse.count -= 1;
-                                                if (playerUsing.blocksHoldingWithMouse.count <= 0)
-                                                {
-                                                    Debug.LogError("we should have count > 0 when not putting all (right click and we have more than 1 put only put 1 in) into block, got count " + playerUsing.blocksHoldingWithMouse.count + " instead");
-                                                }
-                                            }
+                                            letGo = true;
                                         }
-                                    }
-                                    // left click, place all sorta
-                                    else if (Input.GetMouseButtonDown(0))
-                                    {
-                                        // can fit some in
-                                        if (inventory.blocks[i].count < numMaxStack)
-                                        {
-                                            // can fit all in
-                                            if (inventory.blocks[i].count + playerUsing.blocksHoldingWithMouse.count <= numMaxStack)
-                                            {
-                                                inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
-                                                inventoryModified = true;
-                                                letGo = true;
-                                                playerUsing.blocksHoldingWithMouse = null;
-                                            }
-                                            // can only fit some in
-                                            else
-                                            {
-                                                int numCanFitIn = numMaxStack - inventory.blocks[i].count;
-                                                inventory.blocks[i].count += numCanFitIn;
-                                                inventoryModified = true;
-                                                playerUsing.blocksHoldingWithMouse.count -= numCanFitIn;
-                                                if (playerUsing.blocksHoldingWithMouse.count <= 0)
-                                                {
-                                                    Debug.LogError("we should have count > 0 when not putting all into block, got count " + playerUsing.blocksHoldingWithMouse.count + " instead");
-                                                }
-                                            }
-                                        }
-                                        // can't fit any more in, swap
                                         else
                                         {
-                                            inventory.blocks[i].count = playerUsing.blocksHoldingWithMouse.count;
-                                            inventoryModified = true;
-                                            playerUsing.blocksHoldingWithMouse.count = numMaxStack;
+                                            playerUsing.blocksHoldingWithMouse.count -= 1;
                                         }
-
+                                    }
+                                    // left click, put all
+                                    else if (Input.GetMouseButtonDown(0))
+                                    {
+                                        inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
+                                        inventoryModified = true;
+                                        letGo = true;
                                     }
                                 }
-                                // different things, swap
-                                else if (Input.GetMouseButtonDown(0))
+                                else
                                 {
-                                    BlockStack tmp = inventory.blocks[i].Copy();
-                                    inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
-                                    inventoryModified = true;
-                                    playerUsing.blocksHoldingWithMouse = tmp;
-                                    playerUsing.holdingWithMouseEntity.Stack = tmp;
+                                    if (inventory.blocks[i].block == playerUsing.blocksHoldingWithMouse.block)
+                                    {
+                                        int numMaxStack = 1;
+                                        if (World.stackableSize.ContainsKey(playerUsing.blocksHoldingWithMouse.block))
+                                        {
+                                            numMaxStack = World.stackableSize[playerUsing.blocksHoldingWithMouse.block];
+                                        }
+                                        // right click, drop one
+                                        if (Input.GetMouseButtonDown(1))
+                                        {
+                                            // can fit some in, put 1 in
+                                            if (inventory.blocks[i].count < numMaxStack)
+                                            {
+                                                // we are only holding one, put it all in
+                                                if (playerUsing.blocksHoldingWithMouse.count == 1)
+                                                {
+                                                    inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
+                                                    inventoryModified = true;
+                                                    letGo = true;
+                                                    playerUsing.blocksHoldingWithMouse = new BlockStack(BlockValue.Air, 0);
+                                                }
+                                                // put 1 in and leave rest of stack in hand
+                                                else
+                                                {
+                                                    inventory.blocks[i].count += 1;
+                                                    inventoryModified = true;
+                                                    playerUsing.blocksHoldingWithMouse.count -= 1;
+                                                    if (playerUsing.blocksHoldingWithMouse.count <= 0)
+                                                    {
+                                                        Debug.LogError("we should have count > 0 when not putting all (right click and we have more than 1 put only put 1 in) into block, got count " + playerUsing.blocksHoldingWithMouse.count + " instead");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // left click, place all sorta
+                                        else if (Input.GetMouseButtonDown(0))
+                                        {
+                                            // can fit some in
+                                            if (inventory.blocks[i].count < numMaxStack)
+                                            {
+                                                // can fit all in
+                                                if (inventory.blocks[i].count + playerUsing.blocksHoldingWithMouse.count <= numMaxStack)
+                                                {
+                                                    inventory.blocks[i].count += playerUsing.blocksHoldingWithMouse.count;
+                                                    inventoryModified = true;
+                                                    letGo = true;
+                                                    playerUsing.blocksHoldingWithMouse = new BlockStack(BlockValue.Air, 0);
+                                                }
+                                                // can only fit some in
+                                                else
+                                                {
+                                                    int numCanFitIn = numMaxStack - inventory.blocks[i].count;
+                                                    inventory.blocks[i].count += numCanFitIn;
+                                                    inventoryModified = true;
+                                                    playerUsing.blocksHoldingWithMouse.count -= numCanFitIn;
+                                                    if (playerUsing.blocksHoldingWithMouse.count <= 0)
+                                                    {
+                                                        Debug.LogError("we should have count > 0 when not putting all into block, got count " + playerUsing.blocksHoldingWithMouse.count + " instead");
+                                                    }
+                                                }
+                                            }
+                                            // can't fit any more in, swap
+                                            else
+                                            {
+                                                inventory.blocks[i].count = playerUsing.blocksHoldingWithMouse.count;
+                                                inventoryModified = true;
+                                                playerUsing.blocksHoldingWithMouse.count = numMaxStack;
+                                            }
+
+                                        }
+                                    }
+                                    // different things, swap
+                                    else if (Input.GetMouseButtonDown(0))
+                                    {
+                                        BlockStack tmp = inventory.blocks[i].Copy();
+                                        inventory.blocks[i] = playerUsing.blocksHoldingWithMouse.Copy();
+                                        inventoryModified = true;
+                                        playerUsing.blocksHoldingWithMouse = tmp;
+                                        playerUsing.holdingWithMouseEntity.Stack = tmp;
+                                    }
+                                }
+                                if (letGo)
+                                {
+                                    playerUsing.blocksHoldingWithMouse = new BlockStack(BlockValue.Air, 0);
+                                    GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);
+                                    playerUsing.holdingWithMouseEntity = null;
+                                    //mouseLook.allowedToCapture = true;
                                 }
                             }
-                            if (letGo)
+                        }
+                        // result blocks
+                        else
+                        {
+                            int ind = i - inventory.blocks.Length;
+                            //Debug.Log("trying "  + i + " " + inventory.blocks[i] + " " + name);
+                            if (MouseIntersectsBlockEntity(blockItems[i]) && !IsEmptyBlockStack(inventory.resultBlocks[ind]))
                             {
-                                playerUsing.blocksHoldingWithMouse = null;
-                                GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);
-                                playerUsing.holdingWithMouseEntity = null;
-                                //mouseLook.allowedToCapture = true;
+                                // only work if we add the whole stack to it
+                                if (playerUsing.blocksHoldingWithMouse.TryToAddToStack(inventory.resultBlocks[ind]))
+                                {
+                                    inventory.resultBlocks[ind] = new BlockStack(BlockValue.Air, 0);
+                                    inventoryModified = true;
+                                    
+                                    //playerUsing.mouseLook.allowedToCapture = false;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -277,6 +335,12 @@ namespace Blocks
                     //    ThrowStuff();
                     //}
                 }
+
+
+                if (!IsEmptyBlockStack(playerUsing.blocksHoldingWithMouse) && prevCount != playerUsing.blocksHoldingWithMouse.count)
+                {
+                    playerUsing.holdingWithMouseEntity.blockStack.count = playerUsing.blocksHoldingWithMouse.count;
+                }
             }
 
             if (HoldingSomethingWithMouse() && displaying && playerUsing.holdingWithMouseEntity != null)
@@ -284,7 +348,7 @@ namespace Blocks
                 //player.mouseLook.allowedToCapture = false;
                 //Vector3 offset;
                 //Ray ray = playerUsing.mainCamera.ScreenPointToRay(new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.1f));
-                playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, 0.01f);
+                playerUsing.holdingWithMouseEntity.transform.localPosition = new Vector3(Input.mousePosition.x - Screen.width / 2.0f, Input.mousePosition.y - Screen.height / 2.0f, -0.02f);
             }
 
 
@@ -311,13 +375,20 @@ namespace Blocks
 
 
 
-        BlockEntity MakeNewBlockEntity()
+        BlockEntity MakeNewBlockEntity(bool inFront=false)
         {
             BlockEntity res = GameObject.Instantiate(World.mainWorld.blocksWorld.blockRenderPrefab).GetComponent<BlockEntity>();
             res.GetComponent<UnityEngine.UI.Image>().material = new Material(res.GetComponent<UnityEngine.UI.Image>().material);
             res.blockId = -1;
             res.pullable = false;
-            res.transform.SetParent(World.mainWorld.blocksWorld.blockRenderCanvas.transform);
+            if (inFront)
+            {
+                res.transform.SetParent(World.mainWorld.blocksWorld.blockRenderFrontCanvas.transform);
+            }
+            else
+            {
+                res.transform.SetParent(World.mainWorld.blocksWorld.blockRenderCanvas.transform);
+            }
             res.transform.localPosition = new Vector3(0, 0, 0);
             res.transform.localScale = new Vector3(10, 10, 10);
             res.transform.localRotation = Quaternion.identity;
@@ -329,11 +400,11 @@ namespace Blocks
             ShowInventoryArray(inventory.blocks, screenOffset, nRows, maxItems);
             if (inventory.resultBlocks != null)
             {
-                ShowInventoryArray(inventory.resultBlocks, resultOffset, nRows: 1, maxItems: inventory.resultBlocks.Length, numPrev: blockItems.Count);
+                ShowInventoryArray(inventory.resultBlocks, resultOffset, nRows: 1, maxItems: inventory.resultBlocks.Length, numPrev: blockItems.Count, resultBlocks: true);
             }
         }
 
-        void ShowInventoryArray(BlockStack[] blocks, Vector2 offset, int nRows = 4, int maxItems = -1, int numPrev = 0)
+        void ShowInventoryArray(BlockStack[] blocks, Vector2 offset, int nRows = 4, int maxItems = -1, int numPrev = 0, bool resultBlocks=false)
         {
             int numItems = blocks.Length;
             if (maxItems != -1)
@@ -374,7 +445,7 @@ namespace Blocks
                 {
                     actualInventoryWidth = inventoryWidth * rowLen;
                     actualInventoryHeight = inventoryHeight * nRows;
-                    ShowInventoryItem(pos, offset, i, k, blocks[pos - numPrev]);
+                    ShowInventoryItem(pos, offset, i, k, blocks[pos - numPrev], resultBlocks);
                     pos += 1;
                 }
             }
@@ -388,15 +459,28 @@ namespace Blocks
 
 
 
-        public void ShowInventoryItem(int index, Vector2 offset, float rowP, float columnP, BlockStack itemStack)
+        public void ShowInventoryItem(int index, Vector2 offset, float rowP, float columnP, BlockStack itemStack, bool resultBlocks)
         {
+            if (customBlockOwner != null)
+            {
+                if (resultBlocks)
+                {
+                    offset += customBlockOwner.OutputSlotOffset(index);
+                }
+                else
+                {
+                    offset += customBlockOwner.InventorySlotOffset(index);
+                }
+            }
+
+
             // 0 to 1 -> -0.5 to 0.5
             BlockEntity displayItem = blockItems[index];
             float xPos = inventoryWidth * columnP + offset.x;
             float yPos = inventoryHeight * rowP + offset.y;
             xPos -= actualInventoryWidth / 2.0f;
             yPos -= actualInventoryHeight / 2.0f;
-            if (itemStack == null)
+            if (IsEmptyBlockStack(itemStack))
             {
                 displayItem.blockId = -1;
                 displayItem.blockStack = null;
@@ -407,7 +491,7 @@ namespace Blocks
                 displayItem.blockStack = itemStack;
             }
 
-            if (itemStack != null && itemStack.count > 1)
+            if (!IsEmptyBlockStack(itemStack) && itemStack.count > 1)
             {
                 displayItem.GetComponentInChildren<UnityEngine.UI.Text>().text = itemStack.count + "";
             }
@@ -461,7 +545,7 @@ namespace Blocks
                 //Debug.Log(playerUsing.transform.forward);
             }
             CallInventoryModifiedCallbacks();
-            playerUsing.blocksHoldingWithMouse = null;
+            playerUsing.blocksHoldingWithMouse = new BlockStack(BlockValue.Air, 0);
             if (playerUsing.holdingWithMouseEntity != null)
             {
                 GameObject.Destroy(playerUsing.holdingWithMouseEntity.gameObject);

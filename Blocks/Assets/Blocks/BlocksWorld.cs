@@ -488,7 +488,7 @@ namespace Blocks
         
 
         Chunk chunk;
-        int chunkSize;
+        int chunkSizeX, chunkSizeY, chunkSizeZ;
         public bool hasCustomBlocks = false;
         public ComputeBuffer drawDataTransparent;
         public ComputeBuffer drawDataNotTransparent;
@@ -507,26 +507,31 @@ namespace Blocks
         public bool maybeCombineDrawData = true;
         ChunkRenderer[] otherChunks;
 
-        public ChunkRenderer(Chunk chunk, int chunkSize)
+        public ChunkRenderer(Chunk chunk, int chunkSizeX, int chunkSizeY, int chunkSizeZ)
         {
             this.chunk = chunk;
-            this.chunkSize = chunkSize;
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
             InitStuff();
         }
 
+        bool didInit = false;
         void InitStuff()
         {
             // we can only init compute buffers on the main thread
             if (Thread.CurrentThread != World.mainWorld.helperThread)
             {
-                //drawDataTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append);
+                //drawDataTransparent = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ * 12, sizeof(int) * 22, ComputeBufferType.Append);
                 if (World.DO_CPU_RENDER)
                 {
-                    drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Default); // modified to be GPUMemory
+                    // we don't need this anymore since we use meshes
+                    //drawDataNotTransparent = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ * 12, sizeof(int) * 22, ComputeBufferType.Default); // modified to be GPUMemory
                 }
                 else
                 {
-                    drawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.Append); // modified to be GPUMemory
+                    Debug.LogWarning("making compute buffer");
+                    drawDataNotTransparent = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ * 12, sizeof(int) * 22, ComputeBufferType.Append); // modified to be GPUMemory
                 }
             }
 
@@ -535,7 +540,7 @@ namespace Blocks
                 isMetaNode = true;
                 if (Thread.CurrentThread != World.mainWorld.helperThread)
                 {
-                    //combinedDrawDataNotTransparent = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12 * 8, sizeof(int) * 22, ComputeBufferType.Append);
+                    //combinedDrawDataNotTransparent = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ * 12 * 8, sizeof(int) * 22, ComputeBufferType.Append);
                 }
 
                 if (otherChunks == null)
@@ -550,6 +555,7 @@ namespace Blocks
             {
                 isMetaNode = false;
             }
+            didInit = true;
         }
 
         public void Tick()
@@ -584,15 +590,35 @@ namespace Blocks
         {
 
             // this object was made on a seperate thread, init stuff
-            if (drawDataNotTransparent == null)
+            if (!didInit)
             {
                 InitStuff();
             }
-            if (chunk.chunkData.needToBeUpdated && (numAllowedToDoFullRender > 0 || (chunk.chunkRenderer.triangles != null && renderStatus == RenderStatus.HasTriangles)) && chunk.threadRenderingMe == -1)
+            if (chunk.chunkData.needToBeUpdated && (numAllowedToDoFullRender > 0 && (chunk.chunkRenderer.triangles != null && renderStatus == RenderStatus.HasTriangles)) && chunk.threadRenderingMe == -1)
             {
                 chunk.chunkData.needToBeUpdated = false;
-                chunk.world.blocksWorld.MakeChunkTrisAsync(chunk);
-                chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent, ref numAllowedToDoFullRender);
+                // new stuff
+                chunk.threadRenderingMe = 1000000;
+                if (chunk.chunkRenderer.triangles.Count > 0)
+                {
+                    if (myMesh != null)
+                    {
+                        myMesh.Dispose();
+                        myMesh = null;
+                    }
+                    myMesh = TrianglesToMesh(chunk.chunkRenderer.triangles);
+                }
+                numRendereredCubesTransparent = 0;
+                numRendereredCubesNotTransparent = chunk.chunkRenderer.triangles.Count;
+                chunk.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.StoredToComputeBuffer; // set it to up to date now
+                chunk.threadRenderingMe = -1;
+                // done new stuff
+
+                //chunk.world.blocksWorld.MakeChunkTrisAsync(chunk);
+                //chunk.world.blocksWorld.FinishChunkTrisSync(chunk, out numRendereredCubesNotTransparent, out numRendereredCubesTransparent, ref numAllowedToDoFullRender);
+
+
+                numTimesRenderedAfterFinishedTriangles = 0;
 
                 //numRendereredCubesNotTransparent = 0;
                 //numRendereredCubesTransparent = 0;
@@ -679,8 +705,8 @@ namespace Blocks
 
 
 
-            
 
+            bool justRenderUs = false;
 
             if (!isMetaNode)
             {
@@ -694,7 +720,7 @@ namespace Blocks
                 {
                     if (!needToFinishSync)
                     {
-                        chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                        justRenderUs = true;
                     }
                 }
             }
@@ -721,16 +747,98 @@ namespace Blocks
                 {
                     if (!needToFinishSync)
                     {
-                        chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                        justRenderUs = true;
                     }
                 }
             }
 
+            if (justRenderUs && myMesh != null)
+            {
+                // new simpler stuff
+                chunk.world.blocksWorld.RenderChunkBlocksMesh(chunk, myMesh);
+
+                /*
+                int numTimesToConsiderStatic = 20;
+                if (numTimesRenderedAfterFinishedTriangles == numTimesToConsiderStatic) // random so we don't do them all on the same frame
+                {
+                    List<RenderTriangle> myTriangles = triangles;
+                    if (myTriangles != null && myTriangles.Count > 0)
+                    {
+                        numTimesRenderedAfterFinishedTriangles += 1;
+                        //Debug.Log("making mesh for chunk " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " with " + myTriangles.Count + " triangles");
+                        myMesh = TrianglesToMesh(myTriangles);
+                    }
+                    else
+                    {
+                        numTimesRenderedAfterFinishedTriangles = numTimesToConsiderStatic;
+                        myMesh = null;
+                    }
+                }
+                else if (numTimesRenderedAfterFinishedTriangles < numTimesToConsiderStatic)
+                {
+                    myMesh = null;
+                }
+                if (myMesh != null)
+                {
+                    chunk.world.blocksWorld.RenderChunkMesh(chunk, myMesh);
+                }
+                else
+                {
+                    chunk.world.blocksWorld.RenderChunk(chunk, onlyTransparent);
+                    if (numTimesRenderedAfterFinishedTriangles < numTimesToConsiderStatic)
+                    {
+                        numTimesRenderedAfterFinishedTriangles += 1;
+                    }
+                }
+                */
+            }
+
 
             return needToFinishSync;
-
-
         }
+
+
+        public BlocksMesh TrianglesToMesh(List<RenderTriangle> triangles)
+        {
+            List<Vector3> vertices = new List<Vector3>();
+            //List<int> indices = new List<int>();
+            List<Vector2> uvs = new List<Vector2>();
+            //List<Color> colors = new List<Color>();
+            List<Vector2> smallColors = new List<Vector2>();
+            int ind = 0;
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                RenderTriangle curTri = triangles[i];
+                vertices.Add(new Vector3(curTri.vertex1.x, curTri.vertex1.y, curTri.vertex1.z));
+                vertices.Add(new Vector3(curTri.vertex2.x, curTri.vertex2.y, curTri.vertex2.z));
+                vertices.Add(new Vector3(curTri.vertex3.x, curTri.vertex3.y, curTri.vertex3.z));
+                uvs.Add(new Vector2(curTri.uv1.x, curTri.uv1.y));
+                uvs.Add(new Vector2(curTri.uv2.x, curTri.uv2.y));
+                uvs.Add(new Vector2(curTri.uv3.x, curTri.uv3.y));
+                float blockLight = (curTri.state3 & 0xF) / 15.0f;
+                float worldLight = ((curTri.state3 & 0xF0) >> 4) / 15.0f;
+                //colors.Add(new Color(blockLight, worldLight, 0, 0));
+                //colors.Add(new Color(blockLight, worldLight, 0, 0));
+                //colors.Add(new Color(blockLight, worldLight, 0, 0));
+                smallColors.Add(new Vector2(blockLight, worldLight));
+                smallColors.Add(new Vector2(blockLight, worldLight));
+                smallColors.Add(new Vector2(blockLight, worldLight));
+                //indices.Add(ind);
+                //indices.Add(ind+1);
+                //indices.Add(ind+2);
+                ind += 3;
+            }
+            BlocksMesh result = new BlocksMesh(vertices.ToArray(), uvs.ToArray(), smallColors.ToArray());
+            //Mesh result = new Mesh();
+            //result.SetVertices(vertices);
+            //result.SetUVs(0, uvs);
+            //result.SetTriangles(indices, 0, false);
+            //result.SetColors(colors);
+            return result;
+        }
+
+        BlocksMesh myMesh;
+        int numTimesRenderedAfterFinishedTriangles = 0;
 
         public void CombineAndRenderChildrenDrawData()
         {
@@ -787,6 +895,12 @@ namespace Blocks
                     combinedDrawDataNotTransparent.Dispose();
                     combinedDrawDataNotTransparent = null;
                 }
+
+                if (myMesh != null)
+                {
+                    myMesh.Dispose();
+                    myMesh = null;
+                }
             }
         }
     }
@@ -798,17 +912,19 @@ namespace Blocks
         public class BlockTouchingSkyChunk
         {
             public long cx, cz;
-            public int chunkSize;
+            public int chunkSizeX, chunkSizeY, chunkSizeZ;
             public long[,] highestBlocks;
-            public BlockTouchingSkyChunk(long cx, long cz, int chunkSize)
+            public BlockTouchingSkyChunk(long cx, long cz, int chunkSizeX, int chunkSizeY, int chunkSizeZ)
             {
-                this.chunkSize = chunkSize;
+                this.chunkSizeX = chunkSizeX;
+                this.chunkSizeY = chunkSizeY;
+                this.chunkSizeZ = chunkSizeZ;
                 this.cx = cx;
                 this.cz = cz;
-                highestBlocks = new long[chunkSize, chunkSize];
-                for (int i = 0; i < chunkSize; i++)
+                highestBlocks = new long[chunkSizeX, chunkSizeZ];
+                for (int i = 0; i < chunkSizeX; i++)
                 {
-                    for (int j = 0; j < chunkSize; j++)
+                    for (int j = 0; j < chunkSizeZ; j++)
                     {
                         highestBlocks[i, j] = long.MinValue;
                     }
@@ -830,8 +946,8 @@ namespace Blocks
 
         BlockTouchingSkyChunk GetOrCreateSkyChunkAtPosition(long x, long z)
         {
-            long cx = world.divWithFloorForChunkSize(x);
-            long cz = world.divWithFloorForChunkSize(z);
+            long cx = world.divWithFloorForChunkSizeX(x);
+            long cz = world.divWithFloorForChunkSizeZ(z);
             return GetOrCreateSkyChunk(cx, cz);
         }
 
@@ -841,7 +957,7 @@ namespace Blocks
             BlockTouchingSkyChunk skyChunk = GetSkyChunk(cx, cz);
             if (skyChunk == null)
             {
-                skyChunk = new BlockTouchingSkyChunk(cx, cz, world.chunkSize);
+                skyChunk = new BlockTouchingSkyChunk(cx, cz, world.chunkSizeX, world.chunkSizeY, world.chunkSizeZ);
                 if (!xLookup.ContainsKey(cx))
                 {
                     xLookup[cx] = new List<BlockTouchingSkyChunk>();
@@ -956,17 +1072,17 @@ namespace Blocks
         public void RemovedSolidBlockTouchingSky(long x, long y, long z)
         {
             SetNotTouchingSky(x, y, z);
-            long cx = world.divWithFloorForChunkSize(x);
-            long cz = world.divWithFloorForChunkSize(z);
-            long relativeX = x - cx * world.chunkSize;
-            long relativeZ = z - cz * world.chunkSize;
+            long cx = world.divWithFloorForChunkSizeX(x);
+            long cz = world.divWithFloorForChunkSizeZ(z);
+            long relativeX = x - cx * world.chunkSizeX;
+            long relativeZ = z - cz * world.chunkSizeZ;
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
             long curY = y;
-            long cy = world.divWithFloorForChunkSize(y);
+            long cy = world.divWithFloorForChunkSizeY(y);
             while(true)
             {
                 curY -= 1;
-                long curCy = world.divWithFloorForChunkSize(curY);
+                long curCy = world.divWithFloorForChunkSizeY(curY);
                 // went to next chunk down
                 if (curCy != cy)
                 {
@@ -987,7 +1103,7 @@ namespace Blocks
                     // if we hopped down a chunk or more (due to the chunk inbetween not being generated), start searching at the ceiling of that chunk
                     if (hoppedDown)
                     {
-                        curY = curCy * world.chunkSize + world.chunkSize - 1;
+                        curY = curCy * world.chunkSizeY + world.chunkSizeY - 1;
                     }
                     cy = curCy;
                 }
@@ -1007,10 +1123,10 @@ namespace Blocks
 
         public void AddedSolidBlock(long x, long y, long z)
         {
-            long cx = world.divWithFloorForChunkSize(x);
-            long cz = world.divWithFloorForChunkSize(z);
-            long relativeX = x - cx * world.chunkSize;
-            long relativeZ = z - cz * world.chunkSize;
+            long cx = world.divWithFloorForChunkSizeX(x);
+            long cz = world.divWithFloorForChunkSizeZ(z);
+            long relativeX = x - cx * world.chunkSizeX;
+            long relativeZ = z - cz * world.chunkSizeZ;
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
             long curHighestY = skyChunk.highestBlocks[relativeX, relativeZ];
             if (y > curHighestY)
@@ -1026,15 +1142,15 @@ namespace Blocks
         public void GeneratedChunk(Chunk chunk)
         {
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(chunk.cx, chunk.cz);
-            long chunkX = chunk.cx * world.chunkSize;
-            long chunkY = chunk.cy * world.chunkSize;
-            long chunkZ = chunk.cz * world.chunkSize;
-            for (long x = 0; x < world.chunkSize; x++)
+            long chunkX = chunk.cx * world.chunkSizeX;
+            long chunkY = chunk.cy * world.chunkSizeY;
+            long chunkZ = chunk.cz * world.chunkSizeZ;
+            for (long x = 0; x < world.chunkSizeX; x++)
             {
-                for (long z = 0; z < world.chunkSize; z++)
+                for (long z = 0; z < world.chunkSizeZ; z++)
                 {
                     long curHighestY = skyChunk.highestBlocks[x, z];
-                    long highestYInNewChunk = chunk.cy * world.chunkSize + world.chunkSize - 1;
+                    long highestYInNewChunk = chunk.cy * world.chunkSizeY + world.chunkSizeY - 1;
                     // we already have something higher than the top of this chunk, ignore this xz position
                     if (highestYInNewChunk < curHighestY)
                     {
@@ -1043,7 +1159,7 @@ namespace Blocks
                     else
                     {
                         // there might be something higher, check the column of blocks starting at the roof of the chunk
-                        for (long y = world.chunkSize-1; y >= 0; y--)
+                        for (long y = world.chunkSizeY-1; y >= 0; y--)
                         {
                             long curY = chunkY + y;
                             // we are now below the known highest, we are done
@@ -1125,16 +1241,18 @@ namespace Blocks
             {
                 FetchNeighbors();
             }
-            int chunkSize = World.mainWorld.chunkSize;
+            int chunkSizeX = World.mainWorld.chunkSizeX;
+            int chunkSizeY = World.mainWorld.chunkSizeY;
+            int chunkSizeZ = World.mainWorld.chunkSizeZ;
 
             // relative to us at 0
-            long relx = wx - cx * chunkSize;
-            long rely = wy - cy * chunkSize;
-            long relz = wz - cz * chunkSize;
+            long relx = wx - cx * chunkSizeX;
+            long rely = wy - cy * chunkSizeY;
+            long relz = wz - cz * chunkSizeZ;
 
-            float x0Weight = 1.0f - relx / (float)chunkSize;
-            float y0Weight = 1.0f - rely / (float)chunkSize;
-            float z0Weight = 1.0f - relz / (float)chunkSize;
+            float x0Weight = 1.0f - relx / (float)chunkSizeX;
+            float y0Weight = 1.0f - rely / (float)chunkSizeY;
+            float z0Weight = 1.0f - relz / (float)chunkSizeZ;
 
             // average over x first
 
@@ -1290,13 +1408,15 @@ namespace Blocks
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
                 myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
 
+                // clamp from 0 to 15 (otherwise the flags will overflow and it'll overwrite other irrelevant lighting data since only 4 bits are alloted to this field)
+                int clampedValue = System.Math.Min(15, System.Math.Max(0, value));
                 if (value > 0)
                 {
-                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: true, producedLight: value);
+                    lightingState = myChunk.PackLightingValues(skyLighting, System.Math.Max(blockLighting, clampedValue), touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: true, producedLight: clampedValue);
                 }
                 else
                 {
-                    myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: false, producedLight: 0);
+                   lightingState = myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: false, producedLight: 0);
                 }
             }
         }
@@ -1913,175 +2033,29 @@ namespace Blocks
         }
     }
 
-    public abstract class StaticBlock : Block
+
+    public class SimpleBlock : Block
     {
-
-        public static System.Random random = new System.Random();
-
-        public override void OnTick(BlockData block)
+        float baseBreakTime;
+        Tuple<BlockValue, float>[] breakTimes;
+        BlockValue block;
+        public SimpleBlock(BlockValue block, float baseBreakTime, params Tuple<BlockValue, float>[] breakTimes)
         {
-
-        }
-        public override int InventorySpace()
-        {
-            return 0;
-        }
-        public override int NumCraftingOutputs()
-        {
-            return 0;
-        }
-
-    }
-
-
-
-    public abstract class BlockWithInventory : BlockOrItem
-    {
-        public override bool CanBePlaced()
-        {
-            return true;
-        }
-
-        public override void OnTickStart()
-        {
-            
-        }
-
-        public override void OnRandomTick(BlockData block)
-        {
-
-        }
-
-        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
-        {
-            return false;
-        }
-
-
-        public override bool CanConnect()
-        {
-            return false;
-        }
-    }
-
-    public abstract class Block : ConnectableBlock
-    {
-        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
-        {
-            return false;
-        }
-
-
-        public override bool CanConnect()
-        {
-            return false;
-        }
-
-    }
-
-    public abstract class ConnectableBlock : BlockOrItem
-    {
-        public override void OnTickStart()
-        {
-
-        }
-
-        public override void OnRandomTick(BlockData block)
-        {
-        }
-        public override bool CanBePlaced()
-        {
-            return true;
-        }
-        public override int InventorySpace()
-        {
-            return 0;
-        }
-        public override int NumCraftingOutputs()
-        {
-            return 0;
-        }
-    }
-
-
-    public abstract class Block2 : BlockOrItem
-    {
-        public override bool CanBePlaced()
-        {
-            return true;
-        }
-
-        public override void OnRandomTick(BlockData block)
-        {
-
-        }
-
-        public override int InventorySpace()
-        {
-            return 0;
-        }
-        public override int NumCraftingOutputs()
-        {
-            return 0;
-        }
-
-
-        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
-        {
-            return false;
-        }
-
-        public override bool CanConnect()
-        {
-            return false;
-        }
-
-    }
-
-    public abstract class Item : BlockOrItem
-    {
-        public override void OnTickStart()
-        {
-
-        }
-
-        public override void OnRandomTick(BlockData block)
-        {
-        }
-
-
-        public override bool CanConnect()
-        {
-            return false;
-        }
-
-        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
-        {
-            return false;
+            this.block = block;
+            this.baseBreakTime = baseBreakTime;
+            this.breakTimes = breakTimes;
         }
 
         public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
         {
-            return BlockValue.Air;
+            return block;
         }
 
-        public override int InventorySpace()
-        {
-            return 0;
-        }
-        public override int NumCraftingOutputs()
-        {
-            return 0;
-        }
-
-        public override bool CanBePlaced()
-        {
-            return false;
-        }
 
         public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
         {
             destroyBlock = true;
+            CreateBlockEntity(block.block, positionOfBlock);
         }
 
         public override void OnTick(BlockData block)
@@ -2091,19 +2065,156 @@ namespace Blocks
 
         public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
         {
-            return 0.0f;
+            for (int i = 0; i < breakTimes.Length; i++)
+            {
+                if (breakTimes[i].a == thingBreakingWith.Block)
+                {
+                    return breakTimes[i].b;
+                }
+            }
+            return baseBreakTime;
+        }
+    }
+
+
+
+    public abstract class Block : BaseBlockOrItem
+    {
+
+    }
+    
+
+    public abstract class Item : BaseBlockOrItem
+    {
+        public override bool CanBePlaced()
+        {
+            return false;
+        }
+
+        public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+        {
+            return BlockValue.Air;
+        }
+
+        public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+        {
+            destroyBlock = true;
+        }
+    }
+
+
+    public abstract class BaseBlockOrItem : BlockOrItem
+    {
+        public override bool CanBePlaced()
+        {
+            return true;
+        }
+
+        public override bool CanConnect()
+        {
+            return false;
+        }
+
+        public override bool CanBePlaced(AxisDir facePlacedOn, LVector3 pos)
+        {
+            return true;
+        }
+
+        public override bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar)
+        {
+            return false;
+        }
+
+        public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+        {
+            CreateBlockEntity(block.block, positionOfBlock);
+            destroyBlock = true;
+        }
+
+        public override Recipe[] GetRecipes()
+        {
+            return null;
+        }
+
+        public override Vector2 InventorySlotOffset(int slotNum)
+        {
+            return new Vector2(0, 0);
+        }
+
+        public override int InventorySpace()
+        {
+            return 0;
+        }
+
+        public override bool ReturnsItemsWhenDeselected()
+        {
+            return false;
+        }
+
+        public override Vector2 OutputSlotOffset(int outputNum)
+        {
+            return new Vector2(0, 0);
+        }
+
+        public override int NumCraftingOutputs()
+        {
+            return 0;
+        }
+
+        public override int NumInventoryRows()
+        {
+            return 1;
+        }
+
+        public override void OnRandomTick(BlockData block)
+        {
+            
+        }
+
+        public override void OnTick(BlockData block)
+        {
+            
+        }
+
+        public override void OnTickStart()
+        {
+
+        }
+
+        public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+        {
+            return 0.1f;
         }
     }
 
     public abstract class BlockOrItem : RelativeBlockDataGetter
     {
+        public static System.Random randomGen = new System.Random();
         public float rand()
         {
-            return Random.value;
+            return (float)randomGen.NextDouble();
         }
         static int globalPreference = 0;
 
         public int stackSize = 1;
+
+        Recipe[] recipes_ = null;
+
+        public Recipe[] recipes
+        {
+            get
+            {
+                if (recipes_ == null)
+                {
+                    recipes_ = GetRecipes();
+                }
+                return recipes_;
+            }
+            private set
+            {
+
+            }
+        }
 
         public IEnumerable<BlockData> GetNeighbors(BlockData block, bool includingUp = true, bool includingDown = true)
         {
@@ -2413,7 +2524,12 @@ namespace Blocks
 
 
         public abstract int NumCraftingOutputs();
+        public abstract int NumInventoryRows();
+        public abstract bool ReturnsItemsWhenDeselected();
         public abstract int InventorySpace();
+        public abstract Vector2 OutputSlotOffset(int outputNum);
+        public abstract Vector2 InventorySlotOffset(int slotNum);
+        public abstract Recipe[] GetRecipes();
         public abstract void OnTick(BlockData block);
         public abstract float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith);
         public abstract void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock);
@@ -2459,7 +2575,7 @@ namespace Blocks
         public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback, int priority)
         {
             // pretend on 1d line cause that should be good enough
-            lambda = World.mainWorld.chunkSize* World.mainWorld.chunkSize / avgNumBlocksBetween;
+            lambda = System.Math.Max(World.mainWorld.chunkSizeX, World.mainWorld.chunkSizeZ) * World.mainWorld.chunkSizeY / avgNumBlocksBetween;
             this.eventCallback = eventCallback;
             this.priority = priority;
         }
@@ -2480,11 +2596,13 @@ namespace Blocks
         public LVector3[] GeneratePoints(long cx, long cy, long cz)
         {
             float val = Simplex.Noise.Generate(cx, cy, cz);
-            int chunkSize = World.mainWorld.chunkSize;
+            int chunkSizeX = World.mainWorld.chunkSizeX;
+            int chunkSizeY = World.mainWorld.chunkSizeY;
+            int chunkSizeZ = World.mainWorld.chunkSizeZ;
             float totalPr = 0.0f;
             int factorial = 1;
-            int numPoints = chunkSize*chunkSize;
-            for (int i = 0; i < chunkSize*chunkSize; i++)
+            int numPoints = System.Math.Max(chunkSizeX, chunkSizeZ) * chunkSizeY;
+            for (int i = 0; i < numPoints; i++)
             {
                 float prOfThat = (float)(System.Math.Pow(lambda, i) * System.Math.Exp(-lambda) / factorial);
                 if (i > 1)
@@ -2500,12 +2618,12 @@ namespace Blocks
             }
 
             System.Random gen = new System.Random((int)(Simplex.Noise.Generate(cx, cy, cz) * 1000.0f));
-            //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSize= " + chunkSize);
+            //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSizeX= " + chunkSizeX + " chunkSizeY=" + chunkSizeY + " chunkSizeZ=" + chunkSizeZ);
 
             LVector3[] resPoints = new LVector3[numPoints];
             for (int i = 0; i < resPoints.Length; i++)
             {
-                resPoints[i] = new LVector3(gen.Next(0, chunkSize) + cx*chunkSize, gen.Next(0, chunkSize) + cy * chunkSize, gen.Next(0, chunkSize) + cz * chunkSize);
+                resPoints[i] = new LVector3(gen.Next(0, chunkSizeX) + cx* chunkSizeX, gen.Next(0, chunkSizeY) + cy * chunkSizeY, gen.Next(0, chunkSizeZ) + cz * chunkSizeZ);
             }
             return resPoints;
         }
@@ -2535,23 +2653,25 @@ namespace Blocks
 
         public void Run(long baseCX, long baseCY, long baseCZ, int numChunksWide)
         {
-            long chunkSize = World.mainWorld.chunkSize;
-            int sideLength = numChunksWide * World.mainWorld.chunkSize;
+            int chunkSizeX = World.mainWorld.chunkSizeX;
+            int chunkSizeY = World.mainWorld.chunkSizeY;
+            int chunkSizeZ = World.mainWorld.chunkSizeZ;
+            int sideLength = numChunksWide * System.Math.Max(System.Math.Max(chunkSizeX, chunkSizeY), chunkSizeZ);
             float randSeed = Simplex.Noise.rand(baseCX, baseCY, baseCZ);
             System.Random gen = new System.Random((int)(randSeed * 10000.0f));
 
             int numPointsToSample = HowManyPointsToSample(gen.NextDouble(), sideLength);
             Debug.Log("running world generation event with base chunk " + baseCX + " " + baseCY + " " + baseCZ + " and chunksWide=" + numChunksWide + " and numPointsToSample = " + numPointsToSample + " and avgNumBlocksBetween " + avgNumBlocksBetween);
-            //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSize= " + chunkSize);
-            long baseX = baseCX * chunkSize;
-            long baseY = baseCY * chunkSize;
-            long baseZ = baseCZ * chunkSize;
+            //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSizeX= " + chunkSizeX + " chunkSizeY=" + chunkSizeY + " chunkSizeZ=" + chunkSizeZ);
+            long baseX = baseCX * chunkSizeX;
+            long baseY = baseCY * chunkSizeY;
+            long baseZ = baseCZ * chunkSizeZ;
             LVector3[] resPoints = new LVector3[numPointsToSample];
             for (int i = 0; i < resPoints.Length; i++)
             {
-                long x = baseX + gen.Next(0, sideLength);
-                long y = baseY + gen.Next(0, sideLength);
-                long z = baseZ + gen.Next(0, sideLength);
+                long x = baseX + gen.Next(0, numChunksWide*chunkSizeX);
+                long y = baseY + gen.Next(0, numChunksWide*chunkSizeY);
+                long z = baseZ + gen.Next(0, numChunksWide*chunkSizeZ);
                 eventCallback(x, y, z);
             }
         }
@@ -2575,7 +2695,9 @@ namespace Blocks
         // I'm doing a poisson distribution that will have expected number of points = the number of points that result in typical distance to closest other structure = desired val
         public int HowManyPointsToSample(double noiseVal, long cubeSideLength)
         {
-            int chunkSize = World.mainWorld.chunkSize;
+            int chunkSizeX = World.mainWorld.chunkSizeX;
+            int chunkSizeY = World.mainWorld.chunkSizeY;
+            int chunkSizeZ = World.mainWorld.chunkSizeZ;
             double totalPr = 0.0f;
             int factorial = 1;
             double lambda = PointsNeededForAverageDistance(avgNumBlocksBetween, cubeSideLength);
@@ -2738,8 +2860,8 @@ namespace Blocks
 
             // we have not, we need to make one
             PathingNode res = new PathingNode(world, new PathingNodeBlockChunk(world,
-                cx * world.chunkSize, cy * world.chunkSize, cz * world.chunkSize,
-                cx * world.chunkSize + world.chunkSize - 1, cy * world.chunkSize + world.chunkSize - 1, cz * world.chunkSize + world.chunkSize - 1), neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                cx * world.chunkSizeX, cy * world.chunkSizeY, cz * world.chunkSizeZ,
+                cx * world.chunkSizeX + world.chunkSizeX - 1, cy * world.chunkSizeY + world.chunkSizeY - 1, cz * world.chunkSizeZ + world.chunkSizeZ - 1), neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
 
             pathingNodes.Add(res);
 
@@ -2772,7 +2894,7 @@ namespace Blocks
 
 
 
-        int chunkSize;
+        int chunkSizeX, chunkSizeY, chunkSizeZ;
         public ChunkData chunkData;
         public ChunkRenderer chunkRenderer;
         public ChunkBiomeData chunkBiomeData;
@@ -2807,13 +2929,13 @@ namespace Blocks
         public bool TryGetHighestSolidBlockY(long x, long z, out long highestBlockY)
         {
             highestBlockY = long.MinValue;
-            long relativeX = x - cx * chunkSize;
-            long relativeZ = z - cz * chunkSize;
-            for (int y = chunkSize-1; y >= 0; y--)
+            long relativeX = x - cx * chunkSizeX;
+            long relativeZ = z - cz * chunkSizeZ;
+            for (int y = chunkSizeY-1; y >= 0; y--)
             {
                 if (chunkData[relativeX, y, relativeZ] != BlockValue.Air)
                 {
-                    highestBlockY = y+cy*chunkSize;
+                    highestBlockY = y+cy*chunkSizeY;
                     return true;
                 }
             }
@@ -2827,24 +2949,26 @@ namespace Blocks
 
         public void AddBlockUpdate(long i, long j, long k)
         {
-            long relativeX = i - cx * chunkSize;
-            long relativeY = j - cy * chunkSize;
-            long relativeZ = k - cz * chunkSize;
+            long relativeX = i - cx * chunkSizeX;
+            long relativeY = j - cy * chunkSizeY;
+            long relativeZ = k - cz * chunkSizeZ;
             chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
         }
 
 
         public void CreateStuff()
         {
-            this.chunkRenderer = new ChunkRenderer(this, chunkSize);
+            this.chunkRenderer = new ChunkRenderer(this, chunkSizeX, chunkSizeY, chunkSizeZ);
         }
 
 
-        public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSize, bool createStuff = true)
+        public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSizeX, int chunkSizeY, int chunkSizeZ, bool createStuff = true)
         {
             this.world = world;
-            this.chunkSize = chunkSize;
-            this.chunkData = new ChunkData(chunkSize, fillWithWildcard: false);
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
+            this.chunkData = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: false);
             this.chunkData.attachedChunks.Add(this);
             this.cx = chunkX;
             this.cy = chunkY;
@@ -2868,18 +2992,18 @@ namespace Blocks
         public void Generate()
         {
             generating = true;
-            long baseX = cx * chunkSize;
-            long baseY = cy * chunkSize;
-            long baseZ = cz * chunkSize;
+            long baseX = cx * chunkSizeX;
+            long baseY = cy * chunkSizeY;
+            long baseZ = cz * chunkSizeX;
             Structure myStructure = new Structure(cx + " " + cy + " " + cz, true, this, priority:0);
             //long start = PhysicsUtils.millis();
             //Debug.Log("generating chunk " + cx + " " + cy + " " + cz + " ");
             try
             {
                 world.worldGeneration.blockGetter = myStructure;
-                for (long x = baseX; x < baseX + this.chunkSize; x++)
+                for (long x = baseX; x < baseX + this.chunkSizeX; x++)
                 {
-                    for (long z = baseZ; z < baseZ + this.chunkSize; z++)
+                    for (long z = baseZ; z < baseZ + this.chunkSizeZ; z++)
                     {
                         //long curHighestBlockY = long.MinValue;
                         //world.worldGeneration.blockGetter = world;
@@ -2887,7 +3011,7 @@ namespace Blocks
                         //world.worldGeneration.blockGetter = myStructure;
                         //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
                         // going from top to bottom lets us update the "highest block touching the sky" easily
-                        for (long y = baseY + this.chunkSize-1; y >= baseY; y--)
+                        for (long y = baseY + this.chunkSizeY-1; y >= baseY; y--)
                         {
                             //long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, "altitude"));
                             using (BlockData block = myStructure.GetBlockData(x, y, z))
@@ -2897,7 +3021,7 @@ namespace Blocks
                                 block.lightingState = 0;
                                 if (block.block != BlockValue.Wildcard && block.block != BlockValue.Air)
                                 {
-                                    //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSize, y - cy * chunkSize, z - cz * chunkSize));
+                                    //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSizeX, y - cy * chunkSizeY, z - cz * chunkSizeZ));
                                 }
                                 /*
                                 // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
@@ -2972,17 +3096,17 @@ namespace Blocks
             /*
 
             generating = true;
-            long baseX = cx * chunkSize;
-            long baseY = cy * chunkSize;
-            long baseZ = cz * chunkSize;
+            long baseX = cx * chunkSizeX;
+            long baseY = cy * chunkSizeY;
+            long baseZ = cz * chunkSizeZ;
             Structure myStructure = new Structure(cx + " " + cy + " " + cz, true);
             world.worldGeneration.blockGetter = myStructure;
-            for (long x = baseX; x < baseX + this.chunkSize; x++)
+            for (long x = baseX; x < baseX + this.chunkSizeX; x++)
             {
-                for (long z = baseZ; z < baseZ + this.chunkSize; z++)
+                for (long z = baseZ; z < baseZ + this.chunkSizeZ; z++)
                 {
                     long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, c => c.altitude));
-                    for (long y = baseY; y < baseY + this.chunkSize; y++)
+                    for (long y = baseY; y < baseY + this.chunkSizeY; y++)
                     {
                         if (y <= 0)
                         {
@@ -3347,11 +3471,11 @@ namespace Blocks
             if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, false, ref negZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y, z - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
-            if (x == chunkSize - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, ref posX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (x == chunkSizeX - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, ref posX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x + 1, y, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (y == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, ref posY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (y == chunkSizeY - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, ref posY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y + 1, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (z == chunkSize - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, ref posZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (z == chunkSizeZ - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, ref posZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y, z + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
         }
@@ -3361,9 +3485,9 @@ namespace Blocks
             long wx = block.x;
             long wy = block.y;
             long wz = block.z;
-            long x = block.x - chunkSize * cx;
-            long y = block.y - chunkSize * cy;
-            long z = block.z - chunkSize * cz;
+            long x = block.x - chunkSizeX * cx;
+            long y = block.y - chunkSizeY * cy;
+            long z = block.z - chunkSizeZ * cz;
             block.myChunk = this;
             int skyLighting;
             int blockLighting;
@@ -3509,13 +3633,14 @@ namespace Blocks
                     long ind = (long)(i);
                     long x, y, z;
                     chunkData.to3D(ind, out x, out y, out z);
-                    long wx = x + cx * chunkSize;
-                    long wy = y + cy * chunkSize;
-                    long wz = z + cz * chunkSize;
+                    long wx = x + cx * chunkSizeX;
+                    long wy = y + cy * chunkSizeY;
+                    long wz = z + cz * chunkSizeZ;
                     //long mwx, mwy, mwz;
                     //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
                     using (BlockData block = world.GetBlockData(wx, wy, wz))
                     {
+                        world.blocksWorld.lightingTicksThisFrame += 1;
                         UpdateLighting(block);
                         BlockOrItem customBlock;
                         BlockValue blockValue = block.block;
@@ -3547,11 +3672,11 @@ namespace Blocks
                             if (z == 0) AddBlockUpdateOutsideChunk(wx, wy, wz - 1, ref negZ);
                             else chunkData.AddBlockUpdate(x, y, z - 1);
 
-                            if (x == chunkSize - 1) AddBlockUpdateOutsideChunk(wx + 1, wy, wz, ref posX);
+                            if (x == chunkSizeX - 1) AddBlockUpdateOutsideChunk(wx + 1, wy, wz, ref posX);
                             else chunkData.AddBlockUpdate(x + 1, y, z);
-                            if (y == chunkSize - 1) AddBlockUpdateOutsideChunk(wx, wy + 1, wz, ref posY);
+                            if (y == chunkSizeY - 1) AddBlockUpdateOutsideChunk(wx, wy + 1, wz, ref posY);
                             else chunkData.AddBlockUpdate(x, y + 1, z);
-                            if (z == chunkSize - 1) AddBlockUpdateOutsideChunk(wx, wy, wz + 1, ref posZ);
+                            if (z == chunkSizeZ - 1) AddBlockUpdateOutsideChunk(wx, wy, wz + 1, ref posZ);
                             else chunkData.AddBlockUpdate(x, y, z + 1);
 
                             if (block.block == BlockValue.Air)
@@ -3580,9 +3705,9 @@ namespace Blocks
                     if (chunkDataAddedBlockUpdate)
                     {
                         bool neighborsInsideThisChunk =
-                            (x != 0 && x != chunkSize - 1) &&
-                            (y != 0 && y != chunkSize - 1) &&
-                            (z != 0 && z != chunkSize - 1);
+                            (x != 0 && x != chunkSizeX - 1) &&
+                            (y != 0 && y != chunkSizeY - 1) &&
+                            (z != 0 && z != chunkSizeZ - 1);
 
                         if (!neighborsInsideThisChunk)
                         {
@@ -3619,9 +3744,9 @@ namespace Blocks
 
         public void SetState(long x, long y, long z, int state, BlockState stateType)
         {
-            long relativeX = x - cx * chunkSize;
-            long relativeY = y - cy * chunkSize;
-            long relativeZ = z - cz * chunkSize;
+            long relativeX = x - cx * chunkSizeX;
+            long relativeY = y - cy * chunkSizeY;
+            long relativeZ = z - cz * chunkSizeZ;
             bool addedUpdate;
             chunkData.SetState(relativeX, relativeY, relativeZ, state, stateType, out addedUpdate);
             // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
@@ -3635,9 +3760,9 @@ namespace Blocks
 
         public void SetNeighborsAsTouchingAir(long x, long y, long z)
         {
-            long relativeX = x - cx * chunkSize;
-            long relativeY = y - cy * chunkSize;
-            long relativeZ = z - cz * chunkSize;
+            long relativeX = x - cx * chunkSizeX;
+            long relativeY = y - cy * chunkSizeY;
+            long relativeZ = z - cz * chunkSizeZ;
             if (relativeX == 0) world.SetTouchingAir(x - 1, y, z, true);
             else SetTouchingAir(x - 1, y, z, true);
 
@@ -3648,13 +3773,13 @@ namespace Blocks
             else SetTouchingAir(x, y, z - 1, true);
 
 
-            if (relativeX == chunkSize - 1) world.SetTouchingAir(x + 1, y, z, true);
+            if (relativeX == chunkSizeX - 1) world.SetTouchingAir(x + 1, y, z, true);
             else SetTouchingAir(x + 1, y, z, true);
 
-            if (relativeY == chunkSize - 1) world.SetTouchingAir(x, y + 1, z, true);
+            if (relativeY == chunkSizeY - 1) world.SetTouchingAir(x, y + 1, z, true);
             else SetTouchingAir(x, y + 1, z, true);
 
-            if (relativeZ == chunkSize - 1) world.SetTouchingAir(x, y, z + 1, true);
+            if (relativeZ == chunkSizeZ - 1) world.SetTouchingAir(x, y, z + 1, true);
             else SetTouchingAir(x, y, z + 1, true);
 
         }
@@ -3668,9 +3793,9 @@ namespace Blocks
             UpdateLighting(x, y, z);
             return;
             /*
-            long relativeX = x - cx * chunkSize;
-            long relativeY = y - cy * chunkSize;
-            long relativeZ = z - cz * chunkSize;
+            long relativeX = x - cx * chunkSizeX;
+            long relativeY = y - cy * chunkSizeY;
+            long relativeZ = z - cz * chunkSizeZ;
             bool modified;
 
             int skyLighting, blockLighting, touchingSkyFlags;
@@ -3712,9 +3837,9 @@ namespace Blocks
 
         public int GetState(long x, long y, long z, BlockState stateType)
         {
-            long relativeX = x - cx * chunkSize;
-            long relativeY = y - cy * chunkSize;
-            long relativeZ = z - cz * chunkSize;
+            long relativeX = x - cx * chunkSizeX;
+            long relativeY = y - cy * chunkSizeY;
+            long relativeZ = z - cz * chunkSizeZ;
             return chunkData.GetState(relativeX, relativeY, relativeZ, stateType);
         }
 
@@ -3722,17 +3847,17 @@ namespace Blocks
         {
             get
             {
-                long relativeX = x - cx * chunkSize;
-                long relativeY = y - cy * chunkSize;
-                long relativeZ = z - cz * chunkSize;
+                long relativeX = x - cx * chunkSizeX;
+                long relativeY = y - cy * chunkSizeY;
+                long relativeZ = z - cz * chunkSizeZ;
                 return chunkData[relativeX, relativeY, relativeZ];
             }
             set
             {
                 this.threadRenderingMe = 100; // so we don't get renders until we are done 
-                long relativeX = x - cx * chunkSize;
-                long relativeY = y - cy * chunkSize;
-                long relativeZ = z - cz * chunkSize;
+                long relativeX = x - cx * chunkSizeX;
+                long relativeY = y - cy * chunkSizeY;
+                long relativeZ = z - cz * chunkSizeZ;
                 bool addedUpdate;
 
                 int prev = 0;
@@ -3827,20 +3952,19 @@ namespace Blocks
         public IntegerSet blocksNeedUpdating;
         public IntegerSet blocksNeedUpdatingNextFrame;
         int[] data;
-        public int chunkSize;
+        public int chunkSizeX, chunkSizeY, chunkSizeZ;
 
-        int chunkSize_2, chunkSize_3;
 
         public List<Chunk> attachedChunks = new List<Chunk>();
 
-        public ChunkData(int chunkSize, bool fillWithWildcard = false)
+        public ChunkData(int chunkSizeX, int chunkSizeY, int chunkSizeZ, bool fillWithWildcard = false)
         {
-            this.chunkSize = chunkSize;
-            this.chunkSize_2 = chunkSize * chunkSize;
-            this.chunkSize_3 = chunkSize * chunkSize * chunkSize;
-            data = new int[chunkSize * chunkSize * chunkSize * 4];
-            this.blocksNeedUpdating = new IntegerSet(chunkSize * chunkSize * chunkSize);
-            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSize * chunkSize * chunkSize);
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
+            data = new int[chunkSizeX * chunkSizeY * chunkSizeZ * 4];
+            this.blocksNeedUpdating = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
+            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
             if (fillWithWildcard)
             {
                 for (int i = 0; i < data.Length; i++)
@@ -3850,14 +3974,14 @@ namespace Blocks
             }
         }
 
-        public ChunkData(int chunkSize, int[] data)
+        public ChunkData(int chunkSizeX, int chunkSizeY, int chunkSizeZ, int[] data)
         {
-            this.chunkSize = chunkSize;
-            this.chunkSize_2 = chunkSize * chunkSize;
-            this.chunkSize_3 = chunkSize * chunkSize * chunkSize;
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
             this.data = data;
-            this.blocksNeedUpdating = new IntegerSet(chunkSize * chunkSize * chunkSize);
-            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSize * chunkSize * chunkSize);
+            this.blocksNeedUpdating = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
+            this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
         }
 
         public void WriteToFile(string path)
@@ -3903,19 +4027,19 @@ namespace Blocks
                         blocksNeedUpdatingNextFrame.Add(i / 4);
                         int localX, localY, localZ;
                         to3D(i / 4, out localX, out localY, out localZ);
-                        long wx = chunk.cx * chunkSize + localX;
-                        long wy = chunk.cy * chunkSize + localY;
-                        long wz = chunk.cz * chunkSize + localZ;
-                        if (chunkData[i] > 0 && data[i] <= 0 && (localX == 0 || localX == chunkSize-1 || localY == 0 || localY == chunkSize-1 || localZ == 0 || localZ == chunkSize-1))
+                        long wx = chunk.cx * chunkSizeX + localX;
+                        long wy = chunk.cy * chunkSizeY + localY;
+                        long wz = chunk.cz * chunkSizeZ + localZ;
+                        if (chunkData[i] > 0 && data[i] <= 0 && (localX == 0 || localX == chunkSizeX-1 || localY == 0 || localY == chunkSizeY-1 || localZ == 0 || localZ == chunkSizeZ-1))
                         {
                             if (localX == 0) chunk.world.CheckIfTouchingAir(wx - 1, wy, wz);
                             if (localY == 0) chunk.world.CheckIfTouchingAir(wx, wy - 1, wz);
                             if (localZ == 0) chunk.world.CheckIfTouchingAir(wx, wy, wz - 1);
-                            if (localX == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx + 1, wy, wz);
-                            if (localY == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx, wy + 1, wz);
-                            if (localZ == chunkSize - 1) chunk.world.CheckIfTouchingAir(wx, wy, wz + 1);
+                            if (localX == chunkSizeX - 1) chunk.world.CheckIfTouchingAir(wx + 1, wy, wz);
+                            if (localY == chunkSizeY - 1) chunk.world.CheckIfTouchingAir(wx, wy + 1, wz);
+                            if (localZ == chunkSizeZ - 1) chunk.world.CheckIfTouchingAir(wx, wy, wz + 1);
 
-                            //chunk.world.AddBlockUpdateToNeighbors(chunk.cx * chunkSize + localX, chunk.cy * chunkSize + localY, chunk.cz * chunkSize + localZ);
+                            //chunk.world.AddBlockUpdateToNeighbors(chunk.cx * chunkSizeX + localX, chunk.cy * chunkSizeY + localY, chunk.cz * chunkSizeZ + localZ);
                         }
                     }
                     // otherwise this is wildcard, skip to next block (only 3 instead of 4 because i++ is default in loop)
@@ -3963,31 +4087,38 @@ namespace Blocks
         // from https://stackoverflow.com/a/34363187/2924421
         public void to3D(int ind, out int x, out int y, out int z)
         {
+            z = ind / (chunkSizeX * chunkSizeY);
+            ind -= (z * chunkSizeX * chunkSizeY);
+            y = ind / chunkSizeX;
+            x = ind % chunkSizeX;
+
+            /*
             z = ind / (chunkSize_2);
             ind -= (z * chunkSize_2);
             y = ind / chunkSize;
             x = ind % chunkSize;
+            */
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int to1D(int x, int y, int z)
         {
-            return x + y * BlocksWorld.chunkSize + z * BlocksWorld.chunkSize * BlocksWorld.chunkSize;
+            return x + y * chunkSizeX + z * chunkSizeX * chunkSizeY;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void to3D(long ind, out long x, out long y, out long z)
         {
-            z = ind / (chunkSize_2);
-            ind -= (z * chunkSize_2);
-            y = ind / chunkSize;
-            x = ind % chunkSize;
+            z = ind / (chunkSizeX * chunkSizeY);
+            ind -= (z * chunkSizeX * chunkSizeY);
+            y = ind / chunkSizeX;
+            x = ind % chunkSizeX;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public long to1D(long x, long y, long z)
         {
-            return x + y * BlocksWorld.chunkSize + z * BlocksWorld.chunkSize * BlocksWorld.chunkSize;
+            return x + y * chunkSizeX + z * chunkSizeX * chunkSizeY;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -4100,13 +4231,13 @@ namespace Blocks
         {
             get
             {
-                long ind = (i + j * chunkSize + k * chunkSize_2)*4;
+                long ind = (i + j * chunkSizeX + k * chunkSizeX*chunkSizeY)*4;
                 if (ind < 0 || ind >= data.Length)
                 {
                     Debug.LogWarning("warning: out of range, with local " + i + " " + j + " " + k + " and data " + data.Length);
                     return 0;
                 }
-                return data[(i + j * chunkSize + k * chunkSize_2) * 4];
+                return data[(i + j * chunkSizeX + k * chunkSizeX * chunkSizeY) * 4];
             }
             set
             {
@@ -4200,7 +4331,7 @@ namespace Blocks
     [System.Serializable]
     public class SavedChunk
     {
-        public int chunkSize;
+        public int chunkSizeX, chunkSizeY, chunkSizeZ;
         public int[] chunkData;
         public long cx, cy, cz;
 
@@ -4209,9 +4340,11 @@ namespace Blocks
 
         }
 
-        public SavedChunk(int chunkSize, int[] chunkData, long cx, long cy, long cz)
+        public SavedChunk(int chunkSizeX, int chunkSizeY, int chunkSizeZ, int[] chunkData, long cx, long cy, long cz)
         {
-            this.chunkSize = chunkSize;
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
             this.chunkData = chunkData;
             this.cx = cx;
             this.cy = cy;
@@ -4254,7 +4387,7 @@ namespace Blocks
                 LVector3 savedChunkPos = new LVector3(savedChunk.cx, savedChunk.cy, savedChunk.cz);
                 int[] savedChunkData = savedChunk.chunkData;
 
-                ChunkData resSavedChunkData = new ChunkData(savedChunk.chunkSize, savedChunkData);
+                ChunkData resSavedChunkData = new ChunkData(savedChunk.chunkSizeX, savedChunk.chunkSizeY, savedChunk.chunkSizeZ, savedChunkData);
                 ungeneratedChunkPositions[savedChunkPos] = resSavedChunkData;
             }
         }
@@ -4272,7 +4405,7 @@ namespace Blocks
             List<SavedChunk> savedChunks = new List<SavedChunk>();
             foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositions)
             {
-                savedChunks.Add(new SavedChunk(savedChunk.Value.chunkSize, savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
+                savedChunks.Add(new SavedChunk(savedChunk.Value.chunkSizeX, savedChunk.Value.chunkSizeY, savedChunk.Value.chunkSizeZ, savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
             }
 
             return new SavedStructure(name, madeInGeneration, savedChunks.ToArray(), priority);
@@ -4318,14 +4451,16 @@ namespace Blocks
                 {
                     LVector3 chunkPos;
                     World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
-                    int chunkSize = World.mainWorld.chunkSize;
+                    int chunkSizeX = World.mainWorld.chunkSizeX;
+                    int chunkSizeY = World.mainWorld.chunkSizeY;
+                    int chunkSizeZ = World.mainWorld.chunkSizeZ;
                     if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                     {
-                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
                     }
-                    long localPosX = x - chunkPos.x * chunkSize;
-                    long localPosY = y - chunkPos.y * chunkSize;
-                    long localPosZ = z - chunkPos.z * chunkSize;
+                    long localPosX = x - chunkPos.x * chunkSizeX;
+                    long localPosY = y - chunkPos.y * chunkSizeY;
+                    long localPosZ = z - chunkPos.z * chunkSizeZ;
                     bool addedBlockUpdate;
                     ungeneratedChunkPositions[chunkPos].SetState(localPosX, localPosY, localPosZ, state, stateType, out addedBlockUpdate);
                 }
@@ -4356,14 +4491,16 @@ namespace Blocks
                     LVector3 chunkPos;
                     World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
 
-                    int chunkSize = World.mainWorld.chunkSize;
+                    int chunkSizeX = World.mainWorld.chunkSizeX;
+                    int chunkSizeY = World.mainWorld.chunkSizeY;
+                    int chunkSizeZ = World.mainWorld.chunkSizeZ;
                     if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                     {
-                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
                     }
-                    long localPosX = x - chunkPos.x * chunkSize;
-                    long localPosY = y - chunkPos.y * chunkSize;
-                    long localPosZ = z - chunkPos.z * chunkSize;
+                    long localPosX = x - chunkPos.x * chunkSizeX;
+                    long localPosY = y - chunkPos.y * chunkSizeY;
+                    long localPosZ = z - chunkPos.z * chunkSizeZ;
                     return ungeneratedChunkPositions[chunkPos].GetState(localPosX, localPosY, localPosZ, stateType);
                 }
                 else
@@ -4393,14 +4530,16 @@ namespace Blocks
                         LVector3 chunkPos;
                         World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
 
-                        int chunkSize = World.mainWorld.chunkSize;
+                        int chunkSizeX = World.mainWorld.chunkSizeX;
+                        int chunkSizeY = World.mainWorld.chunkSizeY;
+                        int chunkSizeZ = World.mainWorld.chunkSizeZ;
                         if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                         {
-                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
                         }
-                        long localPosX = x - chunkPos.x * chunkSize;
-                        long localPosY = y - chunkPos.y * chunkSize;
-                        long localPosZ = z - chunkPos.z * chunkSize;
+                        long localPosX = x - chunkPos.x * chunkSizeX;
+                        long localPosY = y - chunkPos.y * chunkSizeY;
+                        long localPosZ = z - chunkPos.z * chunkSizeZ;
                         return ungeneratedChunkPositions[chunkPos][localPosX, localPosY, localPosZ];
                     }
                     else
@@ -4431,14 +4570,16 @@ namespace Blocks
                     {
                         LVector3 chunkPos;
                         World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
-                        int chunkSize = World.mainWorld.chunkSize;
+                        int chunkSizeX = World.mainWorld.chunkSizeX;
+                        int chunkSizeY = World.mainWorld.chunkSizeY;
+                        int chunkSizeZ = World.mainWorld.chunkSizeZ;
                         if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                         {
-                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSize, fillWithWildcard: true);
+                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
                         }
-                        long localPosX = x - chunkPos.x * chunkSize;
-                        long localPosY = y - chunkPos.y * chunkSize;
-                        long localPosZ = z - chunkPos.z * chunkSize;
+                        long localPosX = x - chunkPos.x * chunkSizeX;
+                        long localPosY = y - chunkPos.y * chunkSizeY;
+                        long localPosZ = z - chunkPos.z * chunkSizeZ;
                         ungeneratedChunkPositions[chunkPos][localPosX, localPosY, localPosZ] = value;
                     }
                     else
@@ -4943,7 +5084,6 @@ namespace Blocks
             }
             allowedToGenerate = false;
             List<Chunk> curAllChunks = new List<Chunk>(allChunks);
-            allowedToGenerate = true;
             foreach (Chunk chunk in curAllChunks)
             {
                 string chunkName = chunk.cx + "." + chunk.cy + "." + chunk.cz + ".dat";
@@ -4980,6 +5120,7 @@ namespace Blocks
             string worldGenOptionsPath = cleanedRootDir + "/worldGenOptions.json";
             File.WriteAllText(worldGenOptionsPath, Newtonsoft.Json.JsonConvert.SerializeObject(worldGenOptions));
 
+            allowedToGenerate = true;
         }
 
         public void Load(string rootDir)
@@ -5001,6 +5142,8 @@ namespace Blocks
             string configJson = File.ReadAllText(configPath);
             Debug.Log("loading config json from file " + configJson);
             BlockValue.LoadIdConfigFromJsonString(configJson);
+
+            BlockValue.FinishAddNewBlocks();
             Debug.Log("done loading config json from file " + configJson);
 
 
@@ -5009,8 +5152,13 @@ namespace Blocks
 
             blocksWorld.triMaterial.mainTexture = BlockValue.allBlocksTexture;
             blocksWorld.triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+            blocksWorld.meshTriMaterial.mainTexture = BlockValue.allBlocksTexture;
+            blocksWorld.simpleMeshMaterial.mainTexture = BlockValue.allBlocksTexture;
             blocksWorld.blockEntityMaterial.mainTexture = BlockValue.allBlocksTexture;
             blocksWorld.blockIconMaterial.mainTexture = BlockValue.allBlocksTexture;
+
+
+
             Debug.Log("loading chunks");
             string chunksDir = cleanedRootDir + "/chunks";
             DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
@@ -5238,7 +5386,7 @@ namespace Blocks
         {
             LVector3 chunkPos;
             GetChunkCoordinatesAtPos(pos, out chunkPos);
-            Vector3 offset = (new Vector3(chunkPos.x, chunkPos.y, chunkPos.z)) * chunkSize * worldScale;
+            Vector3 offset = (new Vector3(chunkPos.x*chunkSizeX, chunkPos.y*chunkSizeY, chunkPos.z*chunkSizeZ)) * worldScale;
             Matrix4x4 helperMat = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one);
             return GetTrianglesForBlock(pos.BlockV, GetState(pos.x, pos.y, pos.z, BlockState.Animation), dummyTemplate, new Vector3(pos.x, pos.y, pos.z), helperMat);
         }
@@ -5354,7 +5502,7 @@ namespace Blocks
 
         public static Dictionary<int, int> stackableSize;
 
-        public int chunkSize;
+        public int chunkSizeX, chunkSizeY, chunkSizeZ;
         QuickLongDict<List<Chunk>> chunksPerX;
         QuickLongDict<List<Chunk>> chunksPerY;
         QuickLongDict<List<Chunk>> chunksPerZ;
@@ -5514,10 +5662,12 @@ namespace Blocks
         public GenerationClass worldGeneration;
         public BlocksTouchingSky blocksTouchingSky;
 
-        public World(BlocksWorld blocksWorld, int chunkSize, BlocksPack blocksPack)
+        public World(BlocksWorld blocksWorld, int chunkSizeX, int chunkSizeY, int chunkSizeZ, BlocksPack blocksPack)
         {
+            this.chunkSizeX = chunkSizeX;
+            this.chunkSizeY = chunkSizeY;
+            this.chunkSizeZ = chunkSizeZ;
             blocksWorld.creativeMode = creativeMode_;
-            this.chunkSize = chunkSize;
             this.worldGeneration = blocksPack.customGeneration;
             this.customBlocks = blocksPack.customBlocks;
             this.blocksTouchingSky = new BlocksTouchingSky(this);
@@ -5540,10 +5690,6 @@ namespace Blocks
 
 
 
-            foreach (Recipe recipe in blocksPack.customRecipes)
-            {
-                blocksWorld.otherObjectInventoryGui.GetComponent<CraftingDesk>().AddRecipe(recipe);
-            }
 
 
             blockDataCache = new BlockDataCache(this);
@@ -5725,17 +5871,17 @@ namespace Blocks
             ChunkBiomeData chunkBiomeData = GetChunkBiomeData(cx, cy, cz);
             return chunkBiomeData.AverageBiomeData(x, y, z, chunkProperty);
             /*
-            ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-            ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
-            ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+            ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithFloor(z, chunkSizeZ));
+            ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithCeil(z, chunkSizeZ));
+            ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithCeil(z, chunkSizeZ));
 
-            long x1Weight = x - chunkx1z1.cx * chunkSize;
-            long x2Weight = chunkx2z1.cx * chunkSize - x;
-            long z1Weight = z - chunkx1z1.cz * chunkSize;
-            long z2Weight = chunkx2z1.cz * chunkSize - z;
+            long x1Weight = x - chunkx1z1.cx * chunkSizeX;
+            long x2Weight = chunkx2z1.cx * chunkSizeX - x;
+            long z1Weight = z - chunkx1z1.cz * chunkSizeZ;
+            long z2Weight = chunkx2z1.cz * chunkSizeZ - z;
 
-            float px = x1Weight / (float)chunkSize;
-            float pz = z1Weight / (float)chunkSize;
+            float px = x1Weight / (float)chunkSizeX;
+            float pz = z1Weight / (float)chunkSizeZ;
 
 
             float valZ1 = getChunkValue(chunkx1z1) * (1 - px) + getChunkValue(chunkx2z1) * px;
@@ -5748,18 +5894,18 @@ namespace Blocks
 
         public float AverageChunkValues(long x, long y, long z, string valueKey)
         {
-            ChunkBiomeData chunkx1z1 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-            ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithFloor(z, chunkSize));
-            ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
-            ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSize), divWithFloor(y, chunkSize), divWithCeil(z, chunkSize));
+            ChunkBiomeData chunkx1z1 = GetChunkBiomeData(divWithFloor(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithFloor(z, chunkSizeZ));
+            ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithFloor(z, chunkSizeZ));
+            ChunkBiomeData chunkx1z2 = GetChunkBiomeData(divWithFloor(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithCeil(z, chunkSizeZ));
+            ChunkBiomeData chunkx2z2 = GetChunkBiomeData(divWithCeil(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithCeil(z, chunkSizeZ));
 
-            long x1Weight = x - chunkx1z1.cx * chunkSize;
-            long x2Weight = chunkx2z1.cx * chunkSize - x;
-            long z1Weight = z - chunkx1z1.cz * chunkSize;
-            long z2Weight = chunkx2z1.cz * chunkSize - z;
+            long x1Weight = x - chunkx1z1.cx * chunkSizeX;
+            long x2Weight = chunkx2z1.cx * chunkSizeX - x;
+            long z1Weight = z - chunkx1z1.cz * chunkSizeZ;
+            long z2Weight = chunkx2z1.cz * chunkSizeZ - z;
 
-            float px = x1Weight / (float)chunkSize;
-            float pz = z1Weight / (float)chunkSize;
+            float px = x1Weight / (float)chunkSizeX;
+            float pz = z1Weight / (float)chunkSizeZ;
 
 
             float valZ1 = chunkx1z1[valueKey] * (1 - px) + chunkx2z1[valueKey] * px;
@@ -5796,8 +5942,8 @@ namespace Blocks
 
         public bool TryGetHighestSolidBlockY(long x,long z, out long highestBlockY)
         {
-            long cx = divWithFloorForChunkSize(x);
-            long cz = divWithFloorForChunkSize(z);
+            long cx = divWithFloorForChunkSizeX(x);
+            long cz = divWithFloorForChunkSizeZ(z);
             int numAtX = 0;
             if (chunksPerX.ContainsKey(cx))
             {
@@ -6681,9 +6827,21 @@ namespace Blocks
         // here we assume b is never less than 0
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public long divWithFloorForChunkSize(long a)
+        public long divWithFloorForChunkSizeX(long a)
         {
-            return a / chunkSize - ((a < 0 && a % chunkSize != 0) ? 1 : 0);
+            return a / chunkSizeX - ((a < 0 && a % chunkSizeX != 0) ? 1 : 0);
+        }
+
+
+        public long divWithFloorForChunkSizeY(long a)
+        {
+            return a / chunkSizeY - ((a < 0 && a % chunkSizeY != 0) ? 1 : 0);
+        }
+
+
+        public long divWithFloorForChunkSizeZ(long a)
+        {
+            return a / chunkSizeZ - ((a < 0 && a % chunkSizeZ != 0) ? 1 : 0);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -6913,7 +7071,7 @@ namespace Blocks
             }
             //lock(chunkAddLock)
             //{
-                Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSize, createStuff: true);
+                Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSizeX, chunkSizeY, chunkSizeZ, createStuff: true);
                 AddChunkToDataStructures(res);
                 return res;
             //}
@@ -7085,35 +7243,35 @@ namespace Blocks
 
         public Chunk GetOrGenerateChunkAtPos(long x, long y, long z)
         {
-            long chunkX = divWithFloorForChunkSize(x);
-            long chunkY = divWithFloorForChunkSize(y);
-            long chunkZ = divWithFloorForChunkSize(z);
+            long chunkX = divWithFloorForChunkSizeX(x);
+            long chunkY = divWithFloorForChunkSizeY(y);
+            long chunkZ = divWithFloorForChunkSizeZ(z);
             Chunk chunk = GetOrGenerateChunk(chunkX, chunkY, chunkZ);
             return chunk;
         }
 
         public void GetChunkCoordinatesAtPos(LVector3 worldPos, out LVector3 chunkPos)
         {
-            long chunkX = divWithFloorForChunkSize(worldPos.x);
-            long chunkY = divWithFloorForChunkSize(worldPos.y);
-            long chunkZ = divWithFloorForChunkSize(worldPos.z);
+            long chunkX = divWithFloorForChunkSizeX(worldPos.x);
+            long chunkY = divWithFloorForChunkSizeY(worldPos.y);
+            long chunkZ = divWithFloorForChunkSizeZ(worldPos.z);
             chunkPos = new LVector3(chunkX, chunkY, chunkZ);
         }
 
 
         public void GetChunkCoordinatesAtPos(long x, long y, long z, out long cx, out long cy, out long cz)
         {
-            cx = divWithFloorForChunkSize(x);
-            cy = divWithFloorForChunkSize(y);
-            cz = divWithFloorForChunkSize(z);
+            cx = divWithFloorForChunkSizeX(x);
+            cy = divWithFloorForChunkSizeY(y);
+            cz = divWithFloorForChunkSizeZ(z);
         }
 
 
         public void GetChunkCoordinatesAtPos(long x, long y, long z, out LVector3 chunkPos)
         {
-            long chunkX = divWithFloorForChunkSize(x);
-            long chunkY = divWithFloorForChunkSize(y);
-            long chunkZ = divWithFloorForChunkSize(z);
+            long chunkX = divWithFloorForChunkSizeX(x);
+            long chunkY = divWithFloorForChunkSizeY(y);
+            long chunkZ = divWithFloorForChunkSizeZ(z);
             chunkPos = new LVector3(chunkX, chunkY, chunkZ);
         }
 
@@ -7124,9 +7282,9 @@ namespace Blocks
 
         public Chunk GetChunkAtPos(long x, long y, long z)
         {
-            long chunkX = divWithFloorForChunkSize(x);
-            long chunkY = divWithFloorForChunkSize(y);
-            long chunkZ = divWithFloorForChunkSize(z);
+            long chunkX = divWithFloorForChunkSizeX(x);
+            long chunkY = divWithFloorForChunkSizeY(y);
+            long chunkZ = divWithFloorForChunkSizeZ(z);
             Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
             return chunk;
         }
@@ -7134,9 +7292,9 @@ namespace Blocks
 
         public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors = false)
         {
-            long chunkX = divWithFloorForChunkSize(i);
-            long chunkY = divWithFloorForChunkSize(j);
-            long chunkZ = divWithFloorForChunkSize(k);
+            long chunkX = divWithFloorForChunkSizeX(i);
+            long chunkY = divWithFloorForChunkSizeY(j);
+            long chunkZ = divWithFloorForChunkSizeZ(k);
             Chunk chunk = GetChunk(chunkX, chunkY, chunkZ);
             if (chunk != null && !chunk.generating)
             {
@@ -7215,7 +7373,7 @@ namespace Blocks
             for (int i = 0; i < blocksPlayerPositions.Length; i++)
             {
                 LVector3 tmp = LVector3.FromUnityVector3(blocksPlayerPositions[i]);
-                blocksPlayerLPositionsDivChunkSize[i] = new LVector3(divWithFloorForChunkSize(tmp.x), divWithFloorForChunkSize(tmp.y), divWithFloorForChunkSize(tmp.z));
+                blocksPlayerLPositionsDivChunkSize[i] = new LVector3(divWithFloorForChunkSizeX(tmp.x), divWithFloorForChunkSizeY(tmp.y), divWithFloorForChunkSizeZ(tmp.z));
             }
 
 
@@ -7270,12 +7428,13 @@ namespace Blocks
 
             List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist();
 
-            int tmp = 0;
+            int tmp = 10000;
             foreach (Tuple<Chunk, long> chunkAndDist in chunksToRender)
             {
-                numAllowedToDoFullRender = 0;
+                numAllowedToDoFullRender = 1;
                 Chunk chunk = chunkAndDist.a;
                 int prev = numAllowedToDoFullRender;
+                int prevTemp = tmp;
                 long timeBefore = PhysicsUtils.millis();
                 if (chunkAndDist.b < 1)
                 {
@@ -7295,17 +7454,25 @@ namespace Blocks
                     }
                 }
 
-                if (chunksNotFinished.Count >= blocksWorld.chunkBlockDatas.Length)
+                if (!World.DO_CPU_RENDER)
                 {
-                    for (int i = 0; i < chunksNotFinished.Count; i++)
+                    if (chunksNotFinished.Count >= blocksWorld.chunkBlockDatas.Length)
                     {
-                        //chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
+                        for (int i = 0; i < chunksNotFinished.Count; i++)
+                        {
+                            //chunksNotFinished[i].chunkRenderer.FinishRenderSync(chunksNotFinished[i]);
+                        }
+                        chunksNotFinished.Clear();
                     }
-                    chunksNotFinished.Clear();
                 }
                 
+                if (PhysicsUtils.millis() - curMillis > 1000/60.0f)
+                {
+                    numAllowedToDoFullRender = 0;
+                    tmp = 0;
+                }
 
-                if (numAllowedToDoFullRender != prev)
+                if (numAllowedToDoFullRender != prev || prevTemp != tmp)
                 {
                     elapsedTime += PhysicsUtils.millis() - timeBefore;
 
@@ -7397,23 +7564,23 @@ namespace Blocks
                 Chunk playerChunk = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z);
                 RunTick(playerChunk, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
-                Chunk playerChunkBelow = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y-chunkSize, playerPos.z);
+                Chunk playerChunkBelow = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y-chunkSizeY, playerPos.z);
                 RunTick(playerChunkBelow, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
-                Chunk playerChunkAbove = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y + chunkSize, playerPos.z);
+                Chunk playerChunkAbove = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y + chunkSizeY, playerPos.z);
                 RunTick(playerChunkAbove, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
-                Chunk playerChunkX = GetOrGenerateChunkAtPos(playerPos.x + chunkSize, playerPos.y, playerPos.z);
+                Chunk playerChunkX = GetOrGenerateChunkAtPos(playerPos.x + chunkSizeX, playerPos.y, playerPos.z);
                 RunTick(playerChunkX, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
-                Chunk playerChunkX2 = GetOrGenerateChunkAtPos(playerPos.x - chunkSize, playerPos.y, playerPos.z);
+                Chunk playerChunkX2 = GetOrGenerateChunkAtPos(playerPos.x - chunkSizeX, playerPos.y, playerPos.z);
                 RunTick(playerChunkX2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
-                Chunk playerChunkZ = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z+chunkSize);
+                Chunk playerChunkZ = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z+chunkSizeZ);
                 RunTick(playerChunkZ, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
-                Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSize);
+                Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSizeZ);
                 RunTick(playerChunkZ2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
@@ -7422,9 +7589,9 @@ namespace Blocks
                 {
                     int viewDist = 4;
 
-                    long pcx = divWithFloorForChunkSize(playerPos.x);
-                    long pcy = divWithFloorForChunkSize(playerPos.y);
-                    long pcz = divWithFloorForChunkSize(playerPos.z);
+                    long pcx = divWithFloorForChunkSizeX(playerPos.x);
+                    long pcy = divWithFloorForChunkSizeY(playerPos.y);
+                    long pcz = divWithFloorForChunkSizeZ(playerPos.z);
                     int numDone = 0;
                     int maxGenThisStep = 10;
 
@@ -7817,6 +7984,7 @@ namespace Blocks
             }
             */
 
+            string exampleInitFunc = "";
             string exampleThings =
     "using Blocks;\r\n\r\nnamespace " + packName + @"_pack {
     public class " + packName + @" : BlockCollection
@@ -7832,19 +8000,36 @@ namespace Blocks
 
                 if (packBlocks[b].isTransparent)
                 {
-                    exampleThings += "        public static BlockValue " + packBlocks[b].blockName + " = new BlockValue(true, '" + packBlocks[b].blockName + "', '" + packName + "');";
+                    exampleThings += "        public static BlockValue " + packBlocks[b].blockName + ";";
+                    exampleInitFunc += "            " + packBlocks[b].blockName + " = new BlockValue(true, '" + packBlocks[b].blockName + "', '" + packName + "');";
                 }
                 else
                 {
-                    exampleThings += "        public static BlockValue " + packBlocks[b].blockName + " = new BlockValue(false, '" + packBlocks[b].blockName + "', '" + packName + "');";
+                    exampleThings += "        public static BlockValue " + packBlocks[b].blockName + ";";
+                    exampleInitFunc += "            " + packBlocks[b].blockName + " = new BlockValue(false, '" + packBlocks[b].blockName + "', '" + packName + "');";
                 }
                 if (b != packBlocks.Count - 1)
                 {
-                    exampleThings += "\n";
+                    exampleThings += "\r\n";
+                    exampleInitFunc += "\r\n";
                 }
             }
 
             exampleThings = exampleThings.Replace("'", "\"");
+
+
+            string beforeInitFunc = @"
+        // This needed to be added to sync with Unity, since for some reason unity initializes
+        // static fields on a seperate thread so sometimes we didn't finish initializing these
+        // before Update was already being called for some classes
+        public static void InitBlocks()
+        {
+";
+            string afterInitFunc = @"
+        }
+";
+
+            exampleThings += beforeInitFunc + exampleInitFunc.Replace("'", "\"") + afterInitFunc;
 
             exampleThings += afterExampleThings + "\r\n}";
 
@@ -8228,8 +8413,109 @@ namespace Blocks
         }
     }
 
+    public class BlocksMesh : System.IDisposable
+    {
+        public Vector3[] vertices;
+        public Vector2[] uvs;
+        public Vector2[] colors;
+        MeshVertex[] meshVertices;
+
+        public ComputeBuffer drawData;
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct MeshVertex
+        {
+            public Float4 pos;
+            public Float2 uv;
+            public Float2 color;
+        }
+
+        public BlocksMesh(Vector3[] vertices, Vector2[] uvs, Vector2[] colors)
+        {
+            this.vertices = vertices;
+            this.uvs = uvs;
+            this.colors = colors;
+        }
+
+
+        public void MoveDataToGPU()
+        {
+            List<MeshVertex> meshVertices = new List<MeshVertex>(vertices.Length);
+
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                meshVertices.Add(new MeshVertex()
+                {
+                    pos = new Float4()
+                    {
+                        x = vertices[i].x,
+                        y = vertices[i].y,
+                        z = vertices[i].z,
+                        w = 1.0f
+                    },
+                    uv = new Float2()
+                    {
+                        x = uvs[i].x,
+                        y = uvs[i].y
+                    },
+                    color = new Float2()
+                    {
+                        x = colors[i].x,
+                        y = colors[i].y
+                    }
+                });
+            }
+
+
+            // cleanup old data if modified
+            if (drawData != null)
+            {
+                drawData.Dispose();
+                drawData = null;
+            }
+
+            int sizeInBytesOfMeshVertex = Marshal.SizeOf(typeof(MeshVertex));
+            drawData = new ComputeBuffer(meshVertices.Count, sizeInBytesOfMeshVertex);
+            drawData.SetData<MeshVertex>(meshVertices, 0, 0, meshVertices.Count);
+        }
+
+        public void Render(Matrix4x4 transformMat, Material mat)
+        {
+            if (drawData == null)
+            {
+                MoveDataToGPU();
+            }
+            mat.SetBuffer("meshData", drawData);
+            mat.SetPass(0);
+            Graphics.DrawProcedural(MeshTopology.Triangles, vertices.Length);
+        }
+
+        bool disposed = false;
+        public void Dispose()
+        {
+            if (!disposed)
+            {
+                disposed = true;
+
+                if (drawData != null)
+                {
+                    drawData.Dispose();
+                    drawData = null;
+                }
+            }
+        }
+
+        ~BlocksMesh()
+        {
+            Dispose();
+        }
+    }
+
     public class BlocksWorld : MonoBehaviour
     {
+
+        public int lightingTicksThisFrame = 0;
+        public static Material currentPassMat;
 
         public enum ProfileType
         {
@@ -8258,14 +8544,17 @@ namespace Blocks
         public Material blockEntityMaterial;
         public Material blockIconMaterial;
         public Material triMaterial;
+        public Material meshTriMaterial;
         public Material triMaterialWithTransparency;
         public Material breakingMaterial;
+        public Material simpleMeshMaterial;
         public Transform renderTransform;
         public GameObject loggingNodePrefab;
 
         public GameObject blockEntityPrefab;
         public GameObject blockRenderPrefab;
         public GameObject blockRenderCanvas;
+        public GameObject blockRenderFrontCanvas;
         ComputeBuffer drawPositions1;
         ComputeBuffer drawPositions2;
         bool isUsing1 = true;
@@ -8286,7 +8575,9 @@ namespace Blocks
 
         int[] worldData;
 
-        public const int chunkSize = 16;
+        public const int chunkSizeX = 16;
+        public const int chunkSizeY = 16;
+        public const int chunkSizeZ = 16;
 
         public World world;
 
@@ -8748,7 +9039,10 @@ namespace Blocks
             cubeNormals.SetData(vertNormals);
             uvOffsets = new ComputeBuffer(36, sizeof(float) * 4);
             uvOffsets.SetData(texOffsets);
-            helperForCustomBlocks = new ComputeBuffer(chunkSize * chunkSize * chunkSize * 12, sizeof(int) * 22, ComputeBufferType.GPUMemory);
+            if (!World.DO_CPU_RENDER)
+            {
+                helperForCustomBlocks = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ * 12, sizeof(int) * 22, ComputeBufferType.GPUMemory);
+            }
 
             float[] texOffsetsSingleBlock = new float[36 * 4];
             for (int i = 0; i < 36; i++)
@@ -8949,32 +9243,38 @@ namespace Blocks
 
             outlineMaterial.SetBuffer("lineOffsets", linesOffsets);
 
-
-            drawPositions1 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
-            drawPositions2 = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.Append);
+            if (!World.DO_CPU_RENDER)
+            {
+                drawPositions1 = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ, sizeof(int) * 4, ComputeBufferType.Append);
+                drawPositions2 = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ, sizeof(int) * 4, ComputeBufferType.Append);
+            }
 
             // do multiple so we can run the cull blocks in parallel and don't have to wait for each one to finish
             int numInBatch = 1;
-            chunkBlockDatas = new ComputeBuffer[numInBatch];
-            for (int i = 0; i < chunkBlockDatas.Length; i++)
+            if (!World.DO_CPU_RENDER)
             {
-                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
-                chunkBlockDatas[i] = chunkBlockDataI;
-            }
+                chunkBlockDatas = new ComputeBuffer[numInBatch];
+                for (int i = 0; i < chunkBlockDatas.Length; i++)
+                {
+                    ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ, sizeof(int) * 4, ComputeBufferType.GPUMemory);
+                    chunkBlockDatas[i] = chunkBlockDataI;
+                }
 
-            nonCubePositions = new ComputeBuffer[numInBatch];
-            for (int i = 0; i < nonCubePositions.Length; i++)
-            {
-                ComputeBuffer nonCubePositionDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int), ComputeBufferType.Append);
-                nonCubePositions[i] = nonCubePositionDataI;
-            }
+                nonCubePositions = new ComputeBuffer[numInBatch];
+                for (int i = 0; i < nonCubePositions.Length; i++)
+                {
+                    ComputeBuffer nonCubePositionDataI = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ, sizeof(int), ComputeBufferType.Append);
+                    nonCubePositions[i] = nonCubePositionDataI;
+                }
 
-            chunkBlockDatasForCombined = new ComputeBuffer[1];
-            for (int i = 0; i < chunkBlockDatasForCombined.Length; i++)
-            {
-                ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSize * chunkSize * chunkSize, sizeof(int) * 4, ComputeBufferType.GPUMemory);
-                chunkBlockDatasForCombined[i] = chunkBlockDataI;
+                chunkBlockDatasForCombined = new ComputeBuffer[1];
+                for (int i = 0; i < chunkBlockDatasForCombined.Length; i++)
+                {
+                    ComputeBuffer chunkBlockDataI = new ComputeBuffer(chunkSizeX * chunkSizeY * chunkSizeZ, sizeof(int) * 4, ComputeBufferType.GPUMemory);
+                    chunkBlockDatasForCombined[i] = chunkBlockDataI;
+                }
             }
+             
 
 
             //cullBlocksShader.SetBuffer(0, "DataIn", chunkBlockData);
@@ -8989,6 +9289,8 @@ namespace Blocks
 
             triMaterial.mainTexture = BlockValue.allBlocksTexture;
             triMaterialWithTransparency.mainTexture = BlockValue.allBlocksTexture;
+            meshTriMaterial.mainTexture = BlockValue.allBlocksTexture;
+            simpleMeshMaterial.mainTexture = BlockValue.allBlocksTexture;
             blockEntityMaterial.mainTexture = BlockValue.allBlocksTexture;
             blockIconMaterial.mainTexture = BlockValue.allBlocksTexture;
 
@@ -9090,6 +9392,13 @@ namespace Blocks
         public BlocksPlayer[] players;
         public Vector3[] playerPositions;
 
+
+        private void Awake()
+        {
+            BlockValue.SetupAirAndWildcard();
+            Example.InitBlocks();
+            BlockValue.FinishAddNewBlocks();
+        }
         // Use this for initialization
         void Start()
         {
@@ -9102,7 +9411,7 @@ namespace Blocks
             //Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
             //customBlocks[BlockValue.GRASS] = new Grass();
             //GenerationClass customGeneration = new ExampleGeneration();
-            world = new World(this, chunkSize, blocksPack);
+            world = new World(this, chunkSizeX, chunkSizeY, chunkSizeZ, blocksPack);
 
             lastTick = 0;
 
@@ -9208,6 +9517,8 @@ namespace Blocks
         // Update is called once per frame
         void Update()
         {
+            Debug.Log(lightingTicksThisFrame + " lighting ticks this frame");
+            lightingTicksThisFrame = 0;
             players = FindObjectsOfType<BlocksPlayer>();
 
             playerPositions = new Vector3[players.Length];
@@ -9219,6 +9530,8 @@ namespace Blocks
             World.creativeMode = creativeMode;
             triMaterial.SetFloat("globalLightLevel", skyLightLevel);
             triMaterialWithTransparency.SetFloat("globalLightLevel", skyLightLevel);
+            meshTriMaterial.SetFloat("globalLightLevel", skyLightLevel);
+            simpleMeshMaterial.SetFloat("globalLightLevel", skyLightLevel);
             numChunksTotal = world.allChunks.Count;
             for (int i = 0; i < 20; i++)
             {
@@ -9300,7 +9613,7 @@ namespace Blocks
 
 
             RenderTriangle[] defaultCubeTris = World.defaultCubeTris;
-            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+            Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
 
             Matrix4x4 offsetMatrix = Matrix4x4.TRS(offset, Quaternion.identity, Vector3.one);
 
@@ -9308,11 +9621,11 @@ namespace Blocks
             int i = 0;
             int blockValue, blockState, blockLightingState, blockAnimState,lightingTouchingFlags;
             List<RenderTriangle> triangles = new List<RenderTriangle>();
-            for (int z = 0; z < chunkSize; z++)
+            for (int z = 0; z < chunkSizeZ; z++)
             {
-                for (int y = 0; y < chunkSize; y++)
+                for (int y = 0; y < chunkSizeY; y++)
                 {
-                    for (int x = 0; x < chunkSize; x++)
+                    for (int x = 0; x < chunkSizeX; x++)
                     {
                         blockValue = chunkData[i++];
                         blockState = chunkData[i++];
@@ -9388,7 +9701,7 @@ namespace Blocks
             }
             else
             {
-                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz * chunkSizeZ)) * worldScale;
                 renderTransform.transform.position += offset;
 
                 ComputeBuffer curChunkBlockData = chunkBlockDatasForCombined[curChunkBlockDataCombinedI];
@@ -9398,7 +9711,7 @@ namespace Blocks
                 for (int i = 0; i < 2; i++)
                 {
                     cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                    cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                    //cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
                     cullBlocksShader.SetFloat("ptCloudScale", worldScale);
                     cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                     cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
@@ -9406,7 +9719,7 @@ namespace Blocks
                 }
                 // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
                 cullBlocksShader.SetBuffer(0, "DrawingThings", drawData);
-                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(0, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
 
                 renderTransform.transform.position -= offset;
 
@@ -9429,7 +9742,7 @@ namespace Blocks
             else
             {
 
-                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
                 renderTransform.transform.position += offset;
 
                 chunk.chunkRenderer.drawDataNotTransparent.SetCounterValue(0);
@@ -9444,7 +9757,7 @@ namespace Blocks
                 for (int i = 0; i < 2; i++)
                 {
                     cullBlocksShader.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                    cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
+                    //cullBlocksShader.SetInt("ptCloudWidth", chunkSize);
                     cullBlocksShader.SetFloat("ptCloudScale", worldScale);
                     cullBlocksShader.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                     cullBlocksShader.SetBuffer(0, "DataIn", curChunkBlockData);
@@ -9453,11 +9766,11 @@ namespace Blocks
                 }
                 // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
                 cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(0, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
 
                 curNotCubePositions.SetCounterValue(0);
                 cullBlocksShader.SetBuffer(2, "NonCubePositions", curNotCubePositions);
-                cullBlocksShader.Dispatch(2, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(2, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
 
 
                 /*
@@ -9471,7 +9784,7 @@ namespace Blocks
                 //chunkBlockData.SetData(chunk.chunkData.GetRawData());
                 // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
                 cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
-                cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(1, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
                 ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
                 world.argBuffer.GetData(args);
                 numTransparent = args[0];
@@ -9501,7 +9814,7 @@ namespace Blocks
             {
 
                 int[] args = new int[] { 0 };
-                Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
+                Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
                 renderTransform.transform.position += offset;
 
                 /*
@@ -9523,7 +9836,7 @@ namespace Blocks
                 }
                 // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
                 cullBlocksShader.SetBuffer(0, "DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-                cullBlocksShader.Dispatch(0, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(0, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
                 */
                 ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataNotTransparent, world.argBuffer, 0);
                 world.argBuffer.GetData(args);
@@ -9617,7 +9930,7 @@ namespace Blocks
                 //chunkBlockData.SetData(chunk.chunkData.GetRawData());
                 // 0 keeps non-transparent blocks, 1 keeps only transparent blocks
                 cullBlocksShader.SetBuffer(1, "DrawingThings", chunk.chunkRenderer.drawDataTransparent);
-                cullBlocksShader.Dispatch(1, chunkSize / 8, chunkSize / 8, chunkSize / 8);
+                cullBlocksShader.Dispatch(1, chunkSizeX / 8, chunkSizeY / 8, chunkSizeZ / 8);
                 ComputeBuffer.CopyCount(chunk.chunkRenderer.drawDataTransparent, world.argBuffer, 0);
                 world.argBuffer.GetData(args);
                 numTransparent = args[0];
@@ -9838,7 +10151,7 @@ namespace Blocks
         {
             long cx, cy, cz;
             world.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
-            Vector3 offset = (new Vector3(cx, cy, cz)) * chunkSize * worldScale;
+            Vector3 offset = (new Vector3(cx*chunkSizeX, cy*chunkSizeY, cz*chunkSizeZ)) * worldScale;
             renderTransform.transform.position += offset;
             Chunk chunkIn = world.GetChunk(cx, cy, cz);
             if (chunkIn != null)
@@ -9847,18 +10160,52 @@ namespace Blocks
             }
 
             int brokenState = (int)Mathf.Clamp(Mathf.Round(howBroken * 8), 0.0f, 8.0f);
-            blockBreakingBuffer.SetData(new int[] { (int)(x - cx * chunkSize), (int)(y - cy * chunkSize), (int)(z - cz * chunkSize), brokenState });
+            blockBreakingBuffer.SetData(new int[] { (int)(x - cx * chunkSizeX), (int)(y - cy * chunkSizeY), (int)(z - cz * chunkSizeZ), brokenState });
             if (Camera.current != uiCamera)
             {
                 breakingMaterial.SetBuffer("DrawingThings", blockBreakingBuffer);
                 breakingMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                breakingMaterial.SetInt("ptCloudWidth", chunkSize);
+                //breakingMaterial.SetInt("ptCloudWidth", chunkSize);
                 breakingMaterial.SetFloat("ptCloudScale", worldScale);
                 breakingMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                 breakingMaterial.SetPass(0);
                 Graphics.DrawProcedural(MeshTopology.Triangles, 1 * (36));
             }
             renderTransform.transform.position -= offset;
+        }
+
+        MaterialPropertyBlock properties = null;
+
+        public void RenderChunkMesh(Chunk chunk, Mesh mesh)
+        {
+            if (properties == null)
+            {
+                properties = new MaterialPropertyBlock();
+            }
+            if (Camera.current != uiCamera)
+            {
+                //Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
+                //renderTransform.transform.position += offset;
+
+                meshTriMaterial.SetPass(0);
+                Graphics.DrawMeshNow(mesh, renderTransform.transform.localToWorldMatrix);
+
+                //renderTransform.transform.position -= offset;
+            }
+        }
+
+
+        public void RenderChunkBlocksMesh(Chunk chunk, BlocksMesh mesh)
+        {
+            if (Camera.current != uiCamera)
+            {
+                //Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
+                //renderTransform.transform.position += offset;
+
+                mesh.Render(renderTransform.transform.localToWorldMatrix, simpleMeshMaterial);
+
+                //renderTransform.transform.position -= offset;
+            }
         }
 
         public void RenderChunk(Chunk chunk, bool onlyTransparent)
@@ -9868,8 +10215,8 @@ namespace Blocks
             //    return;
             //}
             //Vector3 offset = metaSize * (renderTransform.transform.forward * sandScale * sandDim / 2.0f + renderTransform.transform.right * sandScale * sandDim / 2.0f + renderTransform.transform.up * sandScale * sandDim / 2.0f);
-            Vector3 offset = (new Vector3(chunk.cx, chunk.cy, chunk.cz)) * chunkSize * worldScale;
-            renderTransform.transform.position += offset;
+            //Vector3 offset = (new Vector3(chunk.cx*chunkSizeX, chunk.cy*chunkSizeY, chunk.cz*chunkSizeZ)) * worldScale;
+            //renderTransform.transform.position += offset;
             /*
             if ((Camera.current.cullingMask & (1 << 5)) == 0)
             {
@@ -9901,11 +10248,11 @@ namespace Blocks
                 else
                 {
                     triMaterial.SetBuffer("DrawingThings", chunk.chunkRenderer.drawDataNotTransparent);
-                    triMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
-                    triMaterial.SetInt("ptCloudWidth", chunkSize);
+                    //triMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
+                    //triMaterial.SetInt("ptCloudWidth", chunkSize);
                     //triMaterial.SetBuffer("PixelData", sandPixelData);
-                    triMaterial.SetFloat("ptCloudScale", worldScale);
-                    triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
+                    //triMaterial.SetFloat("ptCloudScale", worldScale);
+                    //triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                     triMaterial.SetPass(0);
                     Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent*3);
 
@@ -9918,7 +10265,7 @@ namespace Blocks
                     // Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent * (36));
                 }
             }
-            renderTransform.transform.position -= offset;
+            //renderTransform.transform.position -= offset;
         }
 
         LVector3 blockBreaking;

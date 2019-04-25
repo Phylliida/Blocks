@@ -53,6 +53,12 @@ namespace Blocks
 
         public int redstoneState = 8;
 
+
+        bool IsEmptyBlockStack(BlockStack blockStack)
+        {
+            return blockStack == null || (blockStack.Block == BlockValue.Air && blockStack.count == 0);
+        }
+
         public void Update()
         {
 
@@ -84,7 +90,6 @@ namespace Blocks
 
                 bool pathingSuccess;
                 PathingChunk.Pathfind(World.mainWorld, startPathingPos, endPathingPos, new MobilityCriteria(1,1,2,1), out pathingSuccess, verbose: World.mainWorld.blocksWorld.verbosePathing);
-
             }
 
             if (Input.GetKeyDown(KeyCode.G))
@@ -285,12 +290,12 @@ namespace Blocks
                         //Debug.Log("hit at pos " + hitPos);
 
                         BlockStack currentItem = inventory.blocks[inventoryGui.selection];
-                        if (currentItem != null && currentItem.maxDurability != 0)
+                        if (!IsEmptyBlockStack(currentItem) && currentItem.maxDurability != 0)
                         {
                             currentItem.durability -= 1;
                             if (currentItem.durability == 0)
                             {
-                                inventory.blocks[inventoryGui.selection] = null;
+                                inventory.blocks[inventoryGui.selection] = new BlockStack(BlockValue.Air, 0);
                             }
                         }
 
@@ -371,7 +376,7 @@ namespace Blocks
                         //World.mainWorld.blocksWorld.otherObjectInventoryGui.screenOffset = new Vector2(0, 300);
                         //World.mainWorld.blocksWorld.otherObjectInventoryGui.displaying = true;
                     }
-                    else if (inventoryGui != null && inventory != null && inventory.blocks[inventoryGui.selection] != null && inventory.blocks[inventoryGui.selection].count > 0)
+                    else if (inventoryGui != null && inventory != null && !IsEmptyBlockStack(inventory.blocks[inventoryGui.selection]) && inventory.blocks[inventoryGui.selection].count > 0)
                     {
                         if (hitResults.blockBeforeHit != myPos && hitResults.blockBeforeHit != myFeetPos && hitResults.blockBeforeHit != myHeadPos && hitResults.blockBeforeHit != myBodyPos)
                         {
@@ -387,7 +392,7 @@ namespace Blocks
                                 inventory.blocks[inventoryGui.selection].count -= 1;
                                 if (inventory.blocks[inventoryGui.selection].count <= 0)
                                 {
-                                    inventory.blocks[inventoryGui.selection] = null;
+                                    inventory.blocks[inventoryGui.selection] = new BlockStack(BlockValue.Air, 0);
                                 }
                             }
                         }

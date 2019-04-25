@@ -35,7 +35,8 @@ public class ExampleGeneration : GenerationClass
             world.AddChunkPropertyEvent(new ChunkPropertyEvent(200.0f, OnTree, 1));
             world.AddChunkPropertyEvent(new ChunkPropertyEvent(2600.0f, OnLavaTube, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2000.0f, OnRiver, 1));
-            world.AddChunkPropertyEvent(new ChunkPropertyEvent(2.0f, OnIronOre, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(3.0f, OnIronOre, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(5.0f, OnCoalOre, 1));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
             world.AddWorldGenerationEvent(new WorldGenerationEvent(100.0f, OnCave, 2));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
@@ -141,11 +142,66 @@ public class ExampleGeneration : GenerationClass
         Random randomGen = new Random((int)(randVal * 10000.0f));
         if (y < bedrockMin)
         {
-            oreBlock = Example.Sand;
+            return;
         }
         else if (distFromSurface < 10 && randomGen.NextDouble() < 0.2)
         {
             oreBlock = Example.IronOre;
+        }
+        else
+        {
+
+        }
+
+        int numThings = Simplex.Noise.randInt(5, 9, x, y, z);
+
+        long curX = x;
+        long curY = y;
+        long curZ = z;
+
+        int[] xOffsets = new int[] { 1, -1, 0, 0, 0, 0 };
+        int[] yOffsets = new int[] { 1, -1, 0, 0, 1, -1 };
+        int[] zOffsets = new int[] { 0, 0, 1, -1, 0, 0 };
+
+        for (int i = 0; i < numThings; i++)
+        {
+            if (OnOrBelowSurface(curX, curY, curZ, out distFromSurface))
+            {
+                if (distFromSurface < 2)
+                {
+                    return;
+                }
+                SetBlock(curX, curY, curZ, oreBlock);
+            }
+            int val = Simplex.Noise.randInt(0, xOffsets.Length, curX, curY, curZ);
+            curX += xOffsets[val];
+            curY += yOffsets[val];
+            curZ += zOffsets[val];
+        }
+    }
+
+
+
+    public void OnCoalOre(long x, long y, long z, BlockData outBlock)
+    {
+        BlockValue oreBlock = Example.CoalOre;
+        long distFromSurface;
+        if (OnOrBelowSurface(x, y, z, out distFromSurface))
+        {
+            if (distFromSurface < 2)
+            {
+                return;
+            }
+        }
+        float randVal = Simplex.Noise.rand(x, y, z);
+        Random randomGen = new Random((int)(randVal * 10000.0f));
+        if (y < bedrockMin)
+        {
+            return;
+        }
+        else if (distFromSurface < 10 && randomGen.NextDouble() < 0.2)
+        {
+            oreBlock = Example.CoalOre;
         }
         else
         {

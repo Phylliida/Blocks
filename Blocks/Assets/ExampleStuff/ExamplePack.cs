@@ -22,8 +22,7 @@ public class Light : Block
 
     public override void OnTick(BlockData block)
     {
-        block.needsAnotherTick = false;
-        block.lightingState = block.lightingState | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT | (15 << Blocks.Chunk.OFFSET_FOR_PRODUCED_LIGHT) | 15;
+        block.lightProduced = 15;
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -358,8 +357,7 @@ public class Lava : Block
 
     public override void OnTick(BlockData block)
     {
-        block.needsAnotherTick = false;
-        block.lightingState = block.lightingState | 15 | Blocks.Chunk.MAKING_BLOCK_LIGHT_BIT;
+        block.lightProduced = 15;
         /*
         using (BlockData below = GetBlockData(block.x, block.y - 1, block.z))
         {
@@ -834,9 +832,8 @@ public static class RedstoneUtil
     }
 }
 
-public class Redstone : ConnectableBlock
+public class Redstone : Block
 {
-
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         // temporairly set us to air so our neighbors think we are gone for connectivity reasons
@@ -1322,7 +1319,7 @@ public class BallTrackTurnFull : Block
 
 
 
-public class SimpleWater : Block2
+public class SimpleWater : Block
 {
     static int maxUpdates = 300;
     static int numUpdatesThisTick = 0;
@@ -1391,7 +1388,7 @@ public class SimpleWater : Block2
 }
 
 
-public class Water : Block2
+public class Water : Block
 {
     static int maxUpdates = 100;
     static int numUpdatesThisTick = 0;
@@ -1582,7 +1579,7 @@ public class Water : Block2
     }
 }
 
-public class Grass : Block2
+public class Grass : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -1656,16 +1653,16 @@ public class Grass : Block2
 }
 
 
-public class Leaf : StaticBlock
+public class Leaf : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         CreateBlockEntity(Example.Stick, positionOfBlock);
-        if (random.NextDouble() < 0.2f)
+        if (rand() < 0.2f)
         {
             CreateBlockEntity(Example.Stick, positionOfBlock);
         }
-        if (random.NextDouble() < 0.05f)
+        if (rand() < 0.05f)
         {
             CreateBlockEntity(Example.Sapling, positionOfBlock);
         }
@@ -1687,7 +1684,7 @@ public class Leaf : StaticBlock
 }
 
 
-public class Sapling : StaticBlock
+public class Sapling : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -1710,7 +1707,7 @@ public class Sapling : StaticBlock
 
     public override void OnRandomTick(BlockData block)
     {
-        if (random.NextDouble() < 0.02f)
+        if (rand() < 0.02f)
         {
             if(TryMakeTree(block))
             {
@@ -1849,7 +1846,7 @@ public class Sapling : StaticBlock
 }
 
 
-public class Rock : StaticBlock
+public class Rock : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -1894,7 +1891,7 @@ public class Rock : StaticBlock
     }
 }
 
-public class LargeRock : StaticBlock
+public class LargeRock : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -1912,6 +1909,83 @@ public class LargeRock : StaticBlock
     }
 
 
+    public override Recipe[] GetRecipes()
+    {
+        List<Recipe> recipes = new List<Recipe>();
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.LargeRock, Example.LargeRock, Example.LargeRock },
+            { Example.LargeRock, Example.Air, Example.LargeRock },
+            { Example.LargeRock, Example.LargeRock, Example.LargeRock }
+        }, new BlockStack(Example.Furnace, 1)));
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Coal},
+            { Example.Stick }
+        }, new BlockStack(Example.Light, 4)));
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Trunk, Example.Trunk,  Example.Trunk},
+            { Example.Trunk, Example.Air, Example.Trunk },
+            { Example.Trunk, Example.Trunk, Example.Trunk }
+        }, new BlockStack(Example.Chest, 1)));
+
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Trunk, Example.Air,  Example.Trunk},
+            { Example.Trunk, Example.Air, Example.Trunk },
+            { Example.Trunk, Example.Trunk, Example.Trunk }
+        }, new BlockStack(Example.Barrel, 1)));
+
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Air, Example.LargeRock,  Example.Air},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Shovel, 1, 64, 64)));
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Air, Example.LargeSharpRock,  Example.Air},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Axe, 1, 64, 64)));
+
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.LargeSharpRock, Example.LargeRock,  Example.LargeSharpRock},
+            { Example.String, Example.Stick, Example.String },
+            { Example.Air, Example.Stick, Example.Air }
+        }, new BlockStack(Example.Pickaxe, 1, 64, 64)));
+
+
+        return recipes.ToArray();
+    }
+
+    public override int InventorySpace()
+    {
+        return 9;
+    }
+
+    public override bool ReturnsItemsWhenDeselected()
+    {
+        return true;
+    }
+
+    public override int NumInventoryRows()
+    {
+        return 3;
+    }
+
+    public override int NumCraftingOutputs()
+    {
+        return 1;
+    }
 
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
@@ -1940,12 +2014,8 @@ public class LargeRock : StaticBlock
 }
 
 
-public class WetBark : StaticBlock
+public class WetBark : Block
 {
-
-
-
-
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
         return Example.WetBark;
@@ -1953,7 +2023,7 @@ public class WetBark : StaticBlock
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
         destroyBlock = true;
-        if (random.NextDouble() < 0.8)
+        if (rand() < 0.8)
         {
             CreateBlockEntity(Example.String, positionOfBlock + Random.insideUnitSphere*0.1f);
         }
@@ -1967,7 +2037,47 @@ public class WetBark : StaticBlock
     }
 }
 
-public class LooseRocks : StaticBlock
+
+public class CoalOre : Block
+{
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.CoalOre;
+    }
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        if (thingBreakingWith.Block == Example.Pickaxe)
+        {
+            int numCoal = (int)(rand() * 5) + 1;
+
+            for (int i = 0; i < numCoal; i++)
+            {
+                CreateBlockEntity(Example.Coal, positionOfBlock + Random.insideUnitSphere * 0.1f);
+            }
+
+        }
+        else
+        {
+
+        }
+
+        destroyBlock = true;
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        if (thingBreakingWith.Block == Example.Pickaxe)
+        {
+            return 2.0f;
+        }
+        else
+        {
+            return 10.0f;
+        }
+    }
+}
+
+public class LooseRocks : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -2004,7 +2114,7 @@ public class LooseRocks : StaticBlock
 }
 
 
-public class Stone : StaticBlock
+public class Stone : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -2039,7 +2149,7 @@ public class Stone : StaticBlock
 }
 
 
-public class Trunk : StaticBlock
+public class Trunk : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -2093,7 +2203,7 @@ public class Trunk : StaticBlock
 }
 
 
-public class Chest : BlockWithInventory
+public class Chest : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
@@ -2101,26 +2211,24 @@ public class Chest : BlockWithInventory
         destroyBlock = true;
     }
 
-
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
         return Example.Chest;
     }
-
 
     public override int InventorySpace()
     {
         return 16*3;
     }
 
+    public override int NumInventoryRows()
+    {
+        return 3;
+    }
+
     public override int NumCraftingOutputs()
     {
         return 0;
-    }
-
-    public override void OnTick(BlockData block)
-    {
-        
     }
 
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
@@ -2129,11 +2237,11 @@ public class Chest : BlockWithInventory
     }
 }
 
-public class Barrel : BlockWithInventory
+public class Barrel : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        //CreateBlockEntity(Example.Barrel, positionOfBlock);
+        CreateBlockEntity(Example.Barrel, positionOfBlock);
         destroyBlock = true;
     }
 
@@ -2142,7 +2250,10 @@ public class Barrel : BlockWithInventory
         return 8*3;
     }
 
-
+    public override int NumInventoryRows()
+    {
+        return 3;
+    }
 
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
@@ -2155,11 +2266,6 @@ public class Barrel : BlockWithInventory
         return 0;
     }
 
-    public override void OnTick(BlockData block)
-    {
-
-    }
-
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
         return 1.0f;
@@ -2167,17 +2273,54 @@ public class Barrel : BlockWithInventory
 }
 
 
-public class CraftingTable : BlockWithInventory
+public class Furnace : Block
 {
     public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
     {
-        CreateBlockEntity(Example.CraftingTable, positionOfBlock);
+        CreateBlockEntity(Example.Furnace, positionOfBlock);
         destroyBlock = true;
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Furnace;
+    }
+
+    public override Recipe[] GetRecipes()
+    {
+        List<Recipe> recipes = new List<Recipe>();
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.IronOre, Example.Coal },
+        }, new BlockStack(Example.Iron, 1)));
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Trunk, Example.Coal },
+        }, new BlockStack(Example.Coal, 16)));
+
+        recipes.Add(new Recipe(new BlockValue[,]
+        {
+            { Example.Trunk, Example.Trunk },
+        }, new BlockStack(Example.Coal, 16)));
+
+
+        return recipes.ToArray();
     }
 
     public override int InventorySpace()
     {
-        return 9;
+        return 2;
+    }
+
+    public override bool ReturnsItemsWhenDeselected()
+    {
+        return true;
+    }
+
+    public override int NumInventoryRows()
+    {
+        return 1;
     }
 
     public override int NumCraftingOutputs()
@@ -2186,17 +2329,6 @@ public class CraftingTable : BlockWithInventory
     }
 
 
-
-    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
-    {
-        return Example.CraftingTable;
-    }
-
-    public override void OnTick(BlockData block)
-    {
-
-    }
-
     public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
     {
         return 1.0f;
@@ -2204,52 +2336,6 @@ public class CraftingTable : BlockWithInventory
 }
 
 
-
-public class SimpleBlock : Block
-{
-
-    float baseBreakTime;
-    Tuple<BlockValue, float>[] breakTimes;
-    BlockValue block;
-    public SimpleBlock(BlockValue block, float baseBreakTime, params Tuple<BlockValue, float>[] breakTimes)
-    {
-        this.block = block;
-        this.baseBreakTime = baseBreakTime;
-        this.breakTimes = breakTimes;
-    }
-
-
-
-
-    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
-    {
-        return block;
-    }
-
-
-    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
-    {
-        destroyBlock = true;
-        CreateBlockEntity(block.block, positionOfBlock);
-    }
-
-    public override void OnTick(BlockData block)
-    {
-
-    }
-
-    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
-    {
-        for (int i = 0; i < breakTimes.Length; i++)
-        {
-            if (breakTimes[i].a == thingBreakingWith.Block)
-            {
-                return breakTimes[i].b;
-            }
-        }
-        return baseBreakTime;
-    }
-}
 
 
 public class Bark : Block
@@ -2308,14 +2394,17 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Clay, new SimpleBlock(Example.Clay, 1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.6f)), 64);
         AddCustomBlock(Example.Stone, new Stone(), 64);
         AddCustomBlock(Example.Leaf, new Leaf(), 64);
+        AddCustomBlock(Example.Furnace, new Furnace(), 64);
         AddCustomBlock(Example.Sapling, new Sapling(), 64);
-        AddCustomBlock(Example.CraftingTable, new CraftingTable(), 64);
+        //AddCustomBlock(Example.CraftingTable, new CraftingTable(), 64);
         AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
         AddCustomBlock(Example.Rock, new Rock(), 64);
         AddCustomBlock(Example.LargeRock, new LargeRock(), 64);
         AddCustomBlock(Example.LooseRocks, new LooseRocks(), 64);
         AddCustomBlock(Example.IronOre, new SimpleBlock(Example.IronOre, 100.0f, new Tuple<BlockValue, float>(Example.Pickaxe, 5.0f)), 64);
         AddCustomBlock(Example.Stick, new SimpleItem(), 64);
+        AddCustomBlock(Example.Coal, new SimpleItem(), 64);
+        AddCustomBlock(Example.Iron, new SimpleItem(), 64);
         AddCustomBlock(Example.Pickaxe, new SimpleItem(), 64);
         AddCustomBlock(Example.SharpRock, new SimpleItem(), 64);
         AddCustomBlock(Example.LargeSharpRock, new SimpleItem(), 64);
@@ -2323,8 +2412,9 @@ public class ExamplePack : BlocksPack {
         AddCustomBlock(Example.Axe, new SimpleItem(), 1);
         AddCustomBlock(Example.WetBark, new WetBark(), 64);
         AddCustomBlock(Example.Chest, new Chest(), 64);
-        //AddCustomBlock(Example.Barrel, new Barrel(), 64);
+        AddCustomBlock(Example.Barrel, new Barrel(), 64);
         AddCustomBlock(Example.Sand, new SimpleBlock(Example.Sand, 1.0f, new Tuple<BlockValue, float>(Example.Shovel, 0.5f)), 64);
+        AddCustomBlock(Example.CoalOre, new CoalOre(), 64);
         //AddCustomBlock(Example.Sand, new WaterSource(), 64);
         AddCustomBlock(Example.Light, new Light(), 64);
         AddCustomBlock(Example.String, new SimpleItem(), 64);
@@ -2342,58 +2432,6 @@ public class ExamplePack : BlocksPack {
         //AddCustomBlock(Example.Redstone, new Redstone(), 64);
         //AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.LargeRock, Example.LargeRock },
-            { Example.LargeRock, Example.LargeRock },
-        }, new BlockStack(Example.CraftingTable, 1)));
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.Trunk, Example.Trunk,  Example.Trunk},
-            { Example.Trunk, Example.Air, Example.Trunk },
-            { Example.Trunk, Example.Trunk, Example.Trunk }
-        }, new BlockStack(Example.Chest, 1)));
-
-
-        
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.Air, Example.Trunk,  Example.Air},
-            { Example.Trunk, Example.Air, Example.Trunk },
-            { Example.Air, Example.Trunk, Example.Air }
-        }, new BlockStack(Example.Barrel, 1)));
-        
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.Air, Example.LargeRock,  Example.Air},
-            { Example.String, Example.Stick, Example.String },
-            { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Shovel, 1, 64, 64)));
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.Air, Example.LargeSharpRock,  Example.Air},
-            { Example.String, Example.Stick, Example.String },
-            { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Axe, 1, 64, 64)));
-
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.LargeSharpRock, Example.LargeRock,  Example.LargeSharpRock},
-            { Example.String, Example.Stick, Example.String },
-            { Example.Air, Example.Stick, Example.Air }
-        }, new BlockStack(Example.Pickaxe, 1, 64, 64)));
-
-        AddCustomRecipe(new Recipe(new BlockValue[,]
-        {
-            { Example.LargeSharpRock, Example.LargeSharpRock,  Example.LargeSharpRock},
-            { Example.Stick, Example.Stick, Example.Stick },
-            { Example.Dirt, Example.Dirt, Example.Dirt }
-        }, new BlockStack(Example.Sand, 1)));
 
 
 

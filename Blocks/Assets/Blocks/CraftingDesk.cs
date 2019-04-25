@@ -8,46 +8,70 @@ public class CraftingDesk : InventoryListener {
 
 
     Recipe addedTmpItemWithRecipe;
+    Blocks.BlockOrItem prevCustomItem = null;
+
+
+    bool IsEmptyBlockStack(BlockStack blockStack)
+    {
+        return blockStack == null || (blockStack.Block == BlockValue.Air && blockStack.count == 0);
+    }
+
     public override void OnInventoryChange(InventoryGui inventoryGui, Inventory inventory, int numRows, int maxItems)
     {
-        if (inventory.resultBlocks == null)
+        if (inventory.resultBlocks == null || inventory.resultBlocks.Length == 0)
         {
-            Debug.LogWarning("crafting inventory has resultBlocks array = null, bailing");
+            Debug.LogWarning("crafting inventory has resultBlocks array = null or len = 0, bailing");
             return;
         }
+
         if (addedTmpItemWithRecipe != null)
         {
-            if (inventory.resultBlocks[0] == null)
-            {
-                if (addedTmpItemWithRecipe.InventoryMatchesRecipe(inventory, numRows, maxItems, useResources: true))
-                {
-
-                }
-                else
-                {
-                    Debug.LogWarning("took result but can't get the resources for it?");
-                }
-                addedTmpItemWithRecipe = null;
-            }
-            else
+            // if switched to something else, clear the result slots
+            if (prevCustomItem != inventoryGui.customBlockOwner)
             {
                 addedTmpItemWithRecipe = null;
                 inventory.resultBlocks[0] = null;
+                prevCustomItem = inventoryGui.customBlockOwner;
+            }
+            else
+            {
+                if (IsEmptyBlockStack(inventory.resultBlocks[0]))
+                {
+                    if (addedTmpItemWithRecipe.InventoryMatchesRecipe(inventory, numRows, maxItems, useResources: true))
+                    {
+
+                    }
+                    else
+                    {
+                        Debug.LogWarning("took result but can't get the resources for it?");
+                    }
+                    addedTmpItemWithRecipe = null;
+                }
+                else
+                {
+                    addedTmpItemWithRecipe = null;
+                    inventory.resultBlocks[0] = new BlockStack(BlockValue.Air, 0);
+                }
             }
         }
-        else if(inventory.resultBlocks[0] != null)
+        else if (!IsEmptyBlockStack(inventory.resultBlocks[0]))
         {
-            inventory.resultBlocks[0] = null;
+            inventory.resultBlocks[0] = new BlockStack(BlockValue.Air, 0);
         }
 
+        prevCustomItem = inventoryGui.customBlockOwner;
+
         Debug.Log("inventory changed, checking recipe");
-        foreach (Recipe recipe in recipes)
+        if (inventoryGui.customBlockOwner != null)
         {
-            if (recipe.InventoryMatchesRecipe(inventory, numRows, maxItems, false))
+            foreach (Recipe recipe in inventoryGui.customBlockOwner.recipes)
             {
-                addedTmpItemWithRecipe = recipe;
-                inventory.resultBlocks[0] = recipe.result.Copy();
-                break;
+                if (recipe.InventoryMatchesRecipe(inventory, numRows, maxItems, false))
+                {
+                    addedTmpItemWithRecipe = recipe;
+                    inventory.resultBlocks[0] = recipe.result.Copy();
+                    break;
+                }
             }
         }
     }

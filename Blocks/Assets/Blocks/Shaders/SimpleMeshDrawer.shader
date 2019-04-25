@@ -2,7 +2,7 @@
 
 // Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
 
-Shader "Blocks/SandDrawerSimple" {
+Shader "Blocks/SimpleMeshDrawer" {
 	Properties
 	{
 		_MainTex("Texture", 2D) = "white" {}
@@ -31,15 +31,6 @@ Shader "Blocks/SandDrawerSimple" {
 #pragma fragment fragment_shader
 		//#pragma multi_compile_fog
 
-	//	int ptCloudWidth;
-	//float ptCloudScale;
-	//float4 ptCloudOffset;
-
-
-	//unity defined variables
-	//float4 _FogColor;
-	//float _FogStart;
-	//float _FogEnd;
 
 	struct v2f {
 		float4 pos : SV_POSITION;
@@ -49,37 +40,32 @@ Shader "Blocks/SandDrawerSimple" {
 		//float fog : TEXCOORD1;
 	};
 
-	StructuredBuffer<float4> cubeOffsets;
-	StructuredBuffer<float4> cubeNormals;
 
-	StructuredBuffer<float4> uvOffsets;
+	struct MeshData
+	{
+		float4 pos;
+		float2 uv;
+		float2 color; // edited because I don't actually need the other two values, this would normally be float4
+	};
+	StructuredBuffer<MeshData> meshData;
+
 	sampler2D _MainTex;
 	float4 _MainTex_TexelSize;
 	float4 _MainTex_ST;
 
-
-	struct DrawingData {
-		int4 data;
-		float4 vertexPos[3];
-		float2 texOffset[3];
-	};
-
-	StructuredBuffer<DrawingData> DrawingThings;
 	float globalLightLevel;
 
 	//float4x4 localToWorld;
 	v2f vertex_shader(uint ida : SV_VertexID)
 	{
-		uint i1 = ida / 3;
-		uint i2 = ida % 3;
-		int lightLevelI = DrawingThings[i1].data.z;
-		float skyLightLevel = ((lightLevelI & 0xF0) >> 4) / 15.0f*globalLightLevel;
-		float blockLightLevel = (lightLevelI & 0xF)/15.0f;
+		MeshData myData = meshData[ida];
+		float skyLightLevel = myData.color.y*globalLightLevel;
+		float blockLightLevel = myData.color.x;
 		float lightLevel = max(skyLightLevel, blockLightLevel);
 		//float lightLevel = 1.0;
 		v2f o;
-		o.pos = UnityObjectToClipPos(DrawingThings[i1].vertexPos[i2]);
-		o.uv = DrawingThings[i1].texOffset[i2];
+		o.pos = UnityObjectToClipPos(myData.pos);
+		o.uv = myData.uv;
 		//o.uv = DrawingThings[ida].texOffset;f
 		o.lightLevel = lightLevel;
 		return o;

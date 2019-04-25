@@ -411,12 +411,12 @@ namespace Blocks
         public PathingChunk3(Chunk chunk, MobilityCriteria mobilityCriteria)
         {
             this.locationSpec = new PathingNodeBlockChunk(chunk.world,
-                chunk.cx * chunk.world.chunkSize,
-                chunk.cy * chunk.world.chunkSize,
-                chunk.cz * chunk.world.chunkSize,
-                chunk.cx * chunk.world.chunkSize + chunk.world.chunkSize - 1,
-                chunk.cy * chunk.world.chunkSize + chunk.world.chunkSize - 1,
-                chunk.cz * chunk.world.chunkSize + chunk.world.chunkSize - 1);
+                chunk.cx * chunk.world.chunkSizeX,
+                chunk.cy * chunk.world.chunkSizeY,
+                chunk.cz * chunk.world.chunkSizeZ,
+                chunk.cx * chunk.world.chunkSizeX + chunk.world.chunkSizeX - 1,
+                chunk.cy * chunk.world.chunkSizeY + chunk.world.chunkSizeY - 1,
+                chunk.cz * chunk.world.chunkSizeZ + chunk.world.chunkSizeZ - 1);
             this.chunk = chunk;
             this.world = chunk.world;
             this.data = new PatchingNodeBlockChunkData(locationSpec);
@@ -1138,12 +1138,12 @@ namespace Blocks
         public PathingChunk(Chunk chunk, MobilityCriteria mobilityCriteria)
         {
             this.locationSpec = new PathingNodeBlockChunk(chunk.world,
-                chunk.cx * chunk.world.chunkSize,
-                chunk.cy * chunk.world.chunkSize,
-                chunk.cz * chunk.world.chunkSize,
-                chunk.cx * chunk.world.chunkSize + chunk.world.chunkSize - 1,
-                chunk.cy * chunk.world.chunkSize + chunk.world.chunkSize - 1,
-                chunk.cz * chunk.world.chunkSize + chunk.world.chunkSize - 1);
+                chunk.cx * chunk.world.chunkSizeX,
+                chunk.cy * chunk.world.chunkSizeY,
+                chunk.cz * chunk.world.chunkSizeZ,
+                chunk.cx * chunk.world.chunkSizeX + chunk.world.chunkSizeX - 1,
+                chunk.cy * chunk.world.chunkSizeY + chunk.world.chunkSizeY - 1,
+                chunk.cz * chunk.world.chunkSizeZ + chunk.world.chunkSizeZ - 1);
             this.chunk = chunk;
             this.world = chunk.world;
             this.data = new PatchingNodeBlockChunkData(locationSpec);

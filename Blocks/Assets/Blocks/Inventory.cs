@@ -71,14 +71,15 @@ namespace Blocks
             {
                 return false;
             }
-            return (block.block == this.block && World.stackableSize.ContainsKey(this.block) && World.stackableSize[this.block] > count);
+            return (block.block == this.block && World.stackableSize.ContainsKey(this.block) && World.stackableSize[this.block] > count+block.count);
         }
 
+        // only adds and returns true if we can add the entire stack (this will break the code in blocks player when you left click to combine stack with finished product from crafting if this behavior is changed)
         public bool TryToAddToStack(BlockStack block)
         {
             if (CanAddToStack(block))
             {
-                this.count += 1;
+                this.count += block.count;
                 return true;
             }
             else
@@ -111,6 +112,12 @@ namespace Blocks
                         newBlocks[i] = blocks[i];
                     }
 
+                    // fill remaining with empty slots (need to do this cause unity chooses weird default values otherwise)
+                    for (int i = blocks.Length; i < newBlocks.Length; i++)
+                    {
+                        newBlocks[i] = new BlockStack(BlockValue.Air, 0);
+                    }
+
                     blocks = newBlocks;
                 }
                 // inventory shrunk, copy the contents over and throw any stuff that we can't fit
@@ -126,13 +133,13 @@ namespace Blocks
                     // try to squeeze stuff in any open spots
                     for (int i = newBlocks.Length; i < blocks.Length; i++)
                     {
-                        if (blocks[i] != null)
+                        if (!IsEmptyBlockStack(blocks[i]))
                         {
                             bool foundPlaceForThisItem = false;
                             // go through new inventory and look for open spots
                             for (int j = 0; j < newBlocks.Length; j++)
                             {
-                                if (newBlocks[j] == null)
+                                if (IsEmptyBlockStack(newBlocks[j]))
                                 {
                                     newBlocks[j] = blocks[i];
                                     foundPlaceForThisItem = true;
@@ -180,7 +187,7 @@ namespace Blocks
             // look for a stack
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] != null && blocks[i].block == block.block)
+                if (!IsEmptyBlockStack(blocks[i]) && blocks[i].block == block.block)
                 {
                     if (blocks[i].CanAddToStack(block))
                     {
@@ -192,7 +199,7 @@ namespace Blocks
             // no stack, look for empty slot
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] == null)
+                if (IsEmptyBlockStack(blocks[i]))
                 {
                     return true;
                 }
@@ -201,12 +208,19 @@ namespace Blocks
             // no empty spots or stacks we can put it in, return false
             return false;
         }
+
+        bool IsEmptyBlockStack(BlockStack blockStack)
+        {
+            return blockStack == null || (blockStack.Block == BlockValue.Air && blockStack.count == 0);
+        }
+
         public bool TryToAddBlock(BlockStack block)
         {
+            Debug.Log("trying to add block " + block.blockName + " with count " + block.count + " and block id " + block.block);
             // look for a stack
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] != null && blocks[i].block == block.block)
+                if (!IsEmptyBlockStack(blocks[i]) && blocks[i].block == block.block)
                 {
                     if (blocks[i].TryToAddToStack(block))
                     {
@@ -218,7 +232,7 @@ namespace Blocks
             // no stack, look for empty slot
             for (int i = 0; i < blocks.Length; i++)
             {
-                if (blocks[i] == null)
+                if (IsEmptyBlockStack(blocks[i]))
                 {
                     blocks[i] = block.Copy();
                     return true;
@@ -240,6 +254,10 @@ namespace Blocks
         {
             this.capacity = capacity;
             blocks = new BlockStack[capacity];
+            for (int i =0; i < blocks.Length; i++)
+            {
+                blocks[i] = new BlockStack(BlockValue.Air, 0);
+            }
         }
 
         public override string ToString()
