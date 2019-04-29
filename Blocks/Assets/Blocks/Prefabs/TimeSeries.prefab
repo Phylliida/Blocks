@@ -54,9 +54,9 @@ MonoBehaviour:
   maxVal: {fileID: 3583644450233315569}
   minVal: {fileID: 5201843860369015150}
   displayImage: {fileID: 8843572531677593228}
-  graphHeight: 25
-  historyLen: 1000
-  widthPerDataPoint: 10
+  graphHeight: 30
+  historyLen: 400
+  widthPerDataPoint: 2
   filledColor: {r: 0.6792453, g: 0.22748311, b: 0.22748311, a: 1}
   unfilledColor: {r: 0.15686187, g: 0.32881948, b: 0.7075472, a: 1}
 --- !u!1 &4021783830107388916
@@ -245,7 +245,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: -17}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8000348765982133522

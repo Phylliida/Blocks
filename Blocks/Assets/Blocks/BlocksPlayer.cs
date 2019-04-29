@@ -98,7 +98,7 @@ namespace Blocks
                 World.mainWorld.GetChunkCoordinatesAtPos(LVector3.FromUnityVector3(transform.position), out chunkPos);
                 for (int x = -2; x <= 2; x++)
                 {
-                    for (int y = -2; y <= 2; y++)
+                    for (int y = -1; y <= 1; y++)
                     {
                         for (int z = -2; z <= 2; z++)
                         {
@@ -114,7 +114,7 @@ namespace Blocks
                 MobilityCriteria mobilityCriteria = new MobilityCriteria(1,1,2,1);
                 for (int x = -2; x <= 2; x++)
                 {
-                    for (int y = -2; y <= 2; y++)
+                    for (int y = -1; y <= 1; y++)
                     {
                         for (int z = -2; z <= 2; z++)
                         {

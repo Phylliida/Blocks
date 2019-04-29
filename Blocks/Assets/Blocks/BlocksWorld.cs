@@ -483,6 +483,8 @@ namespace Blocks
             StoredToComputeBuffer
         }
 
+
+        public object renderingLock = new object();
         public RenderStatus renderStatus = RenderStatus.None;
         public List<RenderTriangle> triangles = null;
         
@@ -598,7 +600,10 @@ namespace Blocks
             {
                 chunk.chunkData.needToBeUpdated = false;
                 // new stuff
-                chunk.threadRenderingMe = 1000000;
+
+
+
+
                 if (chunk.chunkRenderer.triangles.Count > 0)
                 {
                     if (myMesh != null)
@@ -606,17 +611,11 @@ namespace Blocks
                         //myMesh.Dispose();
                         //myMesh = null;
                     }
-                    if (prevMesh != null)
-                    {
-                        prevMesh.Dispose();
-                        prevMesh = null;
-                    }
                     //myMesh = TrianglesToMesh(chunk.chunkRenderer.triangles);
                 }
                 numRendereredCubesTransparent = 0;
                 numRendereredCubesNotTransparent = chunk.chunkRenderer.triangles.Count;
                 chunk.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.StoredToComputeBuffer; // set it to up to date now
-                chunk.threadRenderingMe = -1;
                 // done new stuff
 
                 //chunk.world.blocksWorld.MakeChunkTrisAsync(chunk);
@@ -629,6 +628,7 @@ namespace Blocks
                 //numRendereredCubesTransparent = 0;
                 //needToFinishSync = true;
                 // if we don't have a parent, try to find it
+                /*
                 if (parentChunkRenderer == null)
                 {
                     long parentCX = chunk.world.divWithFloor(chunk.cx, 2) * 2;
@@ -649,9 +649,10 @@ namespace Blocks
                     // tell it to check again
                     parentChunkRenderer.maybeCombineDrawData = true;
                 }
+                */
             }
 
-
+            /*
             bool combineSpookers = false;
 
             // if we are a parent and aren't combining but something has updated, check to see if we can now
@@ -756,11 +757,14 @@ namespace Blocks
                     }
                 }
             }
+            */
 
-            if (justRenderUs && myMesh != null)
+            BlocksMesh curMyMesh = myMesh; // in case of threading stuffs
+
+            if (curMyMesh != null && curMyMesh.meshVertices.Length > 0)
             {
                 // new simpler stuff
-                chunk.world.blocksWorld.RenderChunkBlocksMesh(chunk, myMesh);
+                chunk.world.blocksWorld.RenderChunkBlocksMesh(chunk, curMyMesh);
 
                 /*
                 int numTimesToConsiderStatic = 20;
@@ -805,35 +809,78 @@ namespace Blocks
 
         public BlocksMesh TrianglesToMesh(List<RenderTriangle> triangles)
         {
-            List<Vector3> vertices = new List<Vector3>();
-            //List<int> indices = new List<int>();
-            List<Vector2> uvs = new List<Vector2>();
-            //List<Color> colors = new List<Color>();
-            List<Vector2> smallColors = new List<Vector2>();
+            MeshVertex[] meshVertices = new MeshVertex[triangles.Count*3];
             int ind = 0;
             for (int i = 0; i < triangles.Count; i++)
             {
+                int j = i * 3;
                 RenderTriangle curTri = triangles[i];
-                vertices.Add(new Vector3(curTri.vertex1.x, curTri.vertex1.y, curTri.vertex1.z));
-                vertices.Add(new Vector3(curTri.vertex2.x, curTri.vertex2.y, curTri.vertex2.z));
-                vertices.Add(new Vector3(curTri.vertex3.x, curTri.vertex3.y, curTri.vertex3.z));
-                uvs.Add(new Vector2(curTri.uv1.x, curTri.uv1.y));
-                uvs.Add(new Vector2(curTri.uv2.x, curTri.uv2.y));
-                uvs.Add(new Vector2(curTri.uv3.x, curTri.uv3.y));
                 float blockLight = (curTri.state3 & 0xF) / 15.0f;
                 float worldLight = ((curTri.state3 & 0xF0) >> 4) / 15.0f;
-                //colors.Add(new Color(blockLight, worldLight, 0, 0));
-                //colors.Add(new Color(blockLight, worldLight, 0, 0));
-                //colors.Add(new Color(blockLight, worldLight, 0, 0));
-                smallColors.Add(new Vector2(blockLight, worldLight));
-                smallColors.Add(new Vector2(blockLight, worldLight));
-                smallColors.Add(new Vector2(blockLight, worldLight));
-                //indices.Add(ind);
-                //indices.Add(ind+1);
-                //indices.Add(ind+2);
-                ind += 3;
+                meshVertices[j] = new MeshVertex()
+                {
+                    pos = new Float4()
+                    {
+                        x = curTri.vertex1.x,
+                        y = curTri.vertex1.y,
+                        z = curTri.vertex1.z,
+                        w = 1.0f
+                    },
+                    uv = new Float2()
+                    {
+                        x = curTri.uv1.x,
+                        y = curTri.uv1.y
+                    },
+                    color = new Float2()
+                    {
+                        x = blockLight,
+                        y = worldLight
+                    }
+                };
+                meshVertices[j + 1] = new MeshVertex()
+                {
+                    pos = new Float4()
+                    {
+                        x = curTri.vertex2.x,
+                        y = curTri.vertex2.y,
+                        z = curTri.vertex2.z,
+                        w = 1.0f
+                    },
+                    uv = new Float2()
+                    {
+                        x = curTri.uv2.x,
+                        y = curTri.uv2.y
+                    },
+                    color = new Float2()
+                    {
+                        x = blockLight,
+                        y = worldLight
+                    }
+                };
+
+                meshVertices[j + 2] = new MeshVertex()
+                {
+                    pos = new Float4()
+                    {
+                        x = curTri.vertex3.x,
+                        y = curTri.vertex3.y,
+                        z = curTri.vertex3.z,
+                        w = 1.0f
+                    },
+                    uv = new Float2()
+                    {
+                        x = curTri.uv3.x,
+                        y = curTri.uv3.y
+                    },
+                    color = new Float2()
+                    {
+                        x = blockLight,
+                        y = worldLight
+                    }
+                };
+
             }
-            BlocksMesh result = new BlocksMesh(vertices.ToArray(), uvs.ToArray(), smallColors.ToArray());
+            BlocksMesh result = new BlocksMesh(meshVertices);
             //Mesh result = new Mesh();
             //result.SetVertices(vertices);
             //result.SetUVs(0, uvs);
@@ -2809,7 +2856,7 @@ namespace Blocks
 
     public class Chunk
     {
-        public int threadRenderingMe = -1;
+        public volatile int threadRenderingMe = -1;
         public DoEveryMS needToDoAnotherTick = new DoEveryMS(10);
         public DoEveryMS needToDoRandomTick = new DoEveryMS(10);
         public List<PathingNode> pathingNodes = new List<PathingNode>();
@@ -2818,6 +2865,7 @@ namespace Blocks
         public bool valid = true;
         public long cx, cy, cz;
 
+        public long numTimesRendered = 0;
 
         public int indexUsingInBatch;
 
@@ -3861,7 +3909,7 @@ namespace Blocks
             }
             set
             {
-                this.threadRenderingMe = 100; // so we don't get renders until we are done 
+                //this.threadRenderingMe = 100; // so we don't get renders until we are done 
                 long relativeX = x - cx * chunkSizeX;
                 long relativeY = y - cy * chunkSizeY;
                 long relativeZ = z - cz * chunkSizeZ;
@@ -3936,7 +3984,7 @@ namespace Blocks
                 }
 
                 // we are all done with fiddling, allow other render threads to update us now
-                this.threadRenderingMe = -1;
+                //this.threadRenderingMe = -1;
             }
         }
 
@@ -5792,12 +5840,14 @@ namespace Blocks
                 RunWorldGenerationEvents(-10, -10, -10, 20);
                 GenerateChunk(0, 0, 0);
                 //return;
-                int viewDist = 0;
-                for (int i = -viewDist; i <= viewDist; i++)
+                int viewDistX = 0;
+                int viewDistY = 0;
+                int viewDistZ = 0;
+                for (int i = -viewDistX; i <= viewDistX; i++)
                 {
-                    for (int j = viewDist; j >= -viewDist; j--)
+                    for (int j = viewDistY; j >= -viewDistY; j--)
                     {
-                        for (int k = -viewDist; k <= viewDist; k++)
+                        for (int k = -viewDistZ; k <= viewDistZ; k++)
                         {
                             GenerateChunk(i, j, k);
                         }
@@ -6965,7 +7015,7 @@ namespace Blocks
         static int numWaiting = 0;
 
         public Thread helperThread;
-        public Thread helperThread2;
+        public List<Thread> helperThread2s;
 
         Chunk GetChunkf(long[] pos)
         {
@@ -7372,7 +7422,7 @@ namespace Blocks
             }
         }
 
-        public List<Tuple<Chunk, long>> GetChunksCloserThanRenderDist()
+        public List<Tuple<Chunk, long>> GetChunksCloserThanRenderDist(bool onMainThread=true, int maxDist=-1)
         {
             List<Chunk> allChunksHere = new List<Chunk>();
             Vector3[] blocksPlayerPositions = blocksWorld.playerPositions;
@@ -7386,29 +7436,59 @@ namespace Blocks
 
             List<Tuple<Chunk, long>> allChunksWithDists = new List<Tuple<Chunk, long>>();
 
+            if (maxDist == -1)
+            {
+                maxDist = blocksWorld.chunkRenderDist;
+            }
             for (int i = 0; i < allChunks.Count; i++)
             {
+                Chunk curChunk = allChunks[i];
                 long minPlayerDist = long.MaxValue;
                 foreach (LVector3 playerPosDivChunkSize in blocksPlayerLPositionsDivChunkSize)
                 {
                     long distInChunks =
-                        System.Math.Abs(allChunks[i].cx - playerPosDivChunkSize.x) +
-                        System.Math.Abs(allChunks[i].cy - playerPosDivChunkSize.y) +
-                        System.Math.Abs(allChunks[i].cz - playerPosDivChunkSize.z);
+                        System.Math.Abs(curChunk.cx - playerPosDivChunkSize.x) +
+                        System.Math.Abs(curChunk.cy - playerPosDivChunkSize.y) +
+                        System.Math.Abs(curChunk.cz - playerPosDivChunkSize.z);
 
                     minPlayerDist = System.Math.Min(distInChunks, minPlayerDist);
 
                 }
 
-                if (allChunks[i].mustRenderMe)
+                if (onMainThread)
                 {
-                    allChunksWithDists.Add(new Tuple<Chunk, long>(allChunks[i], minPlayerDist));
+                    if (curChunk.chunkRenderer.prevMesh != null)
+                    {
+                        curChunk.chunkRenderer.prevMesh.Dispose();
+                        curChunk.chunkRenderer.prevMesh = null;
+                    }
                 }
-                // don't render things further than render dist
-                else if (minPlayerDist <= blocksWorld.chunkRenderDist)
+
+                if (curChunk.mustRenderMe)
                 {
-                    allChunksWithDists.Add(new Tuple<Chunk, long>(allChunks[i], minPlayerDist));
+                    allChunksWithDists.Add(new Tuple<Chunk, long>(curChunk, minPlayerDist));
                 }
+                else
+                {
+                    // only render if closer than or equal to render dist
+                    if (minPlayerDist <= maxDist)
+                    {
+                        allChunksWithDists.Add(new Tuple<Chunk, long>(curChunk, minPlayerDist));
+                    }
+                    // otherwise, do some cleanup
+                    else
+                    {
+                        if (onMainThread)
+                        {
+                            if (curChunk.chunkRenderer.myMesh != null && curChunk.chunkRenderer.myMesh.drawData != null)
+                            {
+                                // dispose of draw data on the gpu if we aren't currently using it
+                                curChunk.chunkRenderer.myMesh.DisposeOfGPUData();
+                            }
+                        }
+                    }
+                }
+                
             }
 
             // Sort by closest to player(s), so those are rendered first
@@ -7433,7 +7513,7 @@ namespace Blocks
             long curMillis = PhysicsUtils.millis();
             List<Chunk> chunksNotFinished = new List<Chunk>();
 
-            List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist();
+            List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist(true);
 
             int tmp = 10000;
             foreach (Tuple<Chunk, long> chunkAndDist in chunksToRender)
@@ -7483,7 +7563,7 @@ namespace Blocks
                 {
                     elapsedTime += PhysicsUtils.millis() - timeBefore;
 
-                    if (frameId > 100 && elapsedTime > maxMillis)
+                    if (elapsedTime > maxMillis)
                     {
                         numAllowedToDoFullRender = 0;
                     }
@@ -7544,7 +7624,7 @@ namespace Blocks
             }
             // what direction is checked first: goes in a weird order after that
             globalPreference = (globalPreference + 1) % 4;
-            List<Tuple<Chunk, long>> allChunksHere = GetChunksCloserThanRenderDist();
+            List<Tuple<Chunk, long>> allChunksHere = GetChunksCloserThanRenderDist(false);
 
             // Randomly shuffle the order we update the chunks in, for the memes when they are tiled procedurally
             //Shuffle(allChunksHere);
@@ -7594,7 +7674,9 @@ namespace Blocks
 
                 if ((playerMovedChunks || playerChunk.distancesOfPlacesToExpand == null || playerChunk.distancesOfPlacesToExpand.Count > 0) && frameId % 10 == 0)
                 {
-                    int viewDist = 4;
+                    int viewDistX = World.mainWorld.blocksWorld.viewDistX;
+                    int viewDistY = World.mainWorld.blocksWorld.viewDistY;
+                    int viewDistZ = World.mainWorld.blocksWorld.viewDistZ;
 
                     long pcx = divWithFloorForChunkSizeX(playerPos.x);
                     long pcy = divWithFloorForChunkSizeY(playerPos.y);
@@ -7608,11 +7690,11 @@ namespace Blocks
                         List<Tuple<long, long, long, int>> positionsToGen = new List<Tuple<long, long, long, int>>();
 
                         // sort potential options by closeness
-                        for (int i = -viewDist; i <= viewDist; i++)
+                        for (int i = -viewDistX; i <= viewDistX; i++)
                         {
-                            for (int j = viewDist; j >= -viewDist; j--)
+                            for (int j = viewDistY; j >= -viewDistY; j--)
                             {
-                                for (int k = -viewDist; k <= viewDist; k++)
+                                for (int k = -viewDistZ; k <= viewDistZ; k++)
                                 {
                                     int dist = System.Math.Abs(i) + System.Math.Abs(j) + System.Math.Abs(k);
 
@@ -7643,7 +7725,7 @@ namespace Blocks
             }
 
             long frameTimeStart2 = PhysicsUtils.millis();
-            if (frameId > 100 || blocksWorld.optimize)
+            if (blocksWorld.optimize)
             {
                 maxTickSteps = 10000000;
                 maxGenerating = 10000000;
@@ -8420,39 +8502,36 @@ namespace Blocks
         }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MeshVertex
+    {
+        public Float4 pos;
+        public Float2 uv;
+        public Float2 color;
+    }
+    
     public class BlocksMesh : System.IDisposable
     {
-        public Vector3[] vertices;
-        public Vector2[] uvs;
-        public Vector2[] colors;
-        MeshVertex[] meshVertices;
+
+        public static List<BlocksMesh> allBuffersMade = new List<BlocksMesh>();
+        public static List<BlocksMesh> buffersNotRenderedThisFrame = new List<BlocksMesh>();
+
+        public MeshVertex[] meshVertices;
 
         public ComputeBuffer drawData;
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct MeshVertex
+        public BlocksMesh(MeshVertex[] meshVertices)
         {
-            public Float4 pos;
-            public Float2 uv;
-            public Float2 color;
+            this.meshVertices = meshVertices;
         }
 
         public BlocksMesh(Vector3[] vertices, Vector2[] uvs, Vector2[] colors)
         {
-            this.vertices = vertices;
-            this.uvs = uvs;
-            this.colors = colors;
-        }
-
-
-        public void MoveDataToGPU()
-        {
-            World.mainWorld.blocksWorld.drawDataMovedToGPUMemoryThisFrame += 1;
-            List<MeshVertex> meshVertices = new List<MeshVertex>(vertices.Length);
+            meshVertices = new MeshVertex[vertices.Length];
 
             for (int i = 0; i < vertices.Length; i++)
             {
-                meshVertices.Add(new MeshVertex()
+                meshVertices[i] = new MeshVertex()
                 {
                     pos = new Float4()
                     {
@@ -8471,21 +8550,24 @@ namespace Blocks
                         x = colors[i].x,
                         y = colors[i].y
                     }
-                });
+                };
             }
+        }
 
+
+        public void MoveDataToGPU()
+        {
+            World.mainWorld.blocksWorld.drawDataMovedToGPUMemoryThisFrame += 1;
 
             // cleanup old data if modified
-            if (drawData != null)
-            {
-                drawData.Dispose();
-                drawData = null;
-            }
+            DisposeOfGPUData();
 
             int sizeInBytesOfMeshVertex = Marshal.SizeOf(typeof(MeshVertex));
-            drawData = new ComputeBuffer(meshVertices.Count, sizeInBytesOfMeshVertex);
-            drawData.SetData<MeshVertex>(meshVertices, 0, 0, meshVertices.Count);
+            drawData = new ComputeBuffer(meshVertices.Length, sizeInBytesOfMeshVertex);
+            drawData.SetData(meshVertices, 0, 0, meshVertices.Length);
+            allBuffersMade.Add(this);
         }
+
 
         public void Render(Matrix4x4 transformMat, Material mat)
         {
@@ -8493,38 +8575,64 @@ namespace Blocks
             {
                 MoveDataToGPU();
             }
-            World.mainWorld.blocksWorld.drawCallsThisFrame += 1;
+            if (Camera.current == World.mainWorld.blocksWorld.mainCameraPlayer)
+            {
+                World.mainWorld.blocksWorld.drawCallsThisFrame += 1;
+                if (buffersNotRenderedThisFrame.Contains(this))
+                {
+                    buffersNotRenderedThisFrame.Remove(this);
+                }
+            }
             mat.SetBuffer("meshData", drawData);
             mat.SetPass(0);
-            World.mainWorld.blocksWorld.trianglesDrawnThisFrame += (vertices.Length / 3);
-            Graphics.DrawProcedural(MeshTopology.Triangles, vertices.Length);
+            World.mainWorld.blocksWorld.trianglesDrawnThisFrame += (meshVertices.Length / 3);
+            Graphics.DrawProcedural(MeshTopology.Triangles, meshVertices.Length);
         }
+
+        public void DisposeOfGPUData()
+        {
+            if (drawData != null)
+            {
+                allBuffersMade.Remove(this);
+                if (!drawData.IsValid())
+                {
+                    Debug.Log("going to clean up but already cleaned up, rip me");
+                }
+                else
+                {
+                    drawData.Dispose();
+                }
+                drawData = null;
+            }
+        }
+
 
         bool disposed = false;
         public void Dispose()
         {
-            if (!disposed)
-            {
-                disposed = true;
+            disposed = true;
+            DisposeOfGPUData();
 
-                if (drawData != null)
-                {
-                    drawData.Dispose();
-                    drawData = null;
-                }
-            }
         }
 
         ~BlocksMesh()
         {
-            Dispose();
+            if (!disposed)
+            {
+                Debug.Log("destructor called but dispose was never called");
+            }
+            //Dispose();
         }
     }
 
     public class BlocksWorld : MonoBehaviour
     {
 
-
+        public int viewDistX = 4;
+        public int viewDistY = 2;
+        public int viewDistZ = 4;
+        public TimeSeries renderFpsTimeSeries;
+        public TimeSeries fpsTimeSeries;
         public TimeSeries ticksPerFrameTimeSeries;
         public TimeSeries generationsPerFrameTimeSeries;
         public TimeSeries rendersPerFrameTimeSeries;
@@ -8532,6 +8640,7 @@ namespace Blocks
         public TimeSeries drawDataMovedToMemoryTimeSeries;
         public TimeSeries trianglesDrawnPerFrameTimeSeries;
 
+        public Camera mainCameraPlayer;
         public int lightingTicksThisFrame = 0;
         public int generationsThisFrame = 0;
         public int rendersThisFrame = 0;
@@ -8598,9 +8707,9 @@ namespace Blocks
 
         int[] worldData;
 
-        public const int chunkSizeX = 16;
-        public const int chunkSizeY = 16;
-        public const int chunkSizeZ = 16;
+        public const int chunkSizeX = 32;
+        public const int chunkSizeY = 128;
+        public const int chunkSizeZ = 32;
 
         public World world;
 
@@ -9469,10 +9578,12 @@ namespace Blocks
 
             if (World.DO_CPU_RENDER)
             {
+                world.helperThread2s = new List<Thread>();
                 int NUM_RENDER_THREADS = 4;
                 for (int i = 0;i < NUM_RENDER_THREADS; i++)
                 {
-                    world.helperThread2 = new Thread(() =>
+                    int myThreadI = i;
+                    Thread curThread = new Thread(() =>
                     {
                         while (threadKeepGoing)
                         {
@@ -9481,9 +9592,14 @@ namespace Blocks
 
                                 if (okToRunTicks)
                                 {
-                                    List<Tuple<Chunk, long>> allChunksHere = world.GetChunksCloserThanRenderDist();
+                                    int maxDist = -1;
+                                    if (myThreadI == 0) // dedicate first thread to only rendering chunks nearby players
+                                    {
+                                        maxDist = 1;
+                                    }
+                                    List<Tuple<Chunk, long>> allChunksHere = world.GetChunksCloserThanRenderDist(false, maxDist: maxDist);
 
-                                    if (i > 1)
+                                    if (myThreadI > NUM_RENDER_THREADS/2)
                                     {
                                         allChunksHere.Shuffle();
                                     }
@@ -9491,8 +9607,35 @@ namespace Blocks
                                     {
                                         if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
                                         {
-                                            chunk.a.threadRenderingMe = i;
+                                            // it is probably good to render, double check that someone hasn't changed that (by getting the lock before us)
+                                            lock (chunk.a.chunkRenderer.renderingLock)
+                                            {
+                                                if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
+                                                {
+                                                    chunk.a.threadRenderingMe = myThreadI;
+                                                }
+                                                // someone else got the lock before us, don't render, skip to the next chunk
+                                                else
+                                                {
+                                                    continue;
+                                                }
+                                            }
+
+                                            if (chunk.a.threadRenderingMe != myThreadI)
+                                            {
+                                                continue;
+                                            }
+                                            string stringVal = "thread " + myThreadI + " with " + chunk.a.threadRenderingMe + " is start rendering chunk " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " with render status " + chunk.a.chunkRenderer.renderStatus + " and num times rendered " + chunk.a.numTimesRendered;
+
+                                            if (chunk.a.threadRenderingMe != myThreadI)
+                                            {
+                                                Debug.Log("hmm issue " + chunk.a.threadRenderingMe + " ??");
+                                                continue;
+                                            }
+
+                                            //Debug.Log(stringVal);
                                             int numTris;
+                                            long curMillis = PhysicsUtils.millis();
                                             List<RenderTriangle> renderTriangles = world.blocksWorld.MakeChunkTrisInCPU(chunk.a, null, out numTris);
                                             chunk.a.chunkRenderer.triangles = renderTriangles;
                                             chunk.a.chunkRenderer.prevMesh = chunk.a.chunkRenderer.myMesh; // store prev mesh object so it can be disposed (if needed), this must be done on the render thread because of disposing of compute buffers
@@ -9500,9 +9643,21 @@ namespace Blocks
                                             {
                                                 chunk.a.chunkRenderer.myMesh = chunk.a.chunkRenderer.TrianglesToMesh(chunk.a.chunkRenderer.triangles);
                                             }
-                                            chunk.a.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.HasTriangles;
                                             rendersThisFrame += 1;
-                                            chunk.a.threadRenderingMe = -1;
+                                            if (renderTriangles.Count > 0)
+                                            {
+                                                //Debug.Log("thread " + myThreadI + " with " + chunk.a.threadRenderingMe + " is finished rendering  chunk " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " it took " + (PhysicsUtils.millis() - curMillis) + " millis" + " and started at millis " + curMillis + " and ended at millis " + PhysicsUtils.millis() + " and has " + renderTriangles.Count + " triangles " + " with render status " + chunk.a.chunkRenderer.renderStatus + " and has been rendered " + chunk.a.numTimesRendered + " times");
+                                            }
+                                            // we need to acquire this lock because otherwise another thread reading halfway through our writing could cause it to read the wrong value
+                                            lock (chunk.a.chunkRenderer.renderingLock)
+                                            {
+                                                chunk.a.chunkRenderer.renderStatus = ChunkRenderer.RenderStatus.HasTriangles;
+                                                if (chunk.a.threadRenderingMe == myThreadI)
+                                                {
+                                                    chunk.a.threadRenderingMe = -1;
+                                                }
+                                                chunk.a.numTimesRendered += 1;
+                                            }
                                         }
                                     }
                                 }
@@ -9517,14 +9672,14 @@ namespace Blocks
 
                     if (i == 0)
                     {
-                        world.helperThread2.Priority = System.Threading.ThreadPriority.Normal;
+                        curThread.Priority = System.Threading.ThreadPriority.Normal;
                     }
                     else
                     {
-
-                        world.helperThread2.Priority = System.Threading.ThreadPriority.Lowest;
+                        curThread.Priority = System.Threading.ThreadPriority.Lowest;
                     }
-                    world.helperThread2.Start();
+                    curThread.Start();
+                    world.helperThread2s.Add(curThread);
                 }
             }
 
@@ -9542,22 +9697,27 @@ namespace Blocks
 
 
         public int numChunksTotal;
+        public int drawCallsCount;
+        public int allBuffersMadeCount;
         bool okToRunTicks = true;
+
+        long millisAtStartOfLastUpdateFrame = 0;
         // Update is called once per frame
         void Update()
         {
-            generationsPerFrameTimeSeries.Push(generationsThisFrame);
-            ticksPerFrameTimeSeries.Push(lightingTicksThisFrame);
-            rendersPerFrameTimeSeries.Push(rendersThisFrame);
-            drawCallsTimeSeries.Push(drawCallsThisFrame);
-            drawDataMovedToMemoryTimeSeries.Push(drawDataMovedToGPUMemoryThisFrame);
-            trianglesDrawnPerFrameTimeSeries.Push((float)trianglesDrawnThisFrame/(float)drawCallsThisFrame);
-            lightingTicksThisFrame = 0;
-            generationsThisFrame = 0;
-            rendersThisFrame = 0;
-            drawCallsThisFrame = 0;
-            drawDataMovedToGPUMemoryThisFrame = 0;
-            trianglesDrawnThisFrame = 0;
+            
+
+            long curMillis = PhysicsUtils.millis();
+            long passedMillis = curMillis - millisAtStartOfLastUpdateFrame;
+            float fps = 1000.0f / (float)passedMillis;
+            float millisPassed = Time.deltaTime * 1000.0f;
+            if (millisPassed > 50)
+            {
+                millisPassed = 50;
+            }
+            fpsTimeSeries.Push(millisPassed);
+            millisAtStartOfLastUpdateFrame = curMillis;
+
             players = FindObjectsOfType<BlocksPlayer>();
 
             playerPositions = new Vector3[players.Length];
@@ -9630,6 +9790,7 @@ namespace Blocks
 
         public List<RenderTriangle> MakeChunkTrisInCPU(Chunk chunk, ComputeBuffer drawData, out int numTris, ref int numAllowedToDoFullRender, int offsetInDrawData = 0)
         {
+            /*
             if (drawData != null && chunk.chunkRenderer.triangles != null) // if we aren't making this on a seperate thread (drawData will be null in that case) and a seperate thread has already made our triangles for us, we don't need to!
             {
                 List<RenderTriangle> cachedTriangles = chunk.chunkRenderer.triangles;
@@ -9642,6 +9803,7 @@ namespace Blocks
                     return cachedTriangles;
                 }
             }
+            */
 
             if (drawData != null)
             {
@@ -10308,6 +10470,8 @@ namespace Blocks
         }
 
         LVector3 blockBreaking;
+        long millisAtStartOfLastRenderFrame;
+
         public void OnRenderObject()
         {
             world.Render();
@@ -10315,6 +10479,52 @@ namespace Blocks
             {
                 Tuple<LVector3, float> blockBreaking = blocksBreaking.Dequeue();
                 ActuallyRenderBlockBreaking(blockBreaking.a.x, blockBreaking.a.y, blockBreaking.a.z, 1.0f - blockBreaking.b);
+            }
+
+            if (Camera.current == World.mainWorld.blocksWorld.mainCameraPlayer)
+            {
+
+                long curMillis = PhysicsUtils.millis();
+                long passedMillis = curMillis - millisAtStartOfLastRenderFrame;
+                float fps = 1000.0f / (float)passedMillis;
+                renderFpsTimeSeries.Push(fps);
+                millisAtStartOfLastRenderFrame = curMillis;
+
+                generationsPerFrameTimeSeries.Push(generationsThisFrame);
+                ticksPerFrameTimeSeries.Push(lightingTicksThisFrame);
+                rendersPerFrameTimeSeries.Push(rendersThisFrame);
+                drawCallsTimeSeries.Push(drawCallsThisFrame);
+                drawDataMovedToMemoryTimeSeries.Push(drawDataMovedToGPUMemoryThisFrame);
+                drawCallsThisFrame = System.Math.Max(drawCallsThisFrame, 1); // make sure not 0 for averaging
+                trianglesDrawnPerFrameTimeSeries.Push((float)trianglesDrawnThisFrame / (float)drawCallsThisFrame);
+
+                drawCallsCount = drawCallsThisFrame;
+                allBuffersMadeCount = BlocksMesh.allBuffersMade.Count;
+                if (drawCallsThisFrame != BlocksMesh.allBuffersMade.Count)
+                {
+                    //Debug.Log("draw calls this frame = " + drawCallsThisFrame + " and allBuffersMade count = " + BlocksMesh.allBuffersMade.Count);
+                }
+
+                if (BlocksMesh.buffersNotRenderedThisFrame.Count > 0)
+                {
+                    for (int i =0; i < BlocksMesh.buffersNotRenderedThisFrame.Count; i++)
+                    {
+                        if(BlocksMesh.buffersNotRenderedThisFrame[i].drawData != null)
+                        {
+                            BlocksMesh.buffersNotRenderedThisFrame[i].DisposeOfGPUData();
+                            //Debug.Log("didn't draw buffer");
+                        }
+                    }
+                }
+
+                lightingTicksThisFrame = 0;
+                generationsThisFrame = 0;
+                rendersThisFrame = 0;
+                drawCallsThisFrame = 0;
+                drawDataMovedToGPUMemoryThisFrame = 0;
+                trianglesDrawnThisFrame = 0;
+                BlocksMesh.buffersNotRenderedThisFrame.Clear();
+                BlocksMesh.buffersNotRenderedThisFrame.AddRange(BlocksMesh.allBuffersMade);
             }
         }
 

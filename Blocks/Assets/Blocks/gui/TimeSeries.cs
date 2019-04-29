@@ -83,7 +83,9 @@ public class TimeSeries : MonoBehaviour
             maxVal = minVal + 1.0f;
         }
 
-        for (int i = 0; i < data.Count; i++)
+        float divVal = (float)System.Math.Max(1, (graphHeight - 1));
+        int dataLen = data.Count;
+        for (int i = 0; i < dataLen; i++)
         {
             float curP;
             if (maxVal == minVal)
@@ -94,20 +96,20 @@ public class TimeSeries : MonoBehaviour
             {
                curP = (data[i] - minVal) / (maxVal - minVal);
             }
-            
-            for (int j = 0; j < widthPerDataPoint; j++)
+
+            for (int y = 0; y < graphHeight; y++)
             {
-                for (int y = 0; y < graphHeight; y++)
+                float curY = y / divVal;
+                int curI = i * widthPerDataPoint + y * widthPerDataPoint * dataLen;
+                for (int j = 0; j < widthPerDataPoint; j++)
                 {
-                    int curI = i*widthPerDataPoint+j + y * widthPerDataPoint* data.Count;
-                    float curY = y / (float)System.Math.Max(1, (graphHeight - 1));
                     if (curY <= curP)
                     {
-                        colors[curI] = filledColor32;
+                        colors[curI+j] = filledColor32;
                     }
                     else
                     {
-                        colors[curI] = unfilledColor32;
+                        colors[curI+j] = unfilledColor32;
                     }
                 }
             }

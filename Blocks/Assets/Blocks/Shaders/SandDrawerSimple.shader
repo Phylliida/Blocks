@@ -15,7 +15,7 @@ Shader "Blocks/SandDrawerSimple" {
 		//Tags { "RenderType" = "Opaque" "LightMode" = "ForwardBase"}
 		Tags { "RenderType" = "Opaque"}
 		Pass{
-		//Lighting On
+		Lighting Off
 		ZWrite On
 		Cull Front
 		CGPROGRAM
