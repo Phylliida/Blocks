@@ -5,7 +5,8 @@ using UnityEngine;
 
 public class TimeSeries : MonoBehaviour
 {
-    List<float> data = new List<float>();
+    FastStackQueue<float> data;
+    int posInData = 0;
 
     public bool modified = false;
 
@@ -13,18 +14,19 @@ public class TimeSeries : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        // fill initially with zeros
-        while(data.Count < historyLen)
+        data = new FastStackQueue<float>(historyLen);
+
+        for (int i = 0; i < historyLen; i++)
         {
-            data.Add(0);
+            data.Enqueue(0);
         }
     }
 
 
     public void Push(float val)
     {
-        data.Add(val);
-        data.RemoveAt(0);
+        data.Dequeue();
+        data.Enqueue(val);
         modified = true;
     }
 
@@ -54,6 +56,12 @@ public class TimeSeries : MonoBehaviour
 
     void UpdateGraph()
     {
+
+        if (UnityEngine.Profiling.Profiler.enabled)
+        {
+            return;
+        }
+
         this.titleText.text = title;
         if (data != null && data.Count > 0)
         {

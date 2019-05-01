@@ -323,13 +323,18 @@ namespace Blocks
             return new LVector3(-a.x, -a.y, -a.z);
         }
 
+        public static long FloorToLong(float a)
+        {
+            return (long)System.Math.Floor(a);
+        }
+
         public static LVector3 FromUnityVector3(BlocksWorld world, Vector3 vec)
         {
-            return new LVector3((long)Mathf.Floor(vec.x / world.worldScale), (long)Mathf.Floor(vec.y / world.worldScale), (long)Mathf.Floor(vec.z / world.worldScale));
+            return new LVector3(FloorToLong(vec.x / world.worldScale), FloorToLong(vec.y / world.worldScale), FloorToLong(vec.z / world.worldScale));
         }
         public static LVector3 FromUnityVector3(Vector3 vec)
         {
-            return new LVector3((long)Mathf.Floor(vec.x / World.mainWorld.worldScale), (long)Mathf.Floor(vec.y / World.mainWorld.worldScale), (long)Mathf.Floor(vec.z / World.mainWorld.worldScale));
+            return new LVector3(FloorToLong(vec.x / World.mainWorld.worldScale), FloorToLong(vec.y / World.mainWorld.worldScale), FloorToLong(vec.z / World.mainWorld.worldScale));
         }
 
         public Vector3 BlockCentertoUnityVector3()

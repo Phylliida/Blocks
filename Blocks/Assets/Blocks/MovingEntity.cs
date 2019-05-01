@@ -248,9 +248,13 @@ namespace Blocks
         void Update()
         {
 
-            // don't do stuff on first three frames to let generation happen
-            if (Time.frameCount < 10)
+            // don't do stuff until world is loaded
+            if (World.mainWorld == null || !World.mainWorld.fullyLoaded)
             {
+                if (World.mainWorld != null)
+                {
+                    Debug.Log("loading status: " + World.mainWorld.loadingStatus);
+                }
                 return;
             }
 

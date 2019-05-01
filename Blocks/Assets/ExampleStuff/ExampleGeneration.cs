@@ -17,10 +17,10 @@ public class ExampleGeneration : GenerationClass
     public override void OnGenerationInit()
     {
         float minVal = 10.0f;
-        float maxVal = 100.0f;
+        float maxVal = 90.0f;
         //Simplex.Noise.Seed = 27;
         // scale 10 was what I used for pathing stuffs
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 1.0f, usesY: true);
+        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 5.0f, usesY: true);
         lavaProp = new ChunkProperty("lavaElevation", bedrockMax-40, bedrockMin-30, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);
@@ -32,12 +32,12 @@ public class ExampleGeneration : GenerationClass
         }
         else
         {
-            //world.AddChunkPropertyEvent(new ChunkPropertyEvent(200.0f, OnTree, 1));
+            world.AddChunkPropertyEvent(new ChunkPropertyEvent(200.0f, OnTree, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2600.0f, OnLavaTube, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2000.0f, OnRiver, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(3.0f, OnIronOre, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(5.0f, OnCoalOre, 1));
-            //world.AddWorldGenerationEvent(new WorldGenerationEvent(50.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
+            //world.AddWorldGenerationEvent(new WorldGenerationEvent(500.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(400.0f, OnCave, 2));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
         }

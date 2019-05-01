@@ -8,6 +8,7 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using ExtensionMethods;
 using Blocks.ExtensionMethods;
+
 namespace Blocks
 {
 
@@ -1246,24 +1247,28 @@ namespace Blocks
     public class ChunkBiomeData
     {
         public float altitude;
-        public long cx, cy, cz;
+        public long bx, by, bz;
+        public int biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ;
 
         public float[] chunkProperties;
         public ChunkProperties chunkPropertiesObj;
 
 
-        public ChunkBiomeData(ChunkProperties chunkProperties, long cx, long cy, long cz)
+        public ChunkBiomeData(ChunkProperties chunkProperties, int biomeDataSizeX, int biomeDataSizeY, int biomeDataSizeZ, long bx, long by, long bz)
         {
+            this.bx = bx;
+            this.by = by;
+            this.bz = bz;
+            this.biomeDataSizeX = biomeDataSizeX;
+            this.biomeDataSizeY = biomeDataSizeY;
+            this.biomeDataSizeZ = biomeDataSizeZ;
             this.chunkPropertiesObj = chunkProperties;
-            this.chunkProperties = chunkProperties.GenerateChunkPropertiesArr(cx, cy, cz);
-            this.cx = cx;
-            this.cy = cy;
-            this.cz = cz;
+            this.chunkProperties = chunkProperties.GenerateChunkPropertiesArr(bx, by, bz);
         }
 
         public void RunChunkPropertyEventsOnGeneration()
         {
-            chunkPropertiesObj.RunEvents(cx, cy, cz);
+            chunkPropertiesObj.RunEvents(bx, by, bz);
         }
 
         ChunkBiomeData x0y0z0,
@@ -1278,13 +1283,13 @@ namespace Blocks
         public void FetchNeighbors()
         {
             x0y0z0 = this;
-            x1y0z0 = World.mainWorld.GetChunkBiomeData(cx + 1, cy, cz);
-            x0y1z0 = World.mainWorld.GetChunkBiomeData(cx, cy + 1, cz);
-            x1y1z0 = World.mainWorld.GetChunkBiomeData(cx + 1, cy + 1, cz);
-            x0y0z1 = World.mainWorld.GetChunkBiomeData(cx, cy, cz + 1);
-            x1y0z1 = World.mainWorld.GetChunkBiomeData(cx + 1, cy, cz + 1);
-            x0y1z1 = World.mainWorld.GetChunkBiomeData(cx, cy + 1, cz + 1);
-            x1y1z1 = World.mainWorld.GetChunkBiomeData(cx + 1, cy + 1, cz + 1);
+            x1y0z0 = World.mainWorld.GetChunkBiomeData(bx + 1, by, bz);
+            x0y1z0 = World.mainWorld.GetChunkBiomeData(bx, by + 1, bz);
+            x1y1z0 = World.mainWorld.GetChunkBiomeData(bx + 1, by + 1, bz);
+            x0y0z1 = World.mainWorld.GetChunkBiomeData(bx, by, bz + 1);
+            x1y0z1 = World.mainWorld.GetChunkBiomeData(bx + 1, by, bz + 1);
+            x0y1z1 = World.mainWorld.GetChunkBiomeData(bx, by + 1, bz + 1);
+            x1y1z1 = World.mainWorld.GetChunkBiomeData(bx + 1, by + 1, bz + 1);
         }
 
         public float AverageBiomeData(long wx, long wy, long wz, ChunkProperty chunkProperty)
@@ -1294,18 +1299,15 @@ namespace Blocks
             {
                 FetchNeighbors();
             }
-            int chunkSizeX = World.mainWorld.chunkSizeX;
-            int chunkSizeY = World.mainWorld.chunkSizeY;
-            int chunkSizeZ = World.mainWorld.chunkSizeZ;
 
             // relative to us at 0
-            long relx = wx - cx * chunkSizeX;
-            long rely = wy - cy * chunkSizeY;
-            long relz = wz - cz * chunkSizeZ;
+            long relx = wx - bx * biomeDataSizeX;
+            long rely = wy - by * biomeDataSizeY;
+            long relz = wz - bz * biomeDataSizeZ;
 
-            float x0Weight = 1.0f - relx / (float)chunkSizeX;
-            float y0Weight = 1.0f - rely / (float)chunkSizeY;
-            float z0Weight = 1.0f - relz / (float)chunkSizeZ;
+            float x0Weight = 1.0f - relx / (float)biomeDataSizeX;
+            float y0Weight = 1.0f - rely / (float)biomeDataSizeY;
+            float z0Weight = 1.0f - relz / (float)biomeDataSizeZ;
 
             // average over x first
 
@@ -1493,6 +1495,7 @@ namespace Blocks
 
         private long wx, wy, wz;
         public long cx, cy, cz;
+        public long bx, by, bz;
 
         public long x { get { return wx; } private set { } }
         public long y { get { return wy; } private set { } }
@@ -1853,10 +1856,8 @@ namespace Blocks
         {
             this.wasModified = false;
             this.world = world;
-            this.wx = x;
-            this.wy = y;
-            this.wz = z;
-            World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
+            ReassignValues(x, y, z);
+
             if (World.mainWorld.GetChunk(cx, cy, cz) == null)
             {
                 isGenerated = false;
@@ -1865,8 +1866,6 @@ namespace Blocks
             {
                 isGenerated = true;
             }
-            needsAnotherTick = false;
-            myChunk = null;
         }
 
         public bool isGenerated = false;
@@ -1875,7 +1874,7 @@ namespace Blocks
         {
             if (chunkBiomeData == null)
             {
-                chunkBiomeData = World.mainWorld.GetChunkBiomeData(cx, cy, cz);
+                chunkBiomeData = World.mainWorld.GetChunkBiomeData(bx, by, bz);
             }
             return chunkBiomeData.AverageBiomeData(this.wx, this.wy, this.wz, chunkProperty);
         }
@@ -1900,6 +1899,21 @@ namespace Blocks
             this.wz = z;
             myChunk = null;
             World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out this.cx, out this.cy, out this.cz);
+
+            if (!isGenerated)
+            {
+                if (World.mainWorld.GetChunk(cx, cy, cz) == null)
+                {
+                    isGenerated = false;
+                }
+                else
+                {
+                    isGenerated = true;
+                }
+            }
+
+            World.mainWorld.GetBiomeCoordinatesAtPos(x, y, z, out this.bx, out this.by, out this.bz);
+
             //cachedBlock = world[wx, wy, wz, cx, cy, cz];
             //this.curBlockModifyStateBlock = world.blockModifyState;
         }
@@ -2628,14 +2642,14 @@ namespace Blocks
         public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback, int priority)
         {
             // pretend on 1d line cause that should be good enough
-            lambda = System.Math.Max(World.mainWorld.chunkSizeX, World.mainWorld.chunkSizeZ) * World.mainWorld.chunkSizeY / avgNumBlocksBetween;
+            lambda = System.Math.Max(World.mainWorld.biomeDataSizeX, World.mainWorld.biomeDataSizeZ) * World.mainWorld.biomeDataSizeY / avgNumBlocksBetween;
             this.eventCallback = eventCallback;
             this.priority = priority;
         }
 
-        public void Run(long cx, long cy, long cz)
+        public void Run(long bx, long by, long bz)
         {
-            LVector3[] points = GeneratePoints(cx, cy, cz);
+            LVector3[] points = GeneratePoints(bx, by, bz);
             foreach (LVector3 point in points)
             {
                 using (BlockData blockData = World.mainWorld.GetBlockData(point.x, point.y, point.z))
@@ -2646,15 +2660,15 @@ namespace Blocks
         }
 
         // see https://en.wikipedia.org/wiki/Poisson_distribution#Probability_of_events_for_a_Poisson_distribution
-        public LVector3[] GeneratePoints(long cx, long cy, long cz)
+        public LVector3[] GeneratePoints(long bx, long by, long bz)
         {
-            float val = Simplex.Noise.Generate(cx, cy, cz);
-            int chunkSizeX = World.mainWorld.chunkSizeX;
-            int chunkSizeY = World.mainWorld.chunkSizeY;
-            int chunkSizeZ = World.mainWorld.chunkSizeZ;
+            float val = Simplex.Noise.Generate(bx, by, bz);
+            int biomeDataSizeX = World.mainWorld.biomeDataSizeX;
+            int biomeDataSizeY = World.mainWorld.biomeDataSizeY;
+            int biomeDataSizeZ = World.mainWorld.biomeDataSizeZ;
             float totalPr = 0.0f;
             int factorial = 1;
-            int numPoints = System.Math.Max(chunkSizeX, chunkSizeZ) * chunkSizeY;
+            int numPoints = System.Math.Max(biomeDataSizeX, biomeDataSizeZ) * biomeDataSizeY;
             for (int i = 0; i < numPoints; i++)
             {
                 float prOfThat = (float)(System.Math.Pow(lambda, i) * System.Math.Exp(-lambda) / factorial);
@@ -2670,13 +2684,13 @@ namespace Blocks
                 }
             }
 
-            System.Random gen = new System.Random((int)(Simplex.Noise.Generate(cx, cy, cz) * 1000.0f));
+            System.Random gen = new System.Random((int)(Simplex.Noise.Generate(bx, by, bz) * 1000.0f));
             //Debug.Log(cx + " " + cy + " " + cz + " got numPoints = " + numPoints + " with lambda = " + lambda + " with chunkSizeX= " + chunkSizeX + " chunkSizeY=" + chunkSizeY + " chunkSizeZ=" + chunkSizeZ);
 
             LVector3[] resPoints = new LVector3[numPoints];
             for (int i = 0; i < resPoints.Length; i++)
             {
-                resPoints[i] = new LVector3(gen.Next(0, chunkSizeX) + cx* chunkSizeX, gen.Next(0, chunkSizeY) + cy * chunkSizeY, gen.Next(0, chunkSizeZ) + cz * chunkSizeZ);
+                resPoints[i] = new LVector3(gen.Next(0, biomeDataSizeX) + bx * biomeDataSizeX, gen.Next(0, biomeDataSizeY) + by * biomeDataSizeY, gen.Next(0, biomeDataSizeZ) + bz * biomeDataSizeZ);
             }
             return resPoints;
         }
@@ -2706,9 +2720,9 @@ namespace Blocks
 
         public void Run(long baseCX, long baseCY, long baseCZ, int numChunksWide)
         {
-            int chunkSizeX = World.mainWorld.chunkSizeX;
-            int chunkSizeY = World.mainWorld.chunkSizeY;
-            int chunkSizeZ = World.mainWorld.chunkSizeZ;
+            int chunkSizeX = World.mainWorld.biomeDataSizeX;
+            int chunkSizeY = World.mainWorld.biomeDataSizeY;
+            int chunkSizeZ = World.mainWorld.biomeDataSizeZ;
             int sideLength = numChunksWide * System.Math.Max(System.Math.Max(chunkSizeX, chunkSizeY), chunkSizeZ);
             float randSeed = Simplex.Noise.rand(baseCX, baseCY, baseCZ);
             System.Random gen = new System.Random((int)(randSeed * 10000.0f));
@@ -2748,9 +2762,9 @@ namespace Blocks
         // I'm doing a poisson distribution that will have expected number of points = the number of points that result in typical distance to closest other structure = desired val
         public int HowManyPointsToSample(double noiseVal, long cubeSideLength)
         {
-            int chunkSizeX = World.mainWorld.chunkSizeX;
-            int chunkSizeY = World.mainWorld.chunkSizeY;
-            int chunkSizeZ = World.mainWorld.chunkSizeZ;
+            int chunkSizeX = World.mainWorld.biomeDataSizeX;
+            int chunkSizeY = World.mainWorld.biomeDataSizeY;
+            int chunkSizeZ = World.mainWorld.biomeDataSizeZ;
             double totalPr = 0.0f;
             int factorial = 1;
             double lambda = PointsNeededForAverageDistance(avgNumBlocksBetween, cubeSideLength);
@@ -2793,15 +2807,15 @@ namespace Blocks
             this.index = 0;
         }
 
-        public float GenerateValue(long cx, long cy, long cz)
+        public float GenerateValue(long bx, long by, long bz)
         {
             if (usesY)
             {
-                return Simplex.Noise.Generate(cx / scale, cy / scale, cz / scale) * (maxVal - minVal) + minVal;
+                return Simplex.Noise.Generate(bx / scale, by / scale, bz / scale) * (maxVal - minVal) + minVal;
             }
             else
             {
-                return Simplex.Noise.Generate(cx / scale, 0, cz / scale) * (maxVal - minVal) + minVal;
+                return Simplex.Noise.Generate(bx / scale, 0, bz / scale) * (maxVal - minVal) + minVal;
             }
         }
     }
@@ -2821,20 +2835,20 @@ namespace Blocks
             chunkPropertyEvents.Add(chunkPropertyEvent);
         }
 
-        public void RunEvents(long cx, long cy, long cz)
+        public void RunEvents(long bx, long by, long bz)
         {
             foreach (ChunkPropertyEvent chunkEvent in chunkPropertyEvents)
             {
-                chunkEvent.Run(cx, cy,cz);
+                chunkEvent.Run(bx, by,bz);
             }
         }
 
-        public float[] GenerateChunkPropertiesArr(long cx, long cy, long cz)
+        public float[] GenerateChunkPropertiesArr(long bx, long by, long bz)
         {
             float[] res = new float[chunkProperties.Count];
             for (int i = 0; i < chunkProperties.Count; i++)
             {
-                res[i] = chunkProperties[i].GenerateValue(cx, cy, cz);
+                res[i] = chunkProperties[i].GenerateValue(bx, by, bz);
             }
             return res;
         }
@@ -2951,7 +2965,90 @@ namespace Blocks
         int chunkSizeX, chunkSizeY, chunkSizeZ;
         public ChunkData chunkData;
         public ChunkRenderer chunkRenderer;
-        public ChunkBiomeData chunkBiomeData;
+        public ChunkBiomeData[,,] chunkBiomeDatas;
+        public bool createdBiomeData = false;
+        public object biomeDataLock = new object();
+
+
+        public void InitBiomeData(ChunkProperties chunkProperties)
+        {
+            lock(biomeDataLock)
+            {
+                int biomeDatasPerX = chunkSizeX / world.biomeDataSizeX;
+                int biomeDatasPerY = chunkSizeY / world.biomeDataSizeY;
+                int biomeDatasPerZ = chunkSizeZ / world.biomeDataSizeZ;
+
+
+                chunkBiomeDatas = new ChunkBiomeData[biomeDatasPerX,biomeDatasPerY,biomeDatasPerZ];
+
+
+                long wx = cx * chunkSizeX;
+                long wy = cy * chunkSizeY;
+                long wz = cz * chunkSizeZ;
+
+                long baseBx = world.divWithFloor(wx, world.biomeDataSizeX);
+                long baseBy = world.divWithFloor(wy, world.biomeDataSizeY);
+                long baseBz = world.divWithFloor(wz, world.biomeDataSizeZ);
+
+                for (int bx = 0; bx < biomeDatasPerX; bx++)
+                {
+                    for (int by = 0; by < biomeDatasPerY; by++)
+                    {
+                        for (int bz = 0; bz < biomeDatasPerZ; bz++)
+                        {
+                            LVector3 biomePos = new LVector3(baseBx + bx, baseBy + by, baseBz + bz);
+                            if (world.ungeneratedBiomeDatas.ContainsKey(biomePos))
+                            {
+                                chunkBiomeDatas[bx, by, bz] = world.ungeneratedBiomeDatas[biomePos];
+                                world.ungeneratedBiomeDatas.Remove(biomePos);
+                            }
+                            else
+                            {
+                                chunkBiomeDatas[bx, by, bz] = new ChunkBiomeData(chunkProperties, world.biomeDataSizeX, world.biomeDataSizeY, world.biomeDataSizeZ, baseBx + bx, baseBy + by, baseBz + bz);
+                            }
+                        }
+                    }
+                }
+
+
+            }
+        }
+
+
+        public ChunkBiomeData GetBiomeData(long x, long y, long z)
+        {
+
+            long baseBx = world.divWithFloor(cx * chunkSizeX, world.biomeDataSizeX);
+            long baseBy = world.divWithFloor(cy * chunkSizeY, world.biomeDataSizeY);
+            long baseBz = world.divWithFloor(cz * chunkSizeZ, world.biomeDataSizeZ);
+
+            long bx = world.divWithFloor(x, world.biomeDataSizeX);
+            long by = world.divWithFloor(y, world.biomeDataSizeY);
+            long bz = world.divWithFloor(z, world.biomeDataSizeZ);
+
+            long relativeBx = bx - baseBx;
+            long relativeBy = by - baseBy;
+            long relativeBz = bz - baseBz;
+
+            if (cx == 0 && cy == 0 && (cz == 0 || cz == -1))
+            {
+                //Debug.Log("got spookers " + cx + " " + cy + " " + cz + " " + relativeBx + " " + relativeBy + " " + relativeBz + " " + baseBx + " " + baseBy + " " + baseBz + " " + x + " " + y + " " + z + " " + bx + " " + by + " " + bz);
+            }
+
+
+            if (chunkBiomeDatas == null)
+            {
+                Debug.LogWarning("chunk biome datas for chunk is null " + chunkBiomeDatas);
+                return null;
+            }
+            else if (chunkBiomeDatas[relativeBx, relativeBy, relativeBz] == null)
+            {
+                Debug.LogWarning("chunk biome datas specific value is null " + chunkBiomeDatas[relativeBx, relativeBy, relativeBz]);
+                return null;
+            }
+            return chunkBiomeDatas[relativeBx, relativeBy, relativeBz];
+        }
+
         public BlocksTouchingSky.BlockTouchingSkyChunk touchingSkyChunk;
 
         public Chunk[] posChunks;
@@ -3027,7 +3124,6 @@ namespace Blocks
             this.cx = chunkX;
             this.cy = chunkY;
             this.cz = chunkZ;
-            this.chunkBiomeData = new ChunkBiomeData(chunkProperties, cx, cy, cz);
             posChunks = new Chunk[] { null, null, null };
             negChunks = new Chunk[] { null, null, null };
 
@@ -3102,23 +3198,45 @@ namespace Blocks
 
                 // sort events by priority
 
-                chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents.Sort((x, y) =>
-                {
-                    return x.priority.CompareTo(y.priority);
-                });
+                long baseXPos = cx * chunkSizeX;
+                long baseYPos = cy * chunkSizeY;
+                long baseZPos = cz * chunkSizeZ;
 
-                // give each event a seperate structure with the correct priority so the filling in priority algorithms elsewhere will overwrite properly
-                foreach (ChunkPropertyEvent chunkPropertyEvent in chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents)
+                long baseBx = world.divWithFloor(baseXPos, world.biomeDataSizeX);
+                long baseBy = world.divWithFloor(baseYPos, world.biomeDataSizeY);
+                long baseBz = world.divWithFloor(baseZPos, world.biomeDataSizeZ);
+
+                int biomeDatasPerX = chunkSizeX / world.biomeDataSizeX;
+                int biomeDatasPerY = chunkSizeY / world.biomeDataSizeY;
+                int biomeDatasPerZ = chunkSizeZ / world.biomeDataSizeZ;
+                for (int bx = 0; bx < biomeDatasPerX; bx++)
                 {
-                    Structure myStructure2 = new Structure(cx + " " + cy + " " + cz, true, this, priority: chunkPropertyEvent.priority);
-                    world.worldGeneration.blockGetter = myStructure2;
-                    chunkPropertyEvent.Run(cx, cy, cz);
-                    if (!myStructure2.HasAllChunksGenerated())
+                    for (int by = 0; by < biomeDatasPerY; by++)
                     {
-                        world.AddUnfinishedStructure(myStructure2);
-                    }
+                        for (int bz = 0; bz < biomeDatasPerZ; bz++)
+                        {
+                            ChunkBiomeData chunkBiomeData = chunkBiomeDatas[bx, by, bz];
+                            chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents.Sort((x, y) =>
+                            {
+                                return x.priority.CompareTo(y.priority);
+                            });
 
+                            // give each event a seperate structure with the correct priority so the filling in priority algorithms elsewhere will overwrite properly
+                            foreach (ChunkPropertyEvent chunkPropertyEvent in chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents)
+                            {
+                                Structure myStructure2 = new Structure(cx + " " + cy + " " + cz + " " + bx + " " + by + " " + bz, true, this, priority: chunkPropertyEvent.priority);
+                                world.worldGeneration.blockGetter = myStructure2;
+                                chunkPropertyEvent.Run(bx+ baseBx, by+ baseBy, bz+ baseBz);
+                                if (!myStructure2.HasAllChunksGenerated())
+                                {
+                                    world.AddUnfinishedStructure(myStructure2);
+                                }
+
+                            }
+                        }
+                    }
                 }
+               
             }
             catch (System.Exception e)
             {
@@ -4890,6 +5008,32 @@ namespace Blocks
     public class World : BlockGetter
     {
 
+        public float loadingStatus
+        {
+            get
+            {
+                return System.Math.Min(1.0f, chunksLoaded / (float)numChunksNeededToLoad);
+            }
+            private set
+            {
+
+            }
+        }
+
+        public bool fullyLoaded
+        {
+            get
+            {
+                return loadingStatus == 1.0f;
+            }
+            private set
+            {
+
+            }
+        }
+        public int chunksLoaded = 0;
+        int numChunksNeededToLoad = 9;
+        public System.Diagnostics.Stopwatch startLoadStopwatch;
         public static bool DO_CPU_RENDER = true;
 
         static bool creativeMode_;
@@ -5254,7 +5398,7 @@ namespace Blocks
 
             allChunks.Clear();
             chunkCache.Clear();
-            ungeneratedChunkBiomeDatas.Clear();
+            ungeneratedBiomeDatas.Clear();
             lastChunk = null;
             string generatingStructuresPath = cleanedRootDir + "/generatingStructures.json";
             if (!File.Exists(generatingStructuresPath))
@@ -5717,11 +5861,32 @@ namespace Blocks
         public GenerationClass worldGeneration;
         public BlocksTouchingSky blocksTouchingSky;
 
-        public World(BlocksWorld blocksWorld, int chunkSizeX, int chunkSizeY, int chunkSizeZ, BlocksPack blocksPack)
+        public int biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ;
+
+        public World(BlocksWorld blocksWorld, int chunkSizeX, int chunkSizeY, int chunkSizeZ, int biomeDataSizeX, int biomeDataSizeY, int biomeDataSizeZ, BlocksPack blocksPack)
         {
+            startLoadStopwatch = new System.Diagnostics.Stopwatch();
+            startLoadStopwatch.Start();
+            this.biomeDataSizeX = biomeDataSizeX;
+            this.biomeDataSizeY = biomeDataSizeY;
+            this.biomeDataSizeZ = biomeDataSizeZ;
             this.chunkSizeX = chunkSizeX;
             this.chunkSizeY = chunkSizeY;
             this.chunkSizeZ = chunkSizeZ;
+
+            if (chunkSizeX % biomeDataSizeX != 0)
+            {
+                Debug.LogError("Error: biomeDataSizeX of " + biomeDataSizeX + " needs to divide chunkSizeX of " + chunkSizeX);
+            }
+            if (chunkSizeY % biomeDataSizeY != 0)
+            {
+                Debug.LogError("Error: biomeDataSizeY of " + biomeDataSizeY + " needs to divide chunkSizeY of " + chunkSizeY);
+            }
+            if (chunkSizeZ % biomeDataSizeZ != 0)
+            {
+                Debug.LogError("Error: biomeDataSizeZ of " + biomeDataSizeZ + " needs to divide chunkSizeZ of " + chunkSizeZ);
+            }
+
             blocksWorld.creativeMode = creativeMode_;
             this.worldGeneration = blocksPack.customGeneration;
             this.customBlocks = blocksPack.customBlocks;
@@ -5887,29 +6052,45 @@ namespace Blocks
         public delegate float ChunkValueGetter(ChunkBiomeData chunk);
 
 
-        Dictionary<LVector3, ChunkBiomeData> ungeneratedChunkBiomeDatas = new Dictionary<LVector3, ChunkBiomeData>();
+        public Dictionary<LVector3, ChunkBiomeData> ungeneratedBiomeDatas = new Dictionary<LVector3, ChunkBiomeData>();
 
 
         ChunkBiomeData lastRequest;
 
-        public ChunkBiomeData GetChunkBiomeData(long cx, long cy, long cz)
+        public ChunkBiomeData GetChunkBiomeData(long bx, long by, long bz)
         {
-            Chunk chunk = GetChunk(cx, cy, cz);
+            long worldX = bx * biomeDataSizeX;
+            long worldY = by * biomeDataSizeY;
+            long worldZ = bz * biomeDataSizeZ;
+
+            Chunk chunk = GetChunkAtPos(worldX, worldY, worldZ);
             if (chunk != null)
             {
-                return chunk.chunkBiomeData;
+                while (true)
+                {
+                    lock (chunk.biomeDataLock)
+                    {
+                        if (chunk.chunkBiomeDatas != null)
+                        {
+                            return chunk.GetBiomeData(worldX, worldY, worldZ);
+                        }
+                    }
+                    // we are in a seperate thread, wait for it to finish
+                    Debug.LogWarning("waiting for chunk " + chunk.cx + " " + chunk.cy + " " + chunk.cz + " to make biome data");
+                    Thread.Sleep(10);
+                }
             }
             else
             {
-                LVector3 chunkPos = new LVector3(cx, cy, cz);
-                if (ungeneratedChunkBiomeDatas.ContainsKey(chunkPos))
+                LVector3 biomePos = new LVector3(bx, by, bz);
+                if (ungeneratedBiomeDatas.ContainsKey(biomePos))
                 {
-                    return ungeneratedChunkBiomeDatas[chunkPos];
+                    return ungeneratedBiomeDatas[biomePos];
                 }
                 else
                 {
-                    ChunkBiomeData res = new ChunkBiomeData(chunkProperties, chunkPos.x, chunkPos.y, chunkPos.z);
-                    ungeneratedChunkBiomeDatas[chunkPos] = res;
+                    ChunkBiomeData res = new ChunkBiomeData(chunkProperties, biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ, bx, by, bz);
+                    ungeneratedBiomeDatas[biomePos] = res;
                     return res;
                 }
             }
@@ -5918,14 +6099,14 @@ namespace Blocks
 
         public float AverageChunkValues(long x, long y, long z, ChunkProperty chunkProperty)
         {
-            long cx, cy, cz;
-            GetChunkCoordinatesAtPos(x, y, z, out cx, out cy, out cz);
-            return AverageChunkValues(x, y, z, cx, cy, cz, chunkProperty);
+            long bx, by, bz;
+            GetBiomeCoordinatesAtPos(x, y, z, out bx, out by, out bz);
+            return AverageChunkValues(x, y, z, bx, by, bz, chunkProperty);
         }
 
-        public float AverageChunkValues(long x, long y, long z, long cx, long cy, long cz, ChunkProperty chunkProperty)
+        public float AverageChunkValues(long x, long y, long z, long bx, long by, long bz, ChunkProperty chunkProperty)
         {
-            ChunkBiomeData chunkBiomeData = GetChunkBiomeData(cx, cy, cz);
+            ChunkBiomeData chunkBiomeData = GetChunkBiomeData(bx, by, bz);
             return chunkBiomeData.AverageBiomeData(x, y, z, chunkProperty);
             /*
             ChunkBiomeData chunkx2z1 = GetChunkBiomeData(divWithCeil(x, chunkSizeX), divWithFloor(y, chunkSizeY), divWithFloor(z, chunkSizeZ));
@@ -7202,11 +7383,10 @@ namespace Blocks
             allChunks.Add(chunk);
 
             LVector3 chunkPosVec = new LVector3(chunk.cx, chunk.cy, chunk.cz);
-            if (ungeneratedChunkBiomeDatas.ContainsKey(chunkPosVec))
-            {
-                chunk.chunkBiomeData = ungeneratedChunkBiomeDatas[chunkPosVec];
-                ungeneratedChunkBiomeDatas.Remove(chunkPosVec);
-            }
+
+
+            chunk.InitBiomeData(chunkProperties);
+
             /*
             List<Structure> leftoverStructures = new List<Structure>();
             foreach (Structure structure in unfinishedStructures)
@@ -7321,6 +7501,23 @@ namespace Blocks
             cx = divWithFloorForChunkSizeX(x);
             cy = divWithFloorForChunkSizeY(y);
             cz = divWithFloorForChunkSizeZ(z);
+        }
+
+
+        public void GetBiomeCoordinatesAtPos(LVector3 worldPos, out LVector3 biomePos)
+        {
+            long bx = divWithFloor(worldPos.x, biomeDataSizeX);
+            long by = divWithFloor(worldPos.y, biomeDataSizeY);
+            long bz = divWithFloor(worldPos.z, biomeDataSizeZ);
+            biomePos = new LVector3(bx, by, bz);
+        }
+
+
+        public void GetBiomeCoordinatesAtPos(long x, long y, long z, out long bx, out long by, out long bz)
+        {
+            bx = divWithFloor(x, biomeDataSizeX);
+            by = divWithFloor(y, biomeDataSizeY);
+            bz = divWithFloor(z, biomeDataSizeZ);
         }
 
 
@@ -7497,6 +7694,7 @@ namespace Blocks
             return allChunksWithDists;
         }
 
+        System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
         public void Render()
         {
             long maxMillis = 1000 / 60;
@@ -7508,9 +7706,9 @@ namespace Blocks
                 numAllowedToDoFullRender = 10000;
             }
             // render non-transparent
+            stopwatch.Reset();
+            stopwatch.Start();
 
-
-            long curMillis = PhysicsUtils.millis();
             List<Chunk> chunksNotFinished = new List<Chunk>();
 
             List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist(true);
@@ -7522,7 +7720,6 @@ namespace Blocks
                 Chunk chunk = chunkAndDist.a;
                 int prev = numAllowedToDoFullRender;
                 int prevTemp = tmp;
-                long timeBefore = PhysicsUtils.millis();
                 if (chunkAndDist.b < 1)
                 {
                     if(chunk.chunkRenderer.RenderAsync(false, chunk, ref tmp))
@@ -7540,7 +7737,7 @@ namespace Blocks
                         //chunksNotFinished.Add(chunk);
                     }
                 }
-
+                
                 if (!World.DO_CPU_RENDER)
                 {
                     if (chunksNotFinished.Count >= blocksWorld.chunkBlockDatas.Length)
@@ -7553,7 +7750,7 @@ namespace Blocks
                     }
                 }
                 
-                if (PhysicsUtils.millis() - curMillis > 1000/60.0f)
+                if (stopwatch.ElapsedMilliseconds > 1000/60.0f)
                 {
                     numAllowedToDoFullRender = 0;
                     tmp = 0;
@@ -7561,9 +7758,7 @@ namespace Blocks
 
                 if (numAllowedToDoFullRender != prev || prevTemp != tmp)
                 {
-                    elapsedTime += PhysicsUtils.millis() - timeBefore;
-
-                    if (elapsedTime > maxMillis)
+                    if (stopwatch.ElapsedMilliseconds > maxMillis)
                     {
                         numAllowedToDoFullRender = 0;
                     }
@@ -7584,6 +7779,7 @@ namespace Blocks
                 }
             }
             return;
+            /*
             // render transparent
             foreach (Chunk chunk in allChunks)
             {
@@ -7594,6 +7790,7 @@ namespace Blocks
                 }
             }
             Debug.Log("has total of " + elapsedTime + " elapsed time");
+            */
         }
 
         public static void Shuffle<T>(List<T> arr)
@@ -8573,10 +8770,12 @@ namespace Blocks
         {
             if (drawData == null)
             {
+                World.mainWorld.chunksLoaded += 1;
                 MoveDataToGPU();
             }
             if (Camera.current == World.mainWorld.blocksWorld.mainCameraPlayer)
             {
+
                 World.mainWorld.blocksWorld.drawCallsThisFrame += 1;
                 if (buffersNotRenderedThisFrame.Contains(this))
                 {
@@ -8586,7 +8785,7 @@ namespace Blocks
             mat.SetBuffer("meshData", drawData);
             mat.SetPass(0);
             World.mainWorld.blocksWorld.trianglesDrawnThisFrame += (meshVertices.Length / 3);
-            Graphics.DrawProcedural(MeshTopology.Triangles, meshVertices.Length);
+            Graphics.DrawProceduralNow(MeshTopology.Triangles, meshVertices.Length);
         }
 
         public void DisposeOfGPUData()
@@ -8707,9 +8906,13 @@ namespace Blocks
 
         int[] worldData;
 
-        public const int chunkSizeX = 32;
+        public const int chunkSizeX = 64;
         public const int chunkSizeY = 128;
-        public const int chunkSizeZ = 32;
+        public const int chunkSizeZ = 64;
+
+        public const int biomeDataSizeX = 16;
+        public const int biomeDataSizeY = 16;
+        public const int biomeDataSizeZ = 16;
 
         public World world;
 
@@ -9543,7 +9746,7 @@ namespace Blocks
             //Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
             //customBlocks[BlockValue.GRASS] = new Grass();
             //GenerationClass customGeneration = new ExampleGeneration();
-            world = new World(this, chunkSizeX, chunkSizeY, chunkSizeZ, blocksPack);
+            world = new World(this, chunkSizeX, chunkSizeY, chunkSizeZ, biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ, blocksPack);
 
             lastTick = 0;
 
@@ -10370,7 +10573,7 @@ namespace Blocks
                 breakingMaterial.SetFloat("ptCloudScale", worldScale);
                 breakingMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                 breakingMaterial.SetPass(0);
-                Graphics.DrawProcedural(MeshTopology.Triangles, 1 * (36));
+                Graphics.DrawProceduralNow(MeshTopology.Triangles, 1 * (36));
             }
             renderTransform.transform.position -= offset;
         }
@@ -10455,7 +10658,7 @@ namespace Blocks
                     //triMaterial.SetFloat("ptCloudScale", worldScale);
                     //triMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                     triMaterial.SetPass(0);
-                    Graphics.DrawProcedural(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent*3);
+                    Graphics.DrawProceduralNow(MeshTopology.Triangles, chunk.chunkRenderer.numRendereredCubesNotTransparent*3);
 
 
                     if (chunk.chunkRenderer.hasCustomBlocks)
