@@ -14,6 +14,11 @@ public class Light : Block
         destroyBlock = true;
     }
 
+    public override int ConstantLightEmitted()
+    {
+        return 15;
+    }
+
     public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
     {
         return Example.Light;

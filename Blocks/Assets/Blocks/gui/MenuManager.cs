@@ -113,6 +113,10 @@ namespace Blocks
 
         public void OpenMainMenu()
         {
+            if (blocksWorld != null)
+            {
+                Debug.LogWarning("warning: opened menu: why u do this?");
+            }
             HideAllMenus();
             mainMenu.enabled = true;
             curMenu = MenuStatus.MainMenu;

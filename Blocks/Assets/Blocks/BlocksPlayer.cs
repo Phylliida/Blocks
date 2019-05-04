@@ -382,12 +382,23 @@ namespace Blocks
                         {
                             if (World.mainWorld.AllowedtoPlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.axisHitFrom, hitResults.blockBeforeHit))
                             {
-                                BlockValue blockPlacing = World.mainWorld.PrePlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit, hitResults.axisHitFrom);
+                                int lightProduced;
+                                BlockValue blockPlacing = World.mainWorld.PrePlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit, hitResults.axisHitFrom, out lightProduced);
                                 BlockData.BlockRotation rotation = PhysicsUtils.AxisToRotation(hitResults.axisHitFrom);
                                 using (BlockData dat = World.mainWorld.GetBlockData(hitResults.blockBeforeHit.x, hitResults.blockBeforeHit.y, hitResults.blockBeforeHit.z))
                                 {
+                                    dat.lightProduced = 0;
                                     dat.block = blockPlacing;
+                                    dat.lightProduced = lightProduced;
                                     dat.rotation = rotation;
+                                }
+                                Chunk hitChunk = World.mainWorld.GetChunkAtPos(hitResults.blockBeforeHit.x, hitResults.blockBeforeHit.y, hitResults.blockBeforeHit.z);
+                                if (hitChunk != null)
+                                {
+                                    hitChunk.AddLightingUpdatesToBlock(hitResults.blockBeforeHit);
+                                    hitChunk.AddLightingUpdatesToNeighbors(hitResults.blockBeforeHit);
+                                    hitChunk.needToUpdateLighting = true;
+                                    hitChunk.chunkData.needToBeUpdated = true;
                                 }
                                 inventory.blocks[inventoryGui.selection].count -= 1;
                                 if (inventory.blocks[inventoryGui.selection].count <= 0)

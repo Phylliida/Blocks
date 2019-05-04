@@ -16,11 +16,11 @@ public class ExampleGeneration : GenerationClass
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
-        float minVal = 10.0f;
-        float maxVal = 90.0f;
+        float minVal = 0.0f;
+        float maxVal = 300.0f;
         //Simplex.Noise.Seed = 27;
         // scale 10 was what I used for pathing stuffs
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 5.0f, usesY: true);
+        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 1.0f, usesY: true);
         lavaProp = new ChunkProperty("lavaElevation", bedrockMax-40, bedrockMin-30, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
         world.AddChunkProperty(elevationProp);

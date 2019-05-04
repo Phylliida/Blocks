@@ -510,12 +510,9 @@ namespace Blocks
         public bool maybeCombineDrawData = true;
         ChunkRenderer[] otherChunks;
 
-        public ChunkRenderer(Chunk chunk, int chunkSizeX, int chunkSizeY, int chunkSizeZ)
+        public ChunkRenderer(Chunk chunk)
         {
             this.chunk = chunk;
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
             InitStuff();
         }
 
@@ -599,7 +596,10 @@ namespace Blocks
             }
             if (chunk.chunkData.needToBeUpdated && (numAllowedToDoFullRender > 0 && (chunk.chunkRenderer.triangles != null && renderStatus == RenderStatus.HasTriangles)) && chunk.threadRenderingMe == -1)
             {
-                chunk.chunkData.needToBeUpdated = false;
+                if (!chunk.needToUpdateLighting)
+                {
+                    chunk.chunkData.needToBeUpdated = false;
+                }
                 // new stuff
 
 
@@ -966,13 +966,14 @@ namespace Blocks
         public class BlockTouchingSkyChunk
         {
             public long cx, cz;
-            public int chunkSizeX, chunkSizeY, chunkSizeZ;
+
+            public const int chunkSizeX = World.chunkSizeX;
+            public const int chunkSizeY = World.chunkSizeY;
+            public const int chunkSizeZ = World.chunkSizeZ;
+
             public long[,] highestBlocks;
-            public BlockTouchingSkyChunk(long cx, long cz, int chunkSizeX, int chunkSizeY, int chunkSizeZ)
+            public BlockTouchingSkyChunk(long cx, long cz)
             {
-                this.chunkSizeX = chunkSizeX;
-                this.chunkSizeY = chunkSizeY;
-                this.chunkSizeZ = chunkSizeZ;
                 this.cx = cx;
                 this.cz = cz;
                 highestBlocks = new long[chunkSizeX, chunkSizeZ];
@@ -1011,7 +1012,7 @@ namespace Blocks
             BlockTouchingSkyChunk skyChunk = GetSkyChunk(cx, cz);
             if (skyChunk == null)
             {
-                skyChunk = new BlockTouchingSkyChunk(cx, cz, world.chunkSizeX, world.chunkSizeY, world.chunkSizeZ);
+                skyChunk = new BlockTouchingSkyChunk(cx, cz);
                 if (!xLookup.ContainsKey(cx))
                 {
                     xLookup[cx] = new List<BlockTouchingSkyChunk>();
@@ -1128,8 +1129,8 @@ namespace Blocks
             SetNotTouchingSky(x, y, z);
             long cx = world.divWithFloorForChunkSizeX(x);
             long cz = world.divWithFloorForChunkSizeZ(z);
-            long relativeX = x - cx * world.chunkSizeX;
-            long relativeZ = z - cz * world.chunkSizeZ;
+            long relativeX = x - cx * World.chunkSizeX;
+            long relativeZ = z - cz * World.chunkSizeZ;
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
             long curY = y;
             long cy = world.divWithFloorForChunkSizeY(y);
@@ -1157,7 +1158,7 @@ namespace Blocks
                     // if we hopped down a chunk or more (due to the chunk inbetween not being generated), start searching at the ceiling of that chunk
                     if (hoppedDown)
                     {
-                        curY = curCy * world.chunkSizeY + world.chunkSizeY - 1;
+                        curY = curCy * World.chunkSizeY + World.chunkSizeY - 1;
                     }
                     cy = curCy;
                 }
@@ -1179,8 +1180,8 @@ namespace Blocks
         {
             long cx = world.divWithFloorForChunkSizeX(x);
             long cz = world.divWithFloorForChunkSizeZ(z);
-            long relativeX = x - cx * world.chunkSizeX;
-            long relativeZ = z - cz * world.chunkSizeZ;
+            long relativeX = x - cx * World.chunkSizeX;
+            long relativeZ = z - cz * World.chunkSizeZ;
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(cx, cz);
             long curHighestY = skyChunk.highestBlocks[relativeX, relativeZ];
             if (y > curHighestY)
@@ -1196,15 +1197,15 @@ namespace Blocks
         public void GeneratedChunk(Chunk chunk)
         {
             BlockTouchingSkyChunk skyChunk = GetOrCreateSkyChunk(chunk.cx, chunk.cz);
-            long chunkX = chunk.cx * world.chunkSizeX;
-            long chunkY = chunk.cy * world.chunkSizeY;
-            long chunkZ = chunk.cz * world.chunkSizeZ;
-            for (long x = 0; x < world.chunkSizeX; x++)
+            long chunkX = chunk.cx * World.chunkSizeX;
+            long chunkY = chunk.cy * World.chunkSizeY;
+            long chunkZ = chunk.cz * World.chunkSizeZ;
+            for (long x = 0; x < World.chunkSizeX; x++)
             {
-                for (long z = 0; z < world.chunkSizeZ; z++)
+                for (long z = 0; z < World.chunkSizeZ; z++)
                 {
                     long curHighestY = skyChunk.highestBlocks[x, z];
-                    long highestYInNewChunk = chunk.cy * world.chunkSizeY + world.chunkSizeY - 1;
+                    long highestYInNewChunk = chunk.cy * World.chunkSizeY + World.chunkSizeY - 1;
                     // we already have something higher than the top of this chunk, ignore this xz position
                     if (highestYInNewChunk < curHighestY)
                     {
@@ -1213,7 +1214,7 @@ namespace Blocks
                     else
                     {
                         // there might be something higher, check the column of blocks starting at the roof of the chunk
-                        for (long y = world.chunkSizeY-1; y >= 0; y--)
+                        for (long y = World.chunkSizeY-1; y >= 0; y--)
                         {
                             long curY = chunkY + y;
                             // we are now below the known highest, we are done
@@ -1381,7 +1382,7 @@ namespace Blocks
             {
                 int skyLighting, blockLighting,touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
                 return blockLighting;
             }
             private set
@@ -1397,7 +1398,7 @@ namespace Blocks
 
                 int skyLighting, blockLighting, touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
                 return skyLighting;
             }
             private set
@@ -1413,7 +1414,7 @@ namespace Blocks
 
                 int skyLighting, blockLighting, touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
                 return touchingSkyFlags;
             }
             private set
@@ -1429,7 +1430,7 @@ namespace Blocks
 
                 int skyLighting, blockLighting, touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
                 return touchingSky;
             }
             private set
@@ -1445,7 +1446,7 @@ namespace Blocks
 
                 int skyLighting, blockLighting, touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
 
                 if (makingBlockLight)
                 {
@@ -1461,17 +1462,17 @@ namespace Blocks
 
                 int skyLighting, blockLighting, touchingSkyFlags, producedLighting;
                 bool touchingSky, touchingTransparentOrAir, makingBlockLight;
-                myChunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
+                Chunk.GetLightingValues(lightingState, out skyLighting, out blockLighting, out touchingSky, out touchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedLighting);
 
                 // clamp from 0 to 15 (otherwise the flags will overflow and it'll overwrite other irrelevant lighting data since only 4 bits are alloted to this field)
                 int clampedValue = System.Math.Min(15, System.Math.Max(0, value));
                 if (value > 0)
                 {
-                    lightingState = myChunk.PackLightingValues(skyLighting, System.Math.Max(blockLighting, clampedValue), touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: true, producedLight: clampedValue);
+                    lightingState = Chunk.PackLightingValues(skyLighting, System.Math.Max(blockLighting, clampedValue), touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: true, producedLight: clampedValue);
                 }
                 else
                 {
-                   lightingState = myChunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: false, producedLight: 0);
+                   lightingState = Chunk.PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: false, producedLight: 0);
                 }
             }
         }
@@ -2243,6 +2244,11 @@ namespace Blocks
             
         }
 
+        public override int ConstantLightEmitted()
+        {
+            return 0;
+        }
+
         public override void OnTickStart()
         {
 
@@ -2610,6 +2616,7 @@ namespace Blocks
 
         public abstract void OnTickStart();
         public abstract BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos);
+        public abstract int ConstantLightEmitted();
         public abstract bool CanConnect(BlockData block, BlockData other, bool onSameYPlane, int numConnectedSoFar);
         public abstract bool CanConnect();
 
@@ -2642,7 +2649,7 @@ namespace Blocks
         public ChunkPropertyEvent(float avgNumBlocksBetween, ChunkPropertyEventCallback eventCallback, int priority)
         {
             // pretend on 1d line cause that should be good enough
-            lambda = System.Math.Max(World.mainWorld.biomeDataSizeX, World.mainWorld.biomeDataSizeZ) * World.mainWorld.biomeDataSizeY / avgNumBlocksBetween;
+            lambda = System.Math.Max(World.biomeDataSizeX, World.biomeDataSizeZ) * World.biomeDataSizeY / avgNumBlocksBetween;
             this.eventCallback = eventCallback;
             this.priority = priority;
         }
@@ -2663,9 +2670,9 @@ namespace Blocks
         public LVector3[] GeneratePoints(long bx, long by, long bz)
         {
             float val = Simplex.Noise.Generate(bx, by, bz);
-            int biomeDataSizeX = World.mainWorld.biomeDataSizeX;
-            int biomeDataSizeY = World.mainWorld.biomeDataSizeY;
-            int biomeDataSizeZ = World.mainWorld.biomeDataSizeZ;
+            int biomeDataSizeX = World.biomeDataSizeX;
+            int biomeDataSizeY = World.biomeDataSizeY;
+            int biomeDataSizeZ = World.biomeDataSizeZ;
             float totalPr = 0.0f;
             int factorial = 1;
             int numPoints = System.Math.Max(biomeDataSizeX, biomeDataSizeZ) * biomeDataSizeY;
@@ -2720,9 +2727,9 @@ namespace Blocks
 
         public void Run(long baseCX, long baseCY, long baseCZ, int numChunksWide)
         {
-            int chunkSizeX = World.mainWorld.biomeDataSizeX;
-            int chunkSizeY = World.mainWorld.biomeDataSizeY;
-            int chunkSizeZ = World.mainWorld.biomeDataSizeZ;
+            int chunkSizeX = World.biomeDataSizeX;
+            int chunkSizeY = World.biomeDataSizeY;
+            int chunkSizeZ = World.biomeDataSizeZ;
             int sideLength = numChunksWide * System.Math.Max(System.Math.Max(chunkSizeX, chunkSizeY), chunkSizeZ);
             float randSeed = Simplex.Noise.rand(baseCX, baseCY, baseCZ);
             System.Random gen = new System.Random((int)(randSeed * 10000.0f));
@@ -2762,9 +2769,9 @@ namespace Blocks
         // I'm doing a poisson distribution that will have expected number of points = the number of points that result in typical distance to closest other structure = desired val
         public int HowManyPointsToSample(double noiseVal, long cubeSideLength)
         {
-            int chunkSizeX = World.mainWorld.biomeDataSizeX;
-            int chunkSizeY = World.mainWorld.biomeDataSizeY;
-            int chunkSizeZ = World.mainWorld.biomeDataSizeZ;
+            int chunkSizeX = World.biomeDataSizeX;
+            int chunkSizeY = World.biomeDataSizeY;
+            int chunkSizeZ = World.biomeDataSizeZ;
             double totalPr = 0.0f;
             int factorial = 1;
             double lambda = PointsNeededForAverageDistance(avgNumBlocksBetween, cubeSideLength);
@@ -2870,6 +2877,9 @@ namespace Blocks
 
     public class Chunk
     {
+
+        public IntegerSet blocksNeedUpdatingWithLight;
+        public IntegerSet blocksNeedUpdatingWithLightNextFrame;
         public volatile int threadRenderingMe = -1;
         public DoEveryMS needToDoAnotherTick = new DoEveryMS(10);
         public DoEveryMS needToDoRandomTick = new DoEveryMS(10);
@@ -2908,6 +2918,198 @@ namespace Blocks
             return res;
         }
 
+        public bool needToUpdateLighting = false;
+
+        Chunk x0Chunk;
+        Chunk y0Chunk;
+        Chunk z0Chunk;
+        Chunk x1Chunk;
+        Chunk y1Chunk;
+        Chunk z1Chunk;
+
+
+        public void FetchNeighboringChunks()
+        {
+            x0Chunk = world.GetChunk(cx - 1, cy, cz);
+            y0Chunk = world.GetChunk(cx, cy - 1, cz);
+            z0Chunk = world.GetChunk(cx, cy, cz - 1);
+            x1Chunk = world.GetChunk(cx + 1, cy, cz);
+            y1Chunk = world.GetChunk(cx, cy + 1, cz);
+            z1Chunk = world.GetChunk(cx, cy, cz + 1);
+        }
+
+        public object modifyLock = new object();
+
+        public int UpdateLightingForAllBlocks()
+        {
+            FetchNeighboringChunks();
+            int numLightings = 0;
+            lock (modifyLock)
+            {
+                if (!needToUpdateLighting)
+                {
+                    return numLightings;
+                }
+                else
+                {
+                    needToUpdateLighting = false;
+                }
+
+
+                IntegerSet tmp = blocksNeedUpdatingWithLight;
+                blocksNeedUpdatingWithLight = blocksNeedUpdatingWithLightNextFrame;
+                blocksNeedUpdatingWithLightNextFrame = tmp;
+
+
+                if (blocksNeedUpdatingWithLightNextFrame.Count > 0)
+                {
+                    for (int i = 0; i < blocksNeedUpdatingWithLightNextFrame.Count; i++)
+                    {
+                        World.mainWorld.blocksWorld.lightingTicksThisFrame += 1;
+                        numLightings += 1;
+                        int ind = blocksNeedUpdatingWithLightNextFrame[i];
+                        int x, y, z;
+                        chunkData.to3D(ind, out x, out y, out z);
+                        try
+                        {
+                            long wx = x + chunkSizeX * cx;
+                            long wy = y + chunkSizeY * cy;
+                            long wz = z + chunkSizeZ * cz;
+                            int skyLighting;
+                            int blockLighting;
+                            int touchingSkyFlags;
+                            bool touchingSky;
+                            bool oldTouchingTransparentOrAir;
+                            bool makingBlockLight;
+                            int producedBlockLight;
+                            int oldTouchingSkyFlags;
+                            int lightingStateRawValue = chunkData.GetState(x, y, z, BlockState.Lighting);
+                            GetLightingValues(lightingStateRawValue, out skyLighting, out blockLighting, out touchingSky, out oldTouchingTransparentOrAir, out makingBlockLight, out touchingSkyFlags, out producedBlockLight);
+                            int highestSkyLighting = 0;
+                            int highestBlockLighting = 0;
+                            oldTouchingSkyFlags = touchingSkyFlags;
+                            // check neighbors to see if we need to trickle their light values
+                            bool touchingTransparentOrAir = false;
+                            bool iAmAir = chunkData.GetBlock(x, y, z) == BlockValue.Air;
+                            UpdateTouchingNeighbors(wx, wy, wz, x, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+
+                            bool lightModified = false;
+
+                            if (touchingSkyFlags != oldTouchingSkyFlags)
+                            {
+                                lightModified = true;
+                            }
+
+                            // neighbors light has changed so we need to trickle their values
+                            if (skyLighting < highestSkyLighting - 1 || blockLighting < highestBlockLighting - 1 || (touchingTransparentOrAir != oldTouchingTransparentOrAir) || (touchingSkyFlags != oldTouchingSkyFlags))
+                            {
+                                skyLighting = System.Math.Max(skyLighting, highestSkyLighting - 1);
+                                blockLighting = System.Math.Max(blockLighting, highestBlockLighting - 1);
+                                lightModified = true;
+                            }
+
+                            if (!touchingSky)
+                            {
+                                if (highestSkyLighting <= skyLighting && skyLighting > 0)
+                                {
+                                    skyLighting = System.Math.Max(0, highestSkyLighting - 1);
+                                    lightModified = true;
+                                }
+                            }
+
+
+                            // neighbor's light has changed and we don't produce light, we need to trickle
+                            if (!makingBlockLight && blockLighting > System.Math.Max(0, highestBlockLighting - 1))
+                            {
+                                blockLighting = System.Math.Max(0, highestBlockLighting - 1);
+                                lightModified = true;
+                            }
+
+                            if (lightModified)
+                            {
+                                int resLightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: makingBlockLight, producedLight: producedBlockLight);
+                                //numLightUpdated += 1;
+                                AddLightingUpdatesToBlock(x, y, z);
+                                AddLightingUpdatesToNeighbors(x, y, z);
+                                needToUpdateLighting = true;
+                                bool tmpBlah;
+                                chunkData.SetState(x, y, z, resLightingState, BlockState.Lighting, out tmpBlah);
+                                chunkData.needToBeUpdated = true;
+                                //world.AddBlockUpdateToNeighbors(wx, wy, wz);
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.Log("has ind " + ind + " and local pos " + x + " " + y + " " + z + " with chunk data size " + chunkData.GetRawData().Length + " and error " + e);
+                            throw e;
+                        }
+                    }
+
+                    blocksNeedUpdatingWithLightNextFrame.Clear();
+                }
+
+            }
+
+            return numLightings;
+        }
+
+
+
+        public void AddLightingUpdatesToBlock(LVector3 pos)
+        {
+            lock(modifyLock)
+            {
+                int localX = (int)(pos.x - cx * chunkSizeX);
+                int localY = (int)(pos.y - cy * chunkSizeY);
+                int localZ = (int)(pos.z - cz * chunkSizeZ);
+                blocksNeedUpdatingWithLight.Add(chunkData.to1D(localX, localY, localZ));
+                blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D(localX, localY, localZ));
+                needToUpdateLighting = true;
+                chunkData.needToBeUpdated = true;
+            }
+        }
+
+        public void AddLightingUpdatesToBlock(int localX, int localY, int localZ)
+        {
+            blocksNeedUpdatingWithLight.Add(chunkData.to1D(localX, localY, localZ));
+            blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D(localX, localY, localZ));
+            needToUpdateLighting = true;
+            chunkData.needToBeUpdated = true;
+        }
+
+        public void AddLightingUpdatesToNeighbors(LVector3 pos)
+        {
+            lock(modifyLock)
+            {
+                FetchNeighboringChunks();
+                int localX = (int)(pos.x - cx * chunkSizeX);
+                int localY = (int)(pos.y - cy * chunkSizeY);
+                int localZ = (int)(pos.z - cz * chunkSizeZ);
+                AddLightingUpdatesToNeighbors(localX, localY, localZ);
+            }
+        }
+
+        public void AddLightingUpdatesToNeighbors(int localX, int localY, int localZ)
+        {
+            int x = localX;
+            int y = localY;
+            int z = localZ;
+            if (x == 0) { if (x0Chunk != null) { x0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(chunkSizeX - 1, y, z)); x0Chunk.needToUpdateLighting = true; x0Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x - 1, y, z)); }
+            if (y == 0) { if (y0Chunk != null) { y0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, chunkSizeY - 1, z)); y0Chunk.needToUpdateLighting = true; y0Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y - 1, z)); }
+            if (z == 0) { if (z0Chunk != null) { z0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, chunkSizeZ - 1)); z0Chunk.needToUpdateLighting = true; z0Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, z - 1)); }
+            if (x == chunkSizeX - 1) { if (x1Chunk != null) { x1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(0, y, z)); x1Chunk.needToUpdateLighting = true; x1Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x + 1, y, z)); }
+            if (y == chunkSizeY - 1) { if (y1Chunk != null) { y1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, 0, z)); y1Chunk.needToUpdateLighting = true; y1Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y + 1, z)); }
+            if (z == chunkSizeZ - 1) { if (z1Chunk != null) { z1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, 0)); z1Chunk.needToUpdateLighting = true; z1Chunk.chunkData.needToBeUpdated = true; } }
+            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, z + 1)); }
+            needToUpdateLighting = true;
+            chunkData.needToBeUpdated = true;
+        }
+
         public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose=false)
         {
             // see if we have already made one for the right body specs
@@ -2928,8 +3130,8 @@ namespace Blocks
 
             // we have not, we need to make one
             PathingNode res = new PathingNode(world, new PathingNodeBlockChunk(world,
-                cx * world.chunkSizeX, cy * world.chunkSizeY, cz * world.chunkSizeZ,
-                cx * world.chunkSizeX + world.chunkSizeX - 1, cy * world.chunkSizeY + world.chunkSizeY - 1, cz * world.chunkSizeZ + world.chunkSizeZ - 1), neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
+                cx * World.chunkSizeX, cy * World.chunkSizeY, cz * World.chunkSizeZ,
+                cx * World.chunkSizeX + World.chunkSizeX - 1, cy * World.chunkSizeY + World.chunkSizeY - 1, cz * World.chunkSizeZ + World.chunkSizeZ - 1), neededSizeForward, neededSizeSide, neededSizeUp, jumpHeight);
 
             pathingNodes.Add(res);
 
@@ -2962,7 +3164,10 @@ namespace Blocks
 
 
 
-        int chunkSizeX, chunkSizeY, chunkSizeZ;
+        public const int chunkSizeX = World.chunkSizeX;
+        public const int chunkSizeY = World.chunkSizeY;
+        public const int chunkSizeZ = World.chunkSizeZ;
+
         public ChunkData chunkData;
         public ChunkRenderer chunkRenderer;
         public ChunkBiomeData[,,] chunkBiomeDatas;
@@ -2974,9 +3179,9 @@ namespace Blocks
         {
             lock(biomeDataLock)
             {
-                int biomeDatasPerX = chunkSizeX / world.biomeDataSizeX;
-                int biomeDatasPerY = chunkSizeY / world.biomeDataSizeY;
-                int biomeDatasPerZ = chunkSizeZ / world.biomeDataSizeZ;
+                int biomeDatasPerX = chunkSizeX / World.biomeDataSizeX;
+                int biomeDatasPerY = chunkSizeY / World.biomeDataSizeY;
+                int biomeDatasPerZ = chunkSizeZ / World.biomeDataSizeZ;
 
 
                 chunkBiomeDatas = new ChunkBiomeData[biomeDatasPerX,biomeDatasPerY,biomeDatasPerZ];
@@ -2986,9 +3191,9 @@ namespace Blocks
                 long wy = cy * chunkSizeY;
                 long wz = cz * chunkSizeZ;
 
-                long baseBx = world.divWithFloor(wx, world.biomeDataSizeX);
-                long baseBy = world.divWithFloor(wy, world.biomeDataSizeY);
-                long baseBz = world.divWithFloor(wz, world.biomeDataSizeZ);
+                long baseBx = world.divWithFloor(wx, World.biomeDataSizeX);
+                long baseBy = world.divWithFloor(wy, World.biomeDataSizeY);
+                long baseBz = world.divWithFloor(wz, World.biomeDataSizeZ);
 
                 for (int bx = 0; bx < biomeDatasPerX; bx++)
                 {
@@ -3004,7 +3209,7 @@ namespace Blocks
                             }
                             else
                             {
-                                chunkBiomeDatas[bx, by, bz] = new ChunkBiomeData(chunkProperties, world.biomeDataSizeX, world.biomeDataSizeY, world.biomeDataSizeZ, baseBx + bx, baseBy + by, baseBz + bz);
+                                chunkBiomeDatas[bx, by, bz] = new ChunkBiomeData(chunkProperties, World.biomeDataSizeX, World.biomeDataSizeY, World.biomeDataSizeZ, baseBx + bx, baseBy + by, baseBz + bz);
                             }
                         }
                     }
@@ -3018,13 +3223,13 @@ namespace Blocks
         public ChunkBiomeData GetBiomeData(long x, long y, long z)
         {
 
-            long baseBx = world.divWithFloor(cx * chunkSizeX, world.biomeDataSizeX);
-            long baseBy = world.divWithFloor(cy * chunkSizeY, world.biomeDataSizeY);
-            long baseBz = world.divWithFloor(cz * chunkSizeZ, world.biomeDataSizeZ);
+            long baseBx = world.divWithFloor(cx * chunkSizeX, World.biomeDataSizeX);
+            long baseBy = world.divWithFloor(cy * chunkSizeY, World.biomeDataSizeY);
+            long baseBz = world.divWithFloor(cz * chunkSizeZ, World.biomeDataSizeZ);
 
-            long bx = world.divWithFloor(x, world.biomeDataSizeX);
-            long by = world.divWithFloor(y, world.biomeDataSizeY);
-            long bz = world.divWithFloor(z, world.biomeDataSizeZ);
+            long bx = world.divWithFloor(x, World.biomeDataSizeX);
+            long by = world.divWithFloor(y, World.biomeDataSizeY);
+            long bz = world.divWithFloor(z, World.biomeDataSizeZ);
 
             long relativeBx = bx - baseBx;
             long relativeBy = by - baseBy;
@@ -3104,22 +3309,25 @@ namespace Blocks
             long relativeY = j - cy * chunkSizeY;
             long relativeZ = k - cz * chunkSizeZ;
             chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
+            blocksNeedUpdatingWithLight.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
+            blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
+            needToUpdateLighting = true;
+            chunkData.needToBeUpdated = true;
         }
 
 
         public void CreateStuff()
         {
-            this.chunkRenderer = new ChunkRenderer(this, chunkSizeX, chunkSizeY, chunkSizeZ);
+            this.chunkRenderer = new ChunkRenderer(this);
         }
 
 
-        public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, int chunkSizeX, int chunkSizeY, int chunkSizeZ, bool createStuff = true)
+        public Chunk(World world, ChunkProperties chunkProperties, long chunkX, long chunkY, long chunkZ, bool createStuff = true)
         {
+            this.blocksNeedUpdatingWithLight = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
+            this.blocksNeedUpdatingWithLightNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
             this.world = world;
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
-            this.chunkData = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: false);
+            this.chunkData = new ChunkData(fillWithWildcard: false);
             this.chunkData.attachedChunks.Add(this);
             this.cx = chunkX;
             this.cy = chunkY;
@@ -3151,92 +3359,94 @@ namespace Blocks
             //Debug.Log("generating chunk " + cx + " " + cy + " " + cz + " ");
             try
             {
-                world.worldGeneration.blockGetter = myStructure;
-                for (long x = baseX; x < baseX + this.chunkSizeX; x++)
+                //lock (modifyLock)
                 {
-                    for (long z = baseZ; z < baseZ + this.chunkSizeZ; z++)
+                    world.worldGeneration.blockGetter = myStructure;
+                    for (long x = baseX; x < baseX + World.chunkSizeX; x++)
                     {
-                        //long curHighestBlockY = long.MinValue;
-                        //world.worldGeneration.blockGetter = world;
-                        //bool wasAPreviousHighest = world.TryGetHighestSolidBlockY(x, z, out curHighestBlockY);
-                        //world.worldGeneration.blockGetter = myStructure;
-                        //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
-                        // going from top to bottom lets us update the "highest block touching the sky" easily
-                        for (long y = baseY + this.chunkSizeY-1; y >= baseY; y--)
+                        for (long z = baseZ; z < baseZ + World.chunkSizeZ; z++)
                         {
-                            //long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, "altitude"));
-                            using (BlockData block = myStructure.GetBlockData(x, y, z))
+                            //long curHighestBlockY = long.MinValue;
+                            //world.worldGeneration.blockGetter = world;
+                            //bool wasAPreviousHighest = world.TryGetHighestSolidBlockY(x, z, out curHighestBlockY);
+                            //world.worldGeneration.blockGetter = myStructure;
+                            //float elevation = world.AverageChunkValues(x, 0, z, c => c.chunkProperties["elevation"]);
+                            // going from top to bottom lets us update the "highest block touching the sky" easily
+                            for (long y = baseY + World.chunkSizeY - 1; y >= baseY; y--)
                             {
-                                world.worldGeneration.OnGenerateBlock(x, y, z, block);
-                                block.animationState = 0;
-                                block.lightingState = 0;
-                                if (block.block != BlockValue.Wildcard && block.block != BlockValue.Air)
+                                //long elevation = (long)Mathf.Round(world.AverageChunkValues(x, 0, z, "altitude"));
+                                using (BlockData block = myStructure.GetBlockData(x, y, z))
                                 {
-                                    //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSizeX, y - cy * chunkSizeY, z - cz * chunkSizeZ));
-                                }
-                                /*
-                                // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
-                                if (block.block != BlockValue.Air && block.block != BlockValue.Wildcard && y > curHighestBlockY)
-                                {
-                                    // tell the previously highest one that it is no longer the highest one
-                                    if (wasAPreviousHighest)
+                                    world.worldGeneration.OnGenerateBlock(x, y, z, block);
+                                    block.animationState = 0;
+                                    block.lightingState = 0;
+                                    if (block.block != BlockValue.Wildcard && block.block != BlockValue.Air)
                                     {
-                                        world.worldGeneration.blockGetter = world;
-                                        world.SetState(x, curHighestBlockY, z, world.GetState(x, curHighestBlockY, z, 2) & (~TOUCHING_SKY_MASK), 2);
-                                        world.worldGeneration.blockGetter = myStructure;
-                                        curHighestBlockY = y;
+                                        //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSizeX, y - cy * chunkSizeY, z - cz * chunkSizeZ));
+                                    }
+                                    /*
+                                    // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
+                                    if (block.block != BlockValue.Air && block.block != BlockValue.Wildcard && y > curHighestBlockY)
+                                    {
+                                        // tell the previously highest one that it is no longer the highest one
+                                        if (wasAPreviousHighest)
+                                        {
+                                            world.worldGeneration.blockGetter = world;
+                                            world.SetState(x, curHighestBlockY, z, world.GetState(x, curHighestBlockY, z, 2) & (~TOUCHING_SKY_MASK), 2);
+                                            world.worldGeneration.blockGetter = myStructure;
+                                            curHighestBlockY = y;
+                                        }
+
+                                        // set us to be touching the sky now
+                                        block.state2 = (block.state2 | TOUCHING_SKY_MASK);
+                                    }
+                                    */
+                                }
+                            }
+                        }
+                    }
+
+                    // sort events by priority
+
+                    long baseXPos = cx * chunkSizeX;
+                    long baseYPos = cy * chunkSizeY;
+                    long baseZPos = cz * chunkSizeZ;
+
+                    long baseBx = world.divWithFloor(baseXPos, World.biomeDataSizeX);
+                    long baseBy = world.divWithFloor(baseYPos, World.biomeDataSizeY);
+                    long baseBz = world.divWithFloor(baseZPos, World.biomeDataSizeZ);
+
+                    int biomeDatasPerX = chunkSizeX / World.biomeDataSizeX;
+                    int biomeDatasPerY = chunkSizeY / World.biomeDataSizeY;
+                    int biomeDatasPerZ = chunkSizeZ / World.biomeDataSizeZ;
+                    for (int bx = 0; bx < biomeDatasPerX; bx++)
+                    {
+                        for (int by = 0; by < biomeDatasPerY; by++)
+                        {
+                            for (int bz = 0; bz < biomeDatasPerZ; bz++)
+                            {
+                                ChunkBiomeData chunkBiomeData = chunkBiomeDatas[bx, by, bz];
+                                chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents.Sort((x, y) =>
+                                {
+                                    return x.priority.CompareTo(y.priority);
+                                });
+
+                                // give each event a seperate structure with the correct priority so the filling in priority algorithms elsewhere will overwrite properly
+                                foreach (ChunkPropertyEvent chunkPropertyEvent in chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents)
+                                {
+                                    Structure myStructure2 = new Structure(cx + " " + cy + " " + cz + " " + bx + " " + by + " " + bz, true, this, priority: chunkPropertyEvent.priority);
+                                    world.worldGeneration.blockGetter = myStructure2;
+                                    chunkPropertyEvent.Run(bx + baseBx, by + baseBy, bz + baseBz);
+                                    if (!myStructure2.HasAllChunksGenerated())
+                                    {
+                                        world.AddUnfinishedStructure(myStructure2);
                                     }
 
-                                    // set us to be touching the sky now
-                                    block.state2 = (block.state2 | TOUCHING_SKY_MASK);
                                 }
-                                */
                             }
                         }
                     }
                 }
-
-                // sort events by priority
-
-                long baseXPos = cx * chunkSizeX;
-                long baseYPos = cy * chunkSizeY;
-                long baseZPos = cz * chunkSizeZ;
-
-                long baseBx = world.divWithFloor(baseXPos, world.biomeDataSizeX);
-                long baseBy = world.divWithFloor(baseYPos, world.biomeDataSizeY);
-                long baseBz = world.divWithFloor(baseZPos, world.biomeDataSizeZ);
-
-                int biomeDatasPerX = chunkSizeX / world.biomeDataSizeX;
-                int biomeDatasPerY = chunkSizeY / world.biomeDataSizeY;
-                int biomeDatasPerZ = chunkSizeZ / world.biomeDataSizeZ;
-                for (int bx = 0; bx < biomeDatasPerX; bx++)
-                {
-                    for (int by = 0; by < biomeDatasPerY; by++)
-                    {
-                        for (int bz = 0; bz < biomeDatasPerZ; bz++)
-                        {
-                            ChunkBiomeData chunkBiomeData = chunkBiomeDatas[bx, by, bz];
-                            chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents.Sort((x, y) =>
-                            {
-                                return x.priority.CompareTo(y.priority);
-                            });
-
-                            // give each event a seperate structure with the correct priority so the filling in priority algorithms elsewhere will overwrite properly
-                            foreach (ChunkPropertyEvent chunkPropertyEvent in chunkBiomeData.chunkPropertiesObj.chunkPropertyEvents)
-                            {
-                                Structure myStructure2 = new Structure(cx + " " + cy + " " + cz + " " + bx + " " + by + " " + bz, true, this, priority: chunkPropertyEvent.priority);
-                                world.worldGeneration.blockGetter = myStructure2;
-                                chunkPropertyEvent.Run(bx+ baseBx, by+ baseBy, bz+ baseBz);
-                                if (!myStructure2.HasAllChunksGenerated())
-                                {
-                                    world.AddUnfinishedStructure(myStructure2);
-                                }
-
-                            }
-                        }
-                    }
-                }
-               
             }
             catch (System.Exception e)
             {
@@ -3403,6 +3613,16 @@ namespace Blocks
             chunkData.blocksNeedUpdatingNextFrame.Clear();
             generating = false;
             */
+
+
+            lock (modifyLock)
+            {
+                for (int i = 0; i < chunkSizeX * chunkSizeY * chunkSizeZ; i++)
+                {
+                    blocksNeedUpdatingWithLight.Add(i);
+                }
+                needToUpdateLighting = true;
+            }
         }
 
         System.Random randomGen = new System.Random();
@@ -3455,7 +3675,7 @@ namespace Blocks
         /// <param name="makingBlockLight"></param>
         /// <param name="producedLight"></param>
         /// <returns></returns>
-        public int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir, int touchingTransparentOrAirFlags, bool makingBlockLight=false, int producedLight=0)
+        public static int PackLightingValues(int skyLighting, int blockLighting, bool touchingSky, bool touchingTransparentOrAir, int touchingTransparentOrAirFlags, bool makingBlockLight=false, int producedLight=0)
         {
             int res = 0;
             if (touchingSky)
@@ -3490,7 +3710,8 @@ namespace Blocks
             return res;
         }
 
-        public void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int touchingSkyFlags, out int producedLighting)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void GetLightingValues(int lightingState, out int skyLighting, out int blockLighting, out bool touchingSky, out bool touchingTransparentOrAir, out bool makingBlockLight, out int touchingSkyFlags, out int producedLighting)
         {
             if ((lightingState & TOUCHING_SKY_BIT) != 0)
             {
@@ -3538,10 +3759,12 @@ namespace Blocks
         }
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void GetHighestLightings(long x, long y, long z, int offsetFlag, ref int curHighestSkyLight, ref int curHighestBlockLight, bool aboveNeighbor, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
         {
             int lightingState = chunkData.GetState(x, y, z, BlockState.Lighting);
-            if (!IsSolid(chunkData.GetBlock(x,y,z)))
+            bool isSolid = chunkData.GetBlock(x, y, z) > 0;
+            if (!isSolid)
             {
                 touchingTransparentOrAir = true;
                 // set the flag to one
@@ -3552,40 +3775,45 @@ namespace Blocks
                 // set that flag to zero by anding with bitwise not of it
                 touchingSkyFlags = ((~offsetFlag) & touchingSkyFlags);
             }
-            int neighborSkyLighting;
-            int neighborBlockLighting;
-            int neighborTouchingSkyFlags;
-            bool neighborTouchingSky;
-            bool neighborTouchingTransparentOrAir;
-            bool neighborMakingBlockLight;
-            int neighborProducedLight;
-            GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight, out neighborTouchingSkyFlags, out neighborProducedLight);
 
-            if (!IsSolid(chunkData.GetBlock(x,y,z)) || (iAmAir && (neighborMakingBlockLight || (neighborTouchingSky && aboveNeighbor))))
+            int neighborSkyLighting = (lightingState & SKY_LIGHTING_MASK) >> 4;
+            int neighborBlockLighting = (lightingState & BLOCK_LIGHTING_MASK);
+            bool neighborTouchingSky = (lightingState & TOUCHING_SKY_BIT) != 0;
+            bool neighborMakingBlockLight = (MAKING_BLOCK_LIGHT_BIT & lightingState) != 0;
+
+            if (!isSolid || (iAmAir && (neighborMakingBlockLight || (neighborTouchingSky && aboveNeighbor))))
             {
-                curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
-                curHighestBlockLight = System.Math.Max(neighborBlockLighting, curHighestBlockLight);
+                if (neighborSkyLighting > curHighestSkyLight)
+                {
+                    curHighestSkyLight = neighborSkyLighting;
+                }
+                if (neighborBlockLighting > curHighestBlockLight)
+                {
+                    curHighestBlockLight = neighborBlockLighting;
+                }
             }
         }
 
 
         Chunk negX, posX, negY, posY, negZ, posZ;
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsSolid(int block)
         {
             return block > 0;
         }
 
-        public void GetHighestLightingsOutsideChunk(long wx, long wy, long wz, int offsetFlag, ref int curHighestSkyLight, ref int curHighestBlockLight, bool aboveNeighbor, ref Chunk chunk, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void GetHighestLightingsOutsideChunk(long wx, long wy, long wz, int offsetFlag, ref int curHighestSkyLight, ref int curHighestBlockLight, bool aboveNeighbor, Chunk chunk, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
         {
-            if (chunk == null)
-            {
-                chunk = world.GetChunkAtPos(wx, wy, wz);
-            }
             if (chunk != null && !chunk.generating)
             {
+
                 int lightingState = chunk.GetState(wx, wy, wz, BlockState.Lighting);
-                if(!IsSolid(chunk[wx, wy, wz]))
+                bool isSolid = chunk[wx, wy, wz] > 0;
+                if (!isSolid)
                 {
                     touchingTransparentOrAir = true;
                     // set the flag to one
@@ -3597,18 +3825,21 @@ namespace Blocks
                     touchingSkyFlags = ((~offsetFlag) & touchingSkyFlags);
                 }
 
-                int neighborSkyLighting;
-                int neighborBlockLighting;
-                int neighborTouchingSkyFlags;
-                bool neighborTouchingSky;
-                bool neighborTouchingTransparentOrAir;
-                bool neighborMakingBlockLight;
-                int neighborProducedLight;
-                GetLightingValues(lightingState, out neighborSkyLighting, out neighborBlockLighting, out neighborTouchingSky, out neighborTouchingTransparentOrAir, out neighborMakingBlockLight, out neighborTouchingSkyFlags, out neighborProducedLight);
-                if (!IsSolid(chunk[wx, wy, wz]) || (iAmAir && (neighborMakingBlockLight || (neighborTouchingSky && aboveNeighbor))))
+                int neighborSkyLighting = (lightingState & SKY_LIGHTING_MASK) >> 4;
+                int neighborBlockLighting = (lightingState & BLOCK_LIGHTING_MASK);
+                bool neighborTouchingSky = (lightingState & TOUCHING_SKY_BIT) != 0;
+                bool neighborMakingBlockLight = (MAKING_BLOCK_LIGHT_BIT & lightingState) != 0;
+
+                if (!isSolid || (iAmAir && (neighborMakingBlockLight || (neighborTouchingSky && aboveNeighbor))))
                 {
-                    curHighestSkyLight = System.Math.Max(neighborSkyLighting, curHighestSkyLight);
-                    curHighestBlockLight = System.Math.Max(neighborBlockLighting, curHighestBlockLight);
+                    if (neighborSkyLighting > curHighestSkyLight)
+                    {
+                        curHighestSkyLight = neighborSkyLighting;
+                    }
+                    if (neighborBlockLighting > curHighestBlockLight)
+                    {
+                        curHighestBlockLight = neighborBlockLighting;
+                    }
                 }
             }
         }
@@ -3633,22 +3864,23 @@ namespace Blocks
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void UpdateTouchingNeighbors(long wx, long wy, long wz, long x, long y, long z, ref int highestSkyLighting, ref int highestBlockLighting, ref bool touchingTransparentOrAir, bool iAmAir, ref int touchingSkyFlags)
         {
 
             // this code needed to be a little gross because it needs to be very fast so ideally we want to not use the world lookup unless we have to since usually we'll be inside this chunk
-            if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NX, ref highestSkyLighting, ref highestBlockLighting, false, ref negX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (x == 0) GetHighestLightingsOutsideChunk(wx - 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NX, ref highestSkyLighting, ref highestBlockLighting, false, x0Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x - 1, y, z, TOUCHING_TRANPARENT_OR_AIR_BIT_NX, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NY, ref highestSkyLighting, ref highestBlockLighting, true, ref negY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (y == 0) GetHighestLightingsOutsideChunk(wx, wy - 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_NY, ref highestSkyLighting, ref highestBlockLighting, true, y0Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y - 1, z, TOUCHING_TRANPARENT_OR_AIR_BIT_NY, ref highestSkyLighting, ref highestBlockLighting, true, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, false, ref negZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (z == 0) GetHighestLightingsOutsideChunk(wx, wy, wz - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, false, z0Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y, z - 1, TOUCHING_TRANPARENT_OR_AIR_BIT_NZ, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
-            if (x == chunkSizeX - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, ref posX, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (x == chunkSizeX - 1) GetHighestLightingsOutsideChunk(wx + 1, wy, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, x1Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x + 1, y, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PX, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (y == chunkSizeY - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, ref posY, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (y == chunkSizeY - 1) GetHighestLightingsOutsideChunk(wx, wy + 1, wz, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, y1Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y + 1, z, TOUCHING_TRANPARENT_OR_AIR_BIT_PY, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-            if (z == chunkSizeZ - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, ref posZ, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
+            if (z == chunkSizeZ - 1) GetHighestLightingsOutsideChunk(wx, wy, wz + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, z1Chunk, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
             else GetHighestLightings(x, y, z + 1, TOUCHING_TRANPARENT_OR_AIR_BIT_PZ, ref highestSkyLighting, ref highestBlockLighting, false, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
 
         }
@@ -3679,7 +3911,6 @@ namespace Blocks
             bool iAmAir = block.block == BlockValue.Air;
 
             UpdateTouchingNeighbors(wx, wy, wz, x, y, z, ref highestSkyLighting, ref highestBlockLighting, ref touchingTransparentOrAir, iAmAir, ref touchingSkyFlags);
-
             bool lightModified = false;
 
             if (touchingSkyFlags != oldTouchingSkyFlags)
@@ -3732,7 +3963,7 @@ namespace Blocks
                 block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: makingBlockLight, producedLight: producedBlockLight);
                 //numLightUpdated += 1;
                 chunkData.needToBeUpdated = true;
-                world.AddBlockUpdateToNeighbors(wx, wy, wz);
+                AddLightingUpdatesToNeighbors((int)x, (int)y, (int)z);
             }
         }
 
@@ -3786,123 +4017,135 @@ namespace Blocks
 
             this.TickStart(frameId);
 
-
             int numLightUpdated = 0;
             if (chunkData.blocksNeedUpdating.Count != 0)
             {
-                //Debug.Log("chunk " + cx + " " + cy + " " + cz + " has " + chunkData.blocksNeedUpdating.Count + " block updates");
-                
-                //bool relevantChunk = true;
-                //int k = 0;
-                for (int j = 0; j < chunkData.blocksNeedUpdating.Count; j++)
+                //lock (modifyLock)
                 {
-                    int i = chunkData.blocksNeedUpdating[j];
+                    //Debug.Log("chunk " + cx + " " + cy + " " + cz + " has " + chunkData.blocksNeedUpdating.Count + " block updates");
 
-                    //if (PhysicsUtils.millis() - world.frameTimeStart > maxMillisInFrame)
-                   // {
-                   //     chunkData.blocksNeedUpdatingNextFrame.Add(i);
-                   //     continue;
-                    //}
-                    long ind = (long)(i);
-                    long x, y, z;
-                    chunkData.to3D(ind, out x, out y, out z);
-                    long wx = x + cx * chunkSizeX;
-                    long wy = y + cy * chunkSizeY;
-                    long wz = z + cz * chunkSizeZ;
-                    //long mwx, mwy, mwz;
-                    //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
-                    using (BlockData block = world.GetBlockData(wx, wy, wz))
+                    //bool relevantChunk = true;
+                    //int k = 0;
+                    for (int j = 0; j < chunkData.blocksNeedUpdating.Count; j++)
                     {
-                        world.blocksWorld.lightingTicksThisFrame += 1;
-                        UpdateLighting(block);
-                        BlockOrItem customBlock;
-                        BlockValue blockValue = block.block;
-                        if (world.customBlocks.ContainsKey(blockValue, out customBlock))
-                        {
-                            customBlock.OnTick(block);
+                        int i = chunkData.blocksNeedUpdating[j];
 
-                            if (doRandomTick)
+                        //if (PhysicsUtils.millis() - world.frameTimeStart > maxMillisInFrame)
+                        // {
+                        //     chunkData.blocksNeedUpdatingNextFrame.Add(i);
+                        //     continue;
+                        //}
+                        long ind = (long)(i);
+                        long x, y, z;
+                        chunkData.to3D(ind, out x, out y, out z);
+                        long wx = x + cx * chunkSizeX;
+                        long wy = y + cy * chunkSizeY;
+                        long wz = z + cz * chunkSizeZ;
+                        //long mwx, mwy, mwz;
+                        //PhysicsUtils.ModPos(wx, wy, wz, out mwx, out mwy, out mwz);
+                        using (BlockData block = world.GetBlockData(wx, wy, wz))
+                        {
+                            block.myChunk = this;
+                            BlockValue oldBlockValue = block.block;
+                            int oldLightingState = block.lightingState;
+                            //world.blocksWorld.lightingTicksThisFrame += 1;
+                            //UpdateLighting(block);
+                            BlockOrItem customBlock;
+                            BlockValue blockValue = block.block;
+                            if (world.customBlocks.ContainsKey(blockValue, out customBlock))
                             {
-                                customBlock.OnRandomTick(block);
+                                customBlock.OnTick(block);
+
+                                if (doRandomTick)
+                                {
+                                    customBlock.OnRandomTick(block);
+                                }
+                            }
+
+                            if (block.needsAnotherTick)
+                            {
+                                chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
+                            }
+
+
+                            if (oldBlockValue != block.block || oldLightingState != block.lightingState)
+                            {
+                                blocksNeedUpdatingWithLight.Add(i);
+                                blocksNeedUpdatingWithLightNextFrame.Add(i);
+                                AddLightingUpdatesToNeighbors((int)x, (int)y, (int)z);
+                                needToUpdateLighting = true;
+                                chunkData.needToBeUpdated = true;
+                            }
+
+                            if (block.WasModified)
+                            {
+                                chunkData.needToBeUpdated = true;
+                                // don't call lots of chunk lookups if we don't need to
+                                if (x == 0) AddBlockUpdateOutsideChunk(wx - 1, wy, wz, ref negX);
+                                else chunkData.AddBlockUpdate(x - 1, y, z);
+                                if (y == 0) AddBlockUpdateOutsideChunk(wx, wy - 1, wz, ref negY);
+                                else chunkData.AddBlockUpdate(x, y - 1, z);
+                                if (z == 0) AddBlockUpdateOutsideChunk(wx, wy, wz - 1, ref negZ);
+                                else chunkData.AddBlockUpdate(x, y, z - 1);
+
+                                if (x == chunkSizeX - 1) AddBlockUpdateOutsideChunk(wx + 1, wy, wz, ref posX);
+                                else chunkData.AddBlockUpdate(x + 1, y, z);
+                                if (y == chunkSizeY - 1) AddBlockUpdateOutsideChunk(wx, wy + 1, wz, ref posY);
+                                else chunkData.AddBlockUpdate(x, y + 1, z);
+                                if (z == chunkSizeZ - 1) AddBlockUpdateOutsideChunk(wx, wy, wz + 1, ref posZ);
+                                else chunkData.AddBlockUpdate(x, y, z + 1);
+
+                                if (block.block == BlockValue.Air)
+                                {
+                                    block.state = 0;
+                                    block.animationState = 0;
+                                }
                             }
                         }
+                        /*
 
-                        if (block.needsAnotherTick)
+
+                        int resState1;
+                        int resState2;
+                        int resState3;
+                        bool needsAnotherUpdate;
+                        int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z, 1), chunkData.GetState(x, y, z, 2), chunkData.GetState(x, y, z, 3), out resState1, out resState2, out resState3, out needsAnotherUpdate);
+                        bool chunkDataAddedBlockUpdate;
+                        bool dontCareActually;
+                        chunkData.SetState(x, y, z, resState1, 1, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                        chunkData.SetState(x, y, z, resState2, 2, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                        chunkData.SetState(x, y, z, resState3, 3, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
+                        chunkData.SetBlock(x, y, z, resBlock, out chunkDataAddedBlockUpdate, forceBlockUpdate: needsAnotherUpdate);
+
+
+                        if (chunkDataAddedBlockUpdate)
                         {
-                            chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
-                        }
+                            bool neighborsInsideThisChunk =
+                                (x != 0 && x != chunkSizeX - 1) &&
+                                (y != 0 && y != chunkSizeY - 1) &&
+                                (z != 0 && z != chunkSizeZ - 1);
 
-
-
-                        if (block.WasModified)
-                        {
-                            chunkData.needToBeUpdated = true;
-                            // don't call lots of chunk lookups if we don't need to
-                            if (x == 0) AddBlockUpdateOutsideChunk(wx - 1, wy, wz, ref negX);
-                            else chunkData.AddBlockUpdate(x - 1, y, z);
-                            if (y == 0) AddBlockUpdateOutsideChunk(wx, wy - 1, wz, ref negY);
-                            else chunkData.AddBlockUpdate(x, y - 1, z);
-                            if (z == 0) AddBlockUpdateOutsideChunk(wx, wy, wz - 1, ref negZ);
-                            else chunkData.AddBlockUpdate(x, y, z - 1);
-
-                            if (x == chunkSizeX - 1) AddBlockUpdateOutsideChunk(wx + 1, wy, wz, ref posX);
-                            else chunkData.AddBlockUpdate(x + 1, y, z);
-                            if (y == chunkSizeY - 1) AddBlockUpdateOutsideChunk(wx, wy + 1, wz, ref posY);
-                            else chunkData.AddBlockUpdate(x, y + 1, z);
-                            if (z == chunkSizeZ - 1) AddBlockUpdateOutsideChunk(wx, wy, wz + 1, ref posZ);
-                            else chunkData.AddBlockUpdate(x, y, z + 1);
-
-                            if (block.block == BlockValue.Air)
+                            if (!neighborsInsideThisChunk)
                             {
-                                block.state = 0;
-                                block.animationState = 0;
+                                world.AddBlockUpdateToNeighbors(wx, wy, wz);
+                            }
+                            else
+                            {
+                                chunkData.AddBlockUpdate(x - 1, y, z);
+                                chunkData.AddBlockUpdate(x + 1, y, z);
+                                chunkData.AddBlockUpdate(x, y - 1, z);
+                                chunkData.AddBlockUpdate(x, y + 1, z);
+                                chunkData.AddBlockUpdate(x, y, z-1);
+                                chunkData.AddBlockUpdate(x, y, z+1);
                             }
                         }
+                        */
                     }
-                    /*
 
 
-                    int resState1;
-                    int resState2;
-                    int resState3;
-                    bool needsAnotherUpdate;
-                    int resBlock = world.UpdateBlock(wx, wy, wz, chunkData[x,y,z], chunkData.GetState(x,y,z, 1), chunkData.GetState(x, y, z, 2), chunkData.GetState(x, y, z, 3), out resState1, out resState2, out resState3, out needsAnotherUpdate);
-                    bool chunkDataAddedBlockUpdate;
-                    bool dontCareActually;
-                    chunkData.SetState(x, y, z, resState1, 1, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
-                    chunkData.SetState(x, y, z, resState2, 2, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
-                    chunkData.SetState(x, y, z, resState3, 3, out dontCareActually, forceBlockUpdate: needsAnotherUpdate);
-                    chunkData.SetBlock(x, y, z, resBlock, out chunkDataAddedBlockUpdate, forceBlockUpdate: needsAnotherUpdate);
+                    //Debug.Log("updated " + chunkData.blocksNeedUpdating.Count + " blocks with " + numLightUpdated + " lighting updates " + cx + " " + cy + " " + cz);
 
-
-                    if (chunkDataAddedBlockUpdate)
-                    {
-                        bool neighborsInsideThisChunk =
-                            (x != 0 && x != chunkSizeX - 1) &&
-                            (y != 0 && y != chunkSizeY - 1) &&
-                            (z != 0 && z != chunkSizeZ - 1);
-
-                        if (!neighborsInsideThisChunk)
-                        {
-                            world.AddBlockUpdateToNeighbors(wx, wy, wz);
-                        }
-                        else
-                        {
-                            chunkData.AddBlockUpdate(x - 1, y, z);
-                            chunkData.AddBlockUpdate(x + 1, y, z);
-                            chunkData.AddBlockUpdate(x, y - 1, z);
-                            chunkData.AddBlockUpdate(x, y + 1, z);
-                            chunkData.AddBlockUpdate(x, y, z-1);
-                            chunkData.AddBlockUpdate(x, y, z+1);
-                        }
-                    }
-                    */
                 }
-
-
-                //Debug.Log("updated " + chunkData.blocksNeedUpdating.Count + " blocks with " + numLightUpdated + " lighting updates " + cx + " " + cy + " " + cz);
-
-
             }
 
 
@@ -4099,6 +4342,7 @@ namespace Blocks
                 {
                     world.AddBlockUpdateToNeighbors(x, y, z);
                     chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
+                    Debug.Log("added update");
                 }
 
                 // we are all done with fiddling, allow other render threads to update us now
@@ -4125,16 +4369,15 @@ namespace Blocks
         public IntegerSet blocksNeedUpdating;
         public IntegerSet blocksNeedUpdatingNextFrame;
         int[] data;
-        public int chunkSizeX, chunkSizeY, chunkSizeZ;
+        public const int chunkSizeX = World.chunkSizeX;
+        public const int chunkSizeY = World.chunkSizeY;
+        public const int chunkSizeZ = World.chunkSizeZ;
 
 
         public List<Chunk> attachedChunks = new List<Chunk>();
 
-        public ChunkData(int chunkSizeX, int chunkSizeY, int chunkSizeZ, bool fillWithWildcard = false)
+        public ChunkData(bool fillWithWildcard = false)
         {
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
             data = new int[chunkSizeX * chunkSizeY * chunkSizeZ * 4];
             this.blocksNeedUpdating = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
             this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
@@ -4147,11 +4390,8 @@ namespace Blocks
             }
         }
 
-        public ChunkData(int chunkSizeX, int chunkSizeY, int chunkSizeZ, int[] data)
+        public ChunkData(int[] data)
         {
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
             this.data = data;
             this.blocksNeedUpdating = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
             this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
@@ -4198,6 +4438,8 @@ namespace Blocks
                     {
                         chunkData[i] = data[i];
                         blocksNeedUpdatingNextFrame.Add(i / 4);
+                        chunk.blocksNeedUpdatingWithLight.Add(i / 4);
+                        chunk.needToUpdateLighting = true;
                         int localX, localY, localZ;
                         to3D(i / 4, out localX, out localY, out localZ);
                         long wx = chunk.cx * chunkSizeX + localX;
@@ -4297,17 +4539,17 @@ namespace Blocks
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetState(long i, long j, long k, BlockState stateType)
         {
-            try
-            {
+            //try
+            //{
                 long ind = to1D(i, j, k);
                 return data[ind * 4 + (int)stateType];
-            }
-            catch (System.Exception e)
-            {
-                long ind = to1D(i, j, k);
-                Debug.Log("failed with data len " + data.Length + " and ind " + ind +" and local " + i + " " + j + " " + k);
-                throw e;
-            }
+            //}
+            //catch (System.Exception e)
+            //{
+            //    long ind = to1D(i, j, k);
+            //    Debug.Log("failed with data len " + data.Length + " and ind " + ind +" and local " + i + " " + j + " " + k);
+            //    throw e;
+            //}
         }
 
         public void SetState(long i, long j, long k, int state, BlockState stateType, out bool addedBlockUpdate, bool forceBlockUpdate = false)
@@ -4347,6 +4589,7 @@ namespace Blocks
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetBlock(long i, long j, long k)
         {
             long ind = to1D(i, j, k);
@@ -4504,7 +4747,6 @@ namespace Blocks
     [System.Serializable]
     public class SavedChunk
     {
-        public int chunkSizeX, chunkSizeY, chunkSizeZ;
         public int[] chunkData;
         public long cx, cy, cz;
 
@@ -4513,11 +4755,8 @@ namespace Blocks
 
         }
 
-        public SavedChunk(int chunkSizeX, int chunkSizeY, int chunkSizeZ, int[] chunkData, long cx, long cy, long cz)
+        public SavedChunk(int[] chunkData, long cx, long cy, long cz)
         {
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
             this.chunkData = chunkData;
             this.cx = cx;
             this.cy = cy;
@@ -4560,7 +4799,7 @@ namespace Blocks
                 LVector3 savedChunkPos = new LVector3(savedChunk.cx, savedChunk.cy, savedChunk.cz);
                 int[] savedChunkData = savedChunk.chunkData;
 
-                ChunkData resSavedChunkData = new ChunkData(savedChunk.chunkSizeX, savedChunk.chunkSizeY, savedChunk.chunkSizeZ, savedChunkData);
+                ChunkData resSavedChunkData = new ChunkData(savedChunkData);
                 ungeneratedChunkPositions[savedChunkPos] = resSavedChunkData;
             }
         }
@@ -4578,7 +4817,7 @@ namespace Blocks
             List<SavedChunk> savedChunks = new List<SavedChunk>();
             foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositions)
             {
-                savedChunks.Add(new SavedChunk(savedChunk.Value.chunkSizeX, savedChunk.Value.chunkSizeY, savedChunk.Value.chunkSizeZ, savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
+                savedChunks.Add(new SavedChunk(savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
             }
 
             return new SavedStructure(name, madeInGeneration, savedChunks.ToArray(), priority);
@@ -4624,12 +4863,12 @@ namespace Blocks
                 {
                     LVector3 chunkPos;
                     World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
-                    int chunkSizeX = World.mainWorld.chunkSizeX;
-                    int chunkSizeY = World.mainWorld.chunkSizeY;
-                    int chunkSizeZ = World.mainWorld.chunkSizeZ;
+                    int chunkSizeX = World.chunkSizeX;
+                    int chunkSizeY = World.chunkSizeY;
+                    int chunkSizeZ = World.chunkSizeZ;
                     if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                     {
-                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(fillWithWildcard: true);
                     }
                     long localPosX = x - chunkPos.x * chunkSizeX;
                     long localPosY = y - chunkPos.y * chunkSizeY;
@@ -4664,12 +4903,12 @@ namespace Blocks
                     LVector3 chunkPos;
                     World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
 
-                    int chunkSizeX = World.mainWorld.chunkSizeX;
-                    int chunkSizeY = World.mainWorld.chunkSizeY;
-                    int chunkSizeZ = World.mainWorld.chunkSizeZ;
+                    int chunkSizeX = World.chunkSizeX;
+                    int chunkSizeY = World.chunkSizeY;
+                    int chunkSizeZ = World.chunkSizeZ;
                     if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                     {
-                        ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
+                        ungeneratedChunkPositions[chunkPos] = new ChunkData(fillWithWildcard: true);
                     }
                     long localPosX = x - chunkPos.x * chunkSizeX;
                     long localPosY = y - chunkPos.y * chunkSizeY;
@@ -4703,12 +4942,12 @@ namespace Blocks
                         LVector3 chunkPos;
                         World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
 
-                        int chunkSizeX = World.mainWorld.chunkSizeX;
-                        int chunkSizeY = World.mainWorld.chunkSizeY;
-                        int chunkSizeZ = World.mainWorld.chunkSizeZ;
+                        int chunkSizeX = World.chunkSizeX;
+                        int chunkSizeY = World.chunkSizeY;
+                        int chunkSizeZ = World.chunkSizeZ;
                         if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                         {
-                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
+                            ungeneratedChunkPositions[chunkPos] = new ChunkData(fillWithWildcard: true);
                         }
                         long localPosX = x - chunkPos.x * chunkSizeX;
                         long localPosY = y - chunkPos.y * chunkSizeY;
@@ -4743,12 +4982,12 @@ namespace Blocks
                     {
                         LVector3 chunkPos;
                         World.mainWorld.GetChunkCoordinatesAtPos(x, y, z, out chunkPos);
-                        int chunkSizeX = World.mainWorld.chunkSizeX;
-                        int chunkSizeY = World.mainWorld.chunkSizeY;
-                        int chunkSizeZ = World.mainWorld.chunkSizeZ;
+                        int chunkSizeX = World.chunkSizeX;
+                        int chunkSizeY = World.chunkSizeY;
+                        int chunkSizeZ = World.chunkSizeZ;
                         if (!ungeneratedChunkPositions.ContainsKey(chunkPos))
                         {
-                            ungeneratedChunkPositions[chunkPos] = new ChunkData(chunkSizeX, chunkSizeY, chunkSizeZ, fillWithWildcard: true);
+                            ungeneratedChunkPositions[chunkPos] = new ChunkData(fillWithWildcard: true);
                         }
                         long localPosX = x - chunkPos.x * chunkSizeX;
                         long localPosY = y - chunkPos.y * chunkSizeY;
@@ -5701,7 +5940,10 @@ namespace Blocks
 
         public static Dictionary<int, int> stackableSize;
 
-        public int chunkSizeX, chunkSizeY, chunkSizeZ;
+        public const int chunkSizeX = BlocksWorld.chunkSizeX;
+        public const int chunkSizeY = BlocksWorld.chunkSizeY;
+        public const int chunkSizeZ = BlocksWorld.chunkSizeZ;
+
         QuickLongDict<List<Chunk>> chunksPerX;
         QuickLongDict<List<Chunk>> chunksPerY;
         QuickLongDict<List<Chunk>> chunksPerZ;
@@ -5733,9 +5975,10 @@ namespace Blocks
         /// <param name="pos"></param>
         /// <param name="axisPlacedFrom"></param>
         /// <returns></returns>
-        public BlockValue PrePlaceBlock(BlockValue block, LVector3 pos, AxisDir axisPlacedFrom)
+        public BlockValue PrePlaceBlock(BlockValue block, LVector3 pos, AxisDir axisPlacedFrom, out int lightProduced)
         {
             BlockOrItem customBlock;
+            lightProduced = 0;
             if (customBlocks.ContainsKey(block, out customBlock))
             {
                 if (customBlock.InventorySpace() > 0)
@@ -5748,6 +5991,7 @@ namespace Blocks
                     blocksWorld.blockInventories[pos] = blockInventory;
                 }
 
+                lightProduced = Mathf.Clamp(customBlock.ConstantLightEmitted(), 0, 15);
                 return customBlock.PlaceMe(axisPlacedFrom, pos);
             }
 
@@ -5861,18 +6105,14 @@ namespace Blocks
         public GenerationClass worldGeneration;
         public BlocksTouchingSky blocksTouchingSky;
 
-        public int biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ;
+        public const int biomeDataSizeX = BlocksWorld.biomeDataSizeX;
+        public const int biomeDataSizeY = BlocksWorld.biomeDataSizeY;
+        public const int biomeDataSizeZ = BlocksWorld.biomeDataSizeZ;
 
-        public World(BlocksWorld blocksWorld, int chunkSizeX, int chunkSizeY, int chunkSizeZ, int biomeDataSizeX, int biomeDataSizeY, int biomeDataSizeZ, BlocksPack blocksPack)
+        public World(BlocksWorld blocksWorld, BlocksPack blocksPack)
         {
             startLoadStopwatch = new System.Diagnostics.Stopwatch();
             startLoadStopwatch.Start();
-            this.biomeDataSizeX = biomeDataSizeX;
-            this.biomeDataSizeY = biomeDataSizeY;
-            this.biomeDataSizeZ = biomeDataSizeZ;
-            this.chunkSizeX = chunkSizeX;
-            this.chunkSizeY = chunkSizeY;
-            this.chunkSizeZ = chunkSizeZ;
 
             if (chunkSizeX % biomeDataSizeX != 0)
             {
@@ -7309,7 +7549,7 @@ namespace Blocks
             }
             //lock(chunkAddLock)
             //{
-                Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, chunkSizeX, chunkSizeY, chunkSizeZ, createStuff: true);
+                Chunk res = new Chunk(this, chunkProperties, chunkX, chunkY, chunkZ, createStuff: true);
                 AddChunkToDataStructures(res);
                 return res;
             //}
@@ -7714,8 +7954,10 @@ namespace Blocks
             List<Tuple<Chunk, long>> chunksToRender = GetChunksCloserThanRenderDist(true);
 
             int tmp = 10000;
+            int iff = 0;
             foreach (Tuple<Chunk, long> chunkAndDist in chunksToRender)
             {
+                iff += 1;
                 numAllowedToDoFullRender = 1;
                 Chunk chunk = chunkAndDist.a;
                 int prev = numAllowedToDoFullRender;
@@ -9746,7 +9988,7 @@ namespace Blocks
             //Dictionary<BlockValue, Block> customBlocks = new Dictionary<BlockValue, Block>();
             //customBlocks[BlockValue.GRASS] = new Grass();
             //GenerationClass customGeneration = new ExampleGeneration();
-            world = new World(this, chunkSizeX, chunkSizeY, chunkSizeZ, biomeDataSizeX, biomeDataSizeY, biomeDataSizeZ, blocksPack);
+            world = new World(this, blocksPack);
 
             lastTick = 0;
 
@@ -9782,7 +10024,7 @@ namespace Blocks
             if (World.DO_CPU_RENDER)
             {
                 world.helperThread2s = new List<Thread>();
-                int NUM_RENDER_THREADS = 4;
+                int NUM_RENDER_THREADS = 8;
                 for (int i = 0;i < NUM_RENDER_THREADS; i++)
                 {
                     int myThreadI = i;
@@ -9796,7 +10038,7 @@ namespace Blocks
                                 if (okToRunTicks)
                                 {
                                     int maxDist = -1;
-                                    if (myThreadI == 0) // dedicate first thread to only rendering chunks nearby players
+                                    if (myThreadI <= 1) // dedicate first thread to only rendering chunks nearby players
                                     {
                                         maxDist = 1;
                                     }
@@ -9804,10 +10046,14 @@ namespace Blocks
 
                                     if (myThreadI > NUM_RENDER_THREADS/2)
                                     {
-                                        allChunksHere.Shuffle();
+                                        //allChunksHere.Shuffle();
                                     }
                                     foreach (Tuple<Chunk, long> chunk in allChunksHere)
                                     {
+                                        if (!okToRunTicks || !threadKeepGoing)
+                                        {
+                                            break;
+                                        }
                                         if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
                                         {
                                             // it is probably good to render, double check that someone hasn't changed that (by getting the lock before us)
@@ -9828,12 +10074,30 @@ namespace Blocks
                                             {
                                                 continue;
                                             }
+
                                             string stringVal = "thread " + myThreadI + " with " + chunk.a.threadRenderingMe + " is start rendering chunk " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " with render status " + chunk.a.chunkRenderer.renderStatus + " and num times rendered " + chunk.a.numTimesRendered;
 
                                             if (chunk.a.threadRenderingMe != myThreadI)
                                             {
                                                 Debug.Log("hmm issue " + chunk.a.threadRenderingMe + " ??");
                                                 continue;
+                                            }
+
+                                            int numUpdates = 0;
+                                            while (chunk.a.needToUpdateLighting && okToRunTicks && threadKeepGoing)
+                                            {
+                                                long curTime = PhysicsUtils.millis();
+                                                int numLightings = chunk.a.UpdateLightingForAllBlocks();
+                                                if (PhysicsUtils.millis() - curTime > 100)
+                                                {
+                                                    Debug.Log("thread " + myThreadI + " doing lighting update " + numUpdates + " for chunk  " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " with " + numLightings + " blocks updated lighting took " + (PhysicsUtils.millis() - curTime));
+                                                }
+                                                numUpdates += 1;
+                                            }
+
+                                            if (!threadKeepGoing || !okToRunTicks)
+                                            {
+                                                break;
                                             }
 
                                             //Debug.Log(stringVal);
@@ -9922,6 +10186,16 @@ namespace Blocks
             millisAtStartOfLastUpdateFrame = curMillis;
 
             players = FindObjectsOfType<BlocksPlayer>();
+            List<BlocksPlayer> activePlayers = new List<BlocksPlayer>();
+            for (int i = 0; i < players.Length; i++)
+            {
+                if (players[i].enabled)
+                {
+                    activePlayers.Add(players[i]);
+                }
+            }
+
+            players = activePlayers.ToArray();
 
             playerPositions = new Vector3[players.Length];
             for(int i = 0; i < players.Length; i++)
@@ -10838,6 +11112,7 @@ namespace Blocks
             {
                 threadKeepGoing = false;
                 cleanedUp = true;
+                okToRunTicks = false;
                 CleanupRendering();
             }
         }
