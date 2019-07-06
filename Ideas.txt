@@ -695,7 +695,7 @@ giant aphids: same branch of tree of life of player species: size of rabbit, dri
     player species can protect them, bring them to new trees, enemy colonies might try to raid and steal these
  
  
- 
+Sisters have “molts” where you can evolve them in phases to upgrade their abilities: to molt takes resources, initially fairly simple easy to obtain things but it becomes harder to obtain things as your molts advance, you get various new abilities via the molts
 
  
  
@@ -711,6 +711,10 @@ Something below the world:
     islands of metal and crystal stuff that floats on the lava
     giant stalagmaties that hang from the bedrock
     
+
+
+
+
     nothing down there is edible, because they are all metalic or made of crystals too
         tend to have a ton of hit points and armor (not all hostile but might be some hostile ones) because made out of hefty materials
         plantlike things that can only grow in metal, if they are exposed to water they will rust, if they rust to much they will die
