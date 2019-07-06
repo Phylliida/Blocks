@@ -1,6 +1,6 @@
 Ideas:
 
-
+H
 -Heavy things: requires 2 or more power instead of 1, but can still pass it on
 -Less/no caves?
 -Aquifers/underground caves would be cool
@@ -424,6 +424,13 @@ Jungle: rocks are mostly hard to find because buried by roots and biomass, and t
 Template crafting table: put materials there for what it is supposed to craft, then it'll bring it (worker or machinery) and as soon as template is filled out it'll craft it
 	also we could put stuff that doesn't have crafting result, then they need that many things to move to next step
 	
+
+
+Above area: eventually have sister types that can fly or you can build high
+
+Stuff deep in lava: hotter so you need more heat resistance molts to go deeper and hard to swim through cause molten rock so you need strength 
+
+
 	
 	
 initially queen moves around same as champion
