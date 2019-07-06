@@ -1,6 +1,9 @@
 Ideas:
 
-H
+Earthquake: open more openings to below but maybe break buildings 
+
+
+
 -Heavy things: requires 2 or more power instead of 1, but can still pass it on
 -Less/no caves?
 -Aquifers/underground caves would be cool
