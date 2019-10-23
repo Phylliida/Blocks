@@ -342,6 +342,18 @@ namespace Blocks
             return new Vector3(x * World.mainWorld.worldScale, y * World.mainWorld.worldScale, z * World.mainWorld.worldScale) + Vector3.one * 0.5f * World.mainWorld.worldScale;
         }
 
+        /// <summary>
+        /// (0,0,0) is bottom corner (1,1,1) is top opposite corner
+        /// </summary>
+        /// <param name="localPos"></param>
+        /// <returns></returns>
+        public Vector3 LocalToWorldPos(Vector3 localPos)
+        {
+            Vector3 center = BlockCentertoUnityVector3();
+            Vector3 bottomCorner = center - new Vector3(1, 1, 1) * World.mainWorld.worldScale * 0.5f;
+            return bottomCorner + localPos * World.mainWorld.worldScale;
+        }
+
         public override bool Equals(object obj)
         {
             if (obj == null)
@@ -899,6 +911,17 @@ namespace Blocks
                     T tmp = arr[i];
                     arr[i] = arr[shuffleTo];
                     arr[shuffleTo] = tmp;
+                }
+            }
+        }
+
+        public static class QueueExtensionMethods
+        {
+            public static void EnqueueRange<T>(this Queue<T> queue, IEnumerable<T> collection)
+            {
+                foreach (T item in collection)
+                {
+                    queue.Enqueue(item);
                 }
             }
         }
@@ -1587,11 +1610,11 @@ namespace Blocks
 
         public static bool IsBlockLiquid(int block)
         {
-            return block == Example.Water || block == Example.WaterNoFlow;
+            return block == Example.Water || block == Example.WaterNoFlow || block == Example.Lava;
         }
         public static bool IsBlockSolid(int block)
         {
-            return block != (int)BlockValue.Air && block != (int)Example.Water && block != (int)Example.WaterNoFlow && block != BlockValue.Wildcard;
+            return block != (int)BlockValue.Air && block != (int)Example.Water && block != (int)Example.WaterNoFlow && block != BlockValue.Wildcard && block != (int)Example.Lava;
         }
 
         public static bool RayCast(Vector3 origin, Vector3 dir, float maxDist, int maxSteps = -1)

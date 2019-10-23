@@ -1117,14 +1117,32 @@ namespace Blocks
                         argbTexture.Apply();
                         Color32[] argbColors = argbTexture.GetPixels32();
 
+                        if (argbTexture.width == 16 && argbTexture.height == 16)
+                        {
+                            Debug.Log("tiling texture" + texName + " with path " + texFilePath);
+
+                            argbTexture = new Texture2D(16 * 2, 16 * 3, TextureFormat.ARGB32, false, true);
+                            argbTexture.SetPixels(0, 0, 16, 16, curTex.GetPixels());
+                            argbTexture.SetPixels(16, 0, 16, 16, curTex.GetPixels());
+                            argbTexture.SetPixels(0, 16, 16, 16, curTex.GetPixels());
+                            argbTexture.SetPixels(16, 16, 16, 16, curTex.GetPixels());
+                            argbTexture.SetPixels(0, 32, 16, 16, curTex.GetPixels());
+                            argbTexture.SetPixels(16, 32, 16, 16, curTex.GetPixels());
+                            argbTexture.Apply();
+
+                        }
                         // rescale if needed to correct size
-                        if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
+                        else if (argbTexture.width != 16 * 2 || argbTexture.height != 16 * 3)
                         {
                             TextureScale.Bilinear(argbTexture, 16 * 2, 16 * 3);
+                            argbTexture.Apply();
+                            Debug.Log("rescaling texture " + texName + " with path " + texFilePath);
                         }
 
-                        argbTexture.Apply();
-                        texToIndex[texName] = new Tuple<int, Texture2D, string>(i, curTex, texFilePath);
+                        
+
+
+                        texToIndex[texName] = new Tuple<int, Texture2D, string>(i, argbTexture, texFilePath);
                         i += 1;
                         res.Add(texToIndex[texName]);
                     }

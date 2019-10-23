@@ -71,7 +71,7 @@ namespace Blocks
             {
                 return false;
             }
-            return (block.block == this.block && World.stackableSize.ContainsKey(this.block) && World.stackableSize[this.block] > count+block.count);
+            return (block.block == this.block && World.stackableSize.ContainsKey(this.block) && World.stackableSize[this.block] >= count+block.count);
         }
 
         // only adds and returns true if we can add the entire stack (this will break the code in blocks player when you left click to combine stack with finished product from crafting if this behavior is changed)

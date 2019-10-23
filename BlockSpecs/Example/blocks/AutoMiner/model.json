@@ -1,0 +1,15 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "inventory": "AutoMinerInventory.png",
+        "autominer": "AutoMiner.png"
+    },
+    "elements": [
+        {   
+            "from": [ 0, 0, 0 ],
+            "to": [ 16, 16, 16 ],
+            "shade": false,
+            "texture": "autominer"
+        }
+    ]
+}

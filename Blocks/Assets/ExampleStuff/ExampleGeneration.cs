@@ -7,40 +7,55 @@ using Blocks;
 public class ExampleGeneration : GenerationClass
 {
     public ChunkProperty elevationProp;
+    public ChunkProperty elevationModifierProp;
+    public ChunkProperty cheeseElevation;
     public ChunkProperty lavaProp;
     public ChunkProperty riverProp;
     public ChunkPropertyEvent riverEvent;
     public ChunkPropertyEvent treeEvent;
     public ChunkPropertyEvent caveEvent;
-    bool isFlatland = false;
+    public float seaLevel = 60.0f;
+    bool isFlatland = true;
     // megachunk (4x4x4 chunks or something): things decide properties based on megachunk, then fine tune based on individual values
     public override void OnGenerationInit()
     {
-        float minVal = 0.0f;
-        float maxVal = 300.0f;
+        float minVal = 50.0f;
+        float maxVal = 90.0f;
         //Simplex.Noise.Seed = 27;
         // scale 10 was what I used for pathing stuffs
-        elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 1.0f, usesY: true);
         lavaProp = new ChunkProperty("lavaElevation", bedrockMax-40, bedrockMin-30, usesY: false);
         riverProp = new ChunkProperty("river", 0.0f, 1.0f, scale: 1.0f, usesY: true);
-        world.AddChunkProperty(elevationProp);
+        elevationModifierProp = new ChunkProperty("elevationModifier", -10.0f, 10.0f, scale: 10.0f, usesY: false);
         world.AddChunkProperty(lavaProp);
         world.AddChunkProperty(riverProp);
         if (isFlatland)
         {
-
+            elevationProp = new ChunkProperty("elevation", 46, 46, scale: 1.0f, usesY: false);
+            world.AddChunkProperty(elevationProp);
         }
         else
         {
+            elevationProp = new ChunkProperty("elevation", minVal, maxVal, scale: 1.0f, usesY: true);
+            world.AddChunkProperty(elevationProp);
+            world.AddChunkProperty(elevationModifierProp);
+
+            cheeseElevation = new ChunkProperty("elevation", 350.0f, 500.0f, scale: 1.0f, usesY: true);
+            world.AddChunkProperty(cheeseElevation);
+
             world.AddChunkPropertyEvent(new ChunkPropertyEvent(200.0f, OnTree, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2600.0f, OnLavaTube, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(2000.0f, OnRiver, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(3.0f, OnIronOre, 1));
             //world.AddChunkPropertyEvent(new ChunkPropertyEvent(5.0f, OnCoalOre, 1));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(500.0f, OnCave, 2)); // amount i did lots of pathfinding fiddling with, lots of caves
-            //world.AddWorldGenerationEvent(new WorldGenerationEvent(400.0f, OnCave, 2));
+            world.AddWorldGenerationEvent(new WorldGenerationEvent(100.0f, OnCave, 2));
             //world.AddWorldGenerationEvent(new WorldGenerationEvent(200.0f, OnDeepCave, 2));
         }
+    }
+
+    public float GetElevation(long x, long y, long z)
+    {
+        return GetChunkProperty(x, y, z, elevationModifierProp) + GetChunkProperty(x, y, z, elevationProp);
     }
 
     public void OnLavaTube(long x, long y, long z, BlockData outBlock)
@@ -62,7 +77,7 @@ public class ExampleGeneration : GenerationClass
 
     public void OnDeepCave(long x, long y, long z)
     {
-        long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
+        long elevation = (long)GetElevation(x, y, z);
         if (elevation < y)
         {
             return;
@@ -240,7 +255,7 @@ public class ExampleGeneration : GenerationClass
     {
         //float caveLevelX = outBlock.GetChunkProperty(riverProp);
         long curX = x;
-        long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
+        long elevation = (long)GetElevation(x, y, z);
         if (System.Math.Abs(elevation - y) > 2)
         {
             return;
@@ -268,7 +283,7 @@ public class ExampleGeneration : GenerationClass
                 curZ += Math.Sign(offsetX) * 3;
             }
 
-            curY = (long)Math.Round(GetChunkProperty(curX, curY, curZ, elevationProp));
+            curY = (long)Math.Round(GetElevation(curX, curY, curZ));
             float caveWidth = 3.0f;
             int caveWidthI = (int)Math.Floor(caveWidth);
 
@@ -276,7 +291,7 @@ public class ExampleGeneration : GenerationClass
             {
                 for (int l = -caveWidthI; l <= caveWidthI; l++)
                 {
-                    curY = (int)Math.Round(GetChunkProperty(curX + j, curY, curZ + l, elevationProp));
+                    curY = (int)Math.Round(GetElevation(curX + j, curY, curZ + l));
                     for (int k = -caveWidthI; k <= -1; k++)
                     {
                         if (Math.Sqrt(j * j + k * k + l * l) <= caveWidth)
@@ -299,7 +314,7 @@ public class ExampleGeneration : GenerationClass
 
     public void OnCave(long x, long y, long z)
     {
-        long elevation = (long)GetChunkProperty(x, y, z, elevationProp);
+        long elevation = (long)GetElevation(x, y, z);
         if (elevation < y)
         {
             return;
@@ -357,13 +372,13 @@ public class ExampleGeneration : GenerationClass
 
     public void OnTree(long x, long y, long z, BlockData outBlock)
     {
-        float elevation = outBlock.GetChunkProperty(elevationProp);
+        float elevation = GetElevation(x, y, z);
         long elevationL = (long)Math.Round(elevation);
 
         if (Math.Abs(y-elevationL) < 10)
         {
             y = elevationL;
-            int treeHeight = (int)Math.Round(Simplex.Noise.rand(x, y + 2, z) * 20 + 6);
+            int treeHeight = (int)Math.Round(Simplex.Noise.rand(x, y, z) * 20 + 6);
             for (int i = 0; i < treeHeight; i++)
             {
                 if (i == 0)
@@ -387,10 +402,12 @@ public class ExampleGeneration : GenerationClass
                 float p;
                 float minVal;
                 float maxVal;
+                // Happens if pAlong is less than decrease point
                 if (pAlong < decreasePoint)
                 {
                     minVal = bottomWidth;
                     maxVal = maxWidth;
+                    // pAlong is from 0 to decrease point, change it so p goes from 0 to 1
                     p = (decreasePoint - pAlong) / decreasePoint;
                 }
                 else
@@ -445,8 +462,8 @@ public class ExampleGeneration : GenerationClass
     /// <returns></returns>
     public bool OnOrBelowSurface(long x, long y, long z, out long distFromSurface)
     {
-        long elevationL = (long)Math.Round(GetChunkProperty(x, y, z, elevationProp));
-        long elevationAbove = (long)Math.Round(GetChunkProperty(x, y + 1, z, elevationProp));
+        long elevationL = (long)Math.Round(GetElevation(x, y, z));
+        long elevationAbove = (long)Math.Round(GetElevation(x, y + 1, z));
 
         distFromSurface = elevationL - y;
         long aboveDistFromSurface = elevationAbove - (y + 1);
@@ -475,27 +492,53 @@ public class ExampleGeneration : GenerationClass
     {
         if (isFlatland)
         {
-            if (y < 1)
+            if (x < -10 || x > 10 || z < -10 || z > 10)
             {
-                outBlock.block = Example.Stone;
+                outBlock.block = Example.Air;
             }
             else
             {
-                outBlock.block = Example.Wildcard;
+                if (x == 0 && z == 5 && y == 46)
+                {
+                    //outBlock.block = Example.Wildcard;
+                    //OnTree(x, y, z, outBlock);
+                }
+                if (x == 5 && z == 5 && y == 45)
+                {
+                    outBlock.block = Example.IronOre;
+                }
+                else if (y == 45)
+                {
+                    outBlock.block = Example.Grass;
+                }
+                else if(y == 44)
+                {
+                    outBlock.block = Example.Dirt;
+                }
+                else
+                {
+                    //outBlock.block = Example.Wildcard;
+                }
             }
             return;
         }
-        float elevation = outBlock.GetChunkProperty(elevationProp);
+        float elevation = GetElevation(outBlock.x, outBlock.y, outBlock.z);
         //if (y <= 0)
         //{
         //    outBlock.block = BlockValue.STONE;
         //}
         long elevationL = (long)Math.Round(elevation);
-        long elevationAbove = (long)Math.Round(GetChunkProperty(x, y + 1, z, elevationProp));
+        long elevationAbove = (long)Math.Round(GetElevation(x, y + 1, z));
         if (y >= elevationL)
         {
-            // air, but allow other things to go here instead
-            outBlock.block = Example.Wildcard;
+            if (y < seaLevel)
+            {
+                outBlock.block = Example.WaterNoFlow;
+            }
+            else
+            {
+                outBlock.block = Example.Wildcard;
+            }
         }
         else
         {

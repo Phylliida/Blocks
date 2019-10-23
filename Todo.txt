@@ -1,0 +1,38 @@
+Todo:
+
+
+Opening menu texturing
+Lua JIT api
+Performance improvements
+Polish saving, autosaving, and loading
+Multiplayer
+Pipes
+Player health
+Combat
+Mob AI
+Block models show up as entities on the ground
+Pipe logic
+Auto-crafting system (like in factorio)
+Pink texture (from not assigned yet) initially for entity objects
+Blocks not actually being destroyed after breaking until a few seconds later, when initial world gen (probably should just wait for world to load)
+spawn far in the air (should spawn on the ground)
+Inventory should have small outlines around items that exist, also boxes should be polishedf
+Sometimes breaking animation doesn't happen still when move focus away (happened when starting, and persisted throughout play session)
+Move save and quit from center of screen when you press escape so you don't click on it by default
+
+Finished:
+10/21 Sometimes breaking animation doesn't happen (happened when starting, and persisted throughout play session)
+10/22 Saving thread throws exception sometimes on exit
+When items drop from blocks, make them wait a moment before being picked up (feels smoother that way)
+
+
+Far off:
+Magic system
+
+
+
+
+
+
+
+Skyblock: You start with a single ore, then you eventually can craft more ores out of it

@@ -3,6 +3,7 @@ using Blocks;
 namespace Example_pack {
     public class Example : BlockCollection
     {
+        public static BlockValue AutoMiner;
         public static BlockValue Axe;
         public static BlockValue BallTrack;
         public static BlockValue BallTrackEmpty;
@@ -15,10 +16,12 @@ namespace Example_pack {
         public static BlockValue Bark;
         public static BlockValue Barrel;
         public static BlockValue Bedrock;
+        public static BlockValue Cheese;
         public static BlockValue Chest;
         public static BlockValue Clay;
         public static BlockValue Coal;
         public static BlockValue CoalOre;
+        public static BlockValue ConveyerBelt;
         public static BlockValue CraftingTable;
         public static BlockValue Dirt;
         public static BlockValue Flower;
@@ -56,6 +59,7 @@ namespace Example_pack {
         // before Update was already being called for some classes
         public static void InitBlocks()
         {
+            AutoMiner = new BlockValue(true, "AutoMiner", "Example");
             Axe = new BlockValue(true, "Axe", "Example");
             BallTrack = new BlockValue(true, "BallTrack", "Example");
             BallTrackEmpty = new BlockValue(false, "BallTrackEmpty", "Example");
@@ -68,10 +72,12 @@ namespace Example_pack {
             Bark = new BlockValue(false, "Bark", "Example");
             Barrel = new BlockValue(true, "Barrel", "Example");
             Bedrock = new BlockValue(false, "Bedrock", "Example");
+            Cheese = new BlockValue(false, "Cheese", "Example");
             Chest = new BlockValue(false, "Chest", "Example");
             Clay = new BlockValue(false, "Clay", "Example");
             Coal = new BlockValue(true, "Coal", "Example");
             CoalOre = new BlockValue(false, "CoalOre", "Example");
+            ConveyerBelt = new BlockValue(true, "ConveyerBelt", "Example");
             CraftingTable = new BlockValue(false, "CraftingTable", "Example");
             Dirt = new BlockValue(false, "Dirt", "Example");
             Flower = new BlockValue(true, "Flower", "Example");

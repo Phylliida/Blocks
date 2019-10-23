@@ -8,6 +8,7 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using ExtensionMethods;
 using Blocks.ExtensionMethods;
+using System.IO.Compression;
 
 namespace Blocks
 {
@@ -596,9 +597,13 @@ namespace Blocks
             }
             if (chunk.chunkData.needToBeUpdated && (numAllowedToDoFullRender > 0 && (chunk.chunkRenderer.triangles != null && renderStatus == RenderStatus.HasTriangles)) && chunk.threadRenderingMe == -1)
             {
-                if (!chunk.needToUpdateLighting)
+                // if we have done all the lighting updates we need, we can be done updating this chunk
+                lock(chunk.modifyLock)
                 {
-                    chunk.chunkData.needToBeUpdated = false;
+                    if (!chunk.needToUpdateLighting)
+                    {
+                        chunk.chunkData.needToBeUpdated = false;
+                    }
                 }
                 // new stuff
 
@@ -1681,11 +1686,11 @@ namespace Blocks
 
         public BlockData.BlockRotation GetRelativeRotationOf(BlockData block)
         {
-            int baseRotation = (int)rotation;
-            int otherRotation = (int)block.rotation;
+            int baseRotation = (int)PhysicsUtils.RotationToDegrees(rotation);
+            int otherRotation = (int)PhysicsUtils.RotationToDegrees(block.rotation);
             // Good mod always returns a positive value
             int res = PhysicsUtils.GoodMod(baseRotation - otherRotation, 360);
-            return (BlockRotation)res;
+            return (BlockRotation)PhysicsUtils.DegreesToRotation(res);
         }
 
 
@@ -2178,6 +2183,16 @@ namespace Blocks
             return true;
         }
 
+        public override void BlockStackAbove(BlockData block, BlockStack blockStack, Vector3 blockStackPos, out BlockStack consumedBlockStack)
+        {
+            consumedBlockStack = blockStack;
+        }
+
+        public override void MovingEntityAbove(BlockData block, MovingEntity movingEntity)
+        {
+            
+        }
+
         public override bool CanConnect()
         {
             return false;
@@ -2288,6 +2303,11 @@ namespace Blocks
 
             }
         }
+
+
+        public abstract void MovingEntityAbove(BlockData block, MovingEntity movingEntity);
+
+        public abstract void BlockStackAbove(BlockData block, BlockStack blockStack, Vector3 blockStackPos, out BlockStack consumedBlockStack);
 
         public IEnumerable<BlockData> GetNeighbors(BlockData block, bool includingUp = true, bool includingDown = true)
         {
@@ -2930,36 +2950,37 @@ namespace Blocks
 
         public void FetchNeighboringChunks()
         {
-            x0Chunk = world.GetChunk(cx - 1, cy, cz);
-            y0Chunk = world.GetChunk(cx, cy - 1, cz);
-            z0Chunk = world.GetChunk(cx, cy, cz - 1);
-            x1Chunk = world.GetChunk(cx + 1, cy, cz);
-            y1Chunk = world.GetChunk(cx, cy + 1, cz);
-            z1Chunk = world.GetChunk(cx, cy, cz + 1);
+            if (x0Chunk == null) x0Chunk = world.GetChunk(cx - 1, cy, cz);
+            if (y0Chunk == null) y0Chunk = world.GetChunk(cx, cy - 1, cz);
+            if (z0Chunk == null) z0Chunk = world.GetChunk(cx, cy, cz - 1);
+            if (x1Chunk == null) x1Chunk = world.GetChunk(cx + 1, cy, cz);
+            if (y1Chunk == null) y1Chunk = world.GetChunk(cx, cy + 1, cz);
+            if (z1Chunk == null) z1Chunk = world.GetChunk(cx, cy, cz + 1);
         }
 
         public object modifyLock = new object();
+        public object modifyLock2 = new object();
 
         public int UpdateLightingForAllBlocks()
         {
             FetchNeighboringChunks();
             int numLightings = 0;
-            lock (modifyLock)
+            lock (modifyLock2)
             {
-                if (!needToUpdateLighting)
+                lock(modifyLock)
                 {
-                    return numLightings;
+                    if (!needToUpdateLighting)
+                    {
+                        return numLightings;
+                    }
+                    else
+                    {
+                        needToUpdateLighting = false;
+                    }
+                    IntegerSet tmp = blocksNeedUpdatingWithLight;
+                    blocksNeedUpdatingWithLight = blocksNeedUpdatingWithLightNextFrame;
+                    blocksNeedUpdatingWithLightNextFrame = tmp;
                 }
-                else
-                {
-                    needToUpdateLighting = false;
-                }
-
-
-                IntegerSet tmp = blocksNeedUpdatingWithLight;
-                blocksNeedUpdatingWithLight = blocksNeedUpdatingWithLightNextFrame;
-                blocksNeedUpdatingWithLightNextFrame = tmp;
-
 
                 if (blocksNeedUpdatingWithLightNextFrame.Count > 0)
                 {
@@ -3057,57 +3078,55 @@ namespace Blocks
 
         public void AddLightingUpdatesToBlock(LVector3 pos)
         {
+            int localX = (int)(pos.x - cx * chunkSizeX);
+            int localY = (int)(pos.y - cy * chunkSizeY);
+            int localZ = (int)(pos.z - cz * chunkSizeZ);
+            AddLightingUpdates(chunkData.to1D(localX, localY, localZ));
+        }
+
+        public void AddLightingUpdatesToBlock(int localX, int localY, int localZ)
+        {
+            AddLightingUpdates(chunkData.to1D(localX, localY, localZ));
+        }
+
+        public void AddLightingUpdatesToNeighbors(LVector3 pos)
+        {
+            FetchNeighboringChunks();
+            int localX = (int)(pos.x - cx * chunkSizeX);
+            int localY = (int)(pos.y - cy * chunkSizeY);
+            int localZ = (int)(pos.z - cz * chunkSizeZ);
+            AddLightingUpdatesToNeighbors(localX, localY, localZ);
+        }
+
+        public void AddLightingUpdates(int i)
+        {
             lock(modifyLock)
             {
-                int localX = (int)(pos.x - cx * chunkSizeX);
-                int localY = (int)(pos.y - cy * chunkSizeY);
-                int localZ = (int)(pos.z - cz * chunkSizeZ);
-                blocksNeedUpdatingWithLight.Add(chunkData.to1D(localX, localY, localZ));
-                blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D(localX, localY, localZ));
+                blocksNeedUpdatingWithLight.Add(i);
+                //blocksNeedUpdatingWithLightNextFrame.Add(i);
                 needToUpdateLighting = true;
                 chunkData.needToBeUpdated = true;
             }
         }
 
-        public void AddLightingUpdatesToBlock(int localX, int localY, int localZ)
-        {
-            blocksNeedUpdatingWithLight.Add(chunkData.to1D(localX, localY, localZ));
-            blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D(localX, localY, localZ));
-            needToUpdateLighting = true;
-            chunkData.needToBeUpdated = true;
-        }
-
-        public void AddLightingUpdatesToNeighbors(LVector3 pos)
-        {
-            lock(modifyLock)
-            {
-                FetchNeighboringChunks();
-                int localX = (int)(pos.x - cx * chunkSizeX);
-                int localY = (int)(pos.y - cy * chunkSizeY);
-                int localZ = (int)(pos.z - cz * chunkSizeZ);
-                AddLightingUpdatesToNeighbors(localX, localY, localZ);
-            }
-        }
-
         public void AddLightingUpdatesToNeighbors(int localX, int localY, int localZ)
         {
+            FetchNeighboringChunks();
             int x = localX;
             int y = localY;
             int z = localZ;
-            if (x == 0) { if (x0Chunk != null) { x0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(chunkSizeX - 1, y, z)); x0Chunk.needToUpdateLighting = true; x0Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x - 1, y, z)); }
-            if (y == 0) { if (y0Chunk != null) { y0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, chunkSizeY - 1, z)); y0Chunk.needToUpdateLighting = true; y0Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y - 1, z)); }
-            if (z == 0) { if (z0Chunk != null) { z0Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, chunkSizeZ - 1)); z0Chunk.needToUpdateLighting = true; z0Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, z - 1)); }
-            if (x == chunkSizeX - 1) { if (x1Chunk != null) { x1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(0, y, z)); x1Chunk.needToUpdateLighting = true; x1Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x + 1, y, z)); }
-            if (y == chunkSizeY - 1) { if (y1Chunk != null) { y1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, 0, z)); y1Chunk.needToUpdateLighting = true; y1Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y + 1, z)); }
-            if (z == chunkSizeZ - 1) { if (z1Chunk != null) { z1Chunk.blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, 0)); z1Chunk.needToUpdateLighting = true; z1Chunk.chunkData.needToBeUpdated = true; } }
-            else { blocksNeedUpdatingWithLight.Add(chunkData.to1D(x, y, z + 1)); }
-            needToUpdateLighting = true;
-            chunkData.needToBeUpdated = true;
+            if (x == 0) { if (x0Chunk != null) { x0Chunk.AddLightingUpdates(chunkData.to1D(chunkSizeX - 1, y, z)); } }
+            else { AddLightingUpdates(chunkData.to1D(x - 1, y, z)); }
+            if (y == 0) { if (y0Chunk != null) { y0Chunk.AddLightingUpdates(chunkData.to1D(x, chunkSizeY - 1, z)); } }
+            else { AddLightingUpdates(chunkData.to1D(x, y - 1, z)); }
+            if (z == 0) { if (z0Chunk != null) { z0Chunk.AddLightingUpdates(chunkData.to1D(x, y, chunkSizeZ - 1));  } }
+            else { AddLightingUpdates(chunkData.to1D(x, y, z - 1)); }
+            if (x == chunkSizeX - 1) { if (x1Chunk != null) { x1Chunk.AddLightingUpdates(chunkData.to1D(0, y, z));  } }
+            else { AddLightingUpdates(chunkData.to1D(x + 1, y, z)); }
+            if (y == chunkSizeY - 1) { if (y1Chunk != null) { y1Chunk.AddLightingUpdates(chunkData.to1D(x, 0, z)); } }
+            else { AddLightingUpdates(chunkData.to1D(x, y + 1, z)); }
+            if (z == chunkSizeZ - 1) { if (z1Chunk != null) { z1Chunk.AddLightingUpdates(chunkData.to1D(x, y, 0)); } }
+            else { AddLightingUpdates(chunkData.to1D(x, y, z + 1)); }
         }
 
         public PathingNode GetPathingNode(int neededSizeForward, int neededSizeSide, int neededSizeUp, int jumpHeight, bool verbose=false)
@@ -3309,9 +3328,9 @@ namespace Blocks
             long relativeY = j - cy * chunkSizeY;
             long relativeZ = k - cz * chunkSizeZ;
             chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
-            blocksNeedUpdatingWithLight.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
-            blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
-            needToUpdateLighting = true;
+            //blocksNeedUpdatingWithLight.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
+            //blocksNeedUpdatingWithLightNextFrame.Add(chunkData.to1D((int)relativeX, (int)relativeY, (int)relativeZ));
+            //needToUpdateLighting = true;
             chunkData.needToBeUpdated = true;
         }
 
@@ -3382,8 +3401,18 @@ namespace Blocks
                                     block.lightingState = 0;
                                     if (block.block != BlockValue.Wildcard && block.block != BlockValue.Air)
                                     {
+                                        BlockOrItem customBlock;
+                                        if (world.customBlocks.ContainsKey(block.block, out customBlock) && customBlock.ConstantLightEmitted() > 0)
+                                        {
+                                            block.lightProduced = customBlock.ConstantLightEmitted();
+                                            AddLightingUpdatesToBlock((int)(x - baseX), (int)(y - baseY), (int)(z - baseZ));
+                                            AddLightingUpdatesToNeighbors((int)(x - baseX), (int)(y - baseY), (int)(z - baseZ));
+                                        }
                                         //chunkData.blocksNeedUpdating.Add((int)chunkData.to1D(x - cx * chunkSizeX, y - cy * chunkSizeY, z - cz * chunkSizeZ));
                                     }
+
+
+
                                     /*
                                     // if we became a solid block and we are higher than the previous highest block y, set us to the highest one
                                     if (block.block != BlockValue.Air && block.block != BlockValue.Wildcard && y > curHighestBlockY)
@@ -3474,6 +3503,7 @@ namespace Blocks
             generating = false;
 
             this.touchingSkyChunk = world.blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
+
             //world.blocksTouchingSky.GeneratedChunk(this);
 
             /*
@@ -3619,7 +3649,7 @@ namespace Blocks
             {
                 for (int i = 0; i < chunkSizeX * chunkSizeY * chunkSizeZ; i++)
                 {
-                    blocksNeedUpdatingWithLight.Add(i);
+                    //blocksNeedUpdatingWithLight.Add(i);
                 }
                 needToUpdateLighting = true;
             }
@@ -3963,6 +3993,7 @@ namespace Blocks
                 block.lightingState = PackLightingValues(skyLighting, blockLighting, touchingSky, touchingTransparentOrAir, touchingSkyFlags, makingBlockLight: makingBlockLight, producedLight: producedBlockLight);
                 //numLightUpdated += 1;
                 chunkData.needToBeUpdated = true;
+                AddLightingUpdatesToBlock((int)x, (int)y, (int)z);
                 AddLightingUpdatesToNeighbors((int)x, (int)y, (int)z);
             }
         }
@@ -3983,7 +4014,10 @@ namespace Blocks
                 if (allowGenerate)
                 {
                     this.TickStart(frameId);
+                    long curTime = PhysicsUtils.millis();
                     Generate();
+                    long elapsedTime = PhysicsUtils.millis() - curTime;
+                    //Debug.Log("took " + elapsedTime + " time to generate chunk " + cx + " " + cy + " " + cz);
                     this.chunkRenderer.Tick();
                     return true;
                 }
@@ -4003,7 +4037,7 @@ namespace Blocks
 
             this.chunkRenderer.Tick();
 
-            if (!allowTick || !needToDoAnotherTick.Do())
+            if (!allowTick) // || !needToDoAnotherTick.Do())
             {
                 return didGenerate;
             }
@@ -4024,12 +4058,14 @@ namespace Blocks
                 {
                     //Debug.Log("chunk " + cx + " " + cy + " " + cz + " has " + chunkData.blocksNeedUpdating.Count + " block updates");
 
+                    bool modifiedSomething = false;
                     //bool relevantChunk = true;
                     //int k = 0;
                     for (int j = 0; j < chunkData.blocksNeedUpdating.Count; j++)
                     {
                         int i = chunkData.blocksNeedUpdating[j];
 
+                        world.blocksWorld.ticksThisFrame += 1;
                         //if (PhysicsUtils.millis() - world.frameTimeStart > maxMillisInFrame)
                         // {
                         //     chunkData.blocksNeedUpdatingNextFrame.Add(i);
@@ -4048,6 +4084,8 @@ namespace Blocks
                             block.myChunk = this;
                             BlockValue oldBlockValue = block.block;
                             int oldLightingState = block.lightingState;
+                            int oldAnimationState = block.animationState;
+                            int oldState = block.state;
                             //world.blocksWorld.lightingTicksThisFrame += 1;
                             //UpdateLighting(block);
                             BlockOrItem customBlock;
@@ -4068,18 +4106,23 @@ namespace Blocks
                             }
 
 
-                            if (oldBlockValue != block.block || oldLightingState != block.lightingState)
+                            if (oldBlockValue != block.block)
                             {
-                                blocksNeedUpdatingWithLight.Add(i);
-                                blocksNeedUpdatingWithLightNextFrame.Add(i);
+                                chunkData.blocksNeedUpdatingNextFrame.Add((int)ind);
+                            }
+                            if (oldLightingState != block.lightingState)
+                            {
+                                AddLightingUpdates(i);
+                                //blocksNeedUpdatingWithLight.Add(i);
+                                //blocksNeedUpdatingWithLightNextFrame.Add(i);
                                 AddLightingUpdatesToNeighbors((int)x, (int)y, (int)z);
-                                needToUpdateLighting = true;
-                                chunkData.needToBeUpdated = true;
+                                //needToUpdateLighting = true;
+                                //chunkData.needToBeUpdated = true;
                             }
 
-                            if (block.WasModified)
+                            if (block.WasModified || oldAnimationState != block.animationState || oldLightingState != block.lightingState || oldState != block.state || oldBlockValue != block.block)
                             {
-                                chunkData.needToBeUpdated = true;
+                                modifiedSomething = true;
                                 // don't call lots of chunk lookups if we don't need to
                                 if (x == 0) AddBlockUpdateOutsideChunk(wx - 1, wy, wz, ref negX);
                                 else chunkData.AddBlockUpdate(x - 1, y, z);
@@ -4142,6 +4185,10 @@ namespace Blocks
                         */
                     }
 
+                    if(modifiedSomething)
+                    {
+                        chunkData.needToBeUpdated = true;
+                    }
 
                     //Debug.Log("updated " + chunkData.blocksNeedUpdating.Count + " blocks with " + numLightUpdated + " lighting updates " + cx + " " + cy + " " + cz);
 
@@ -4164,7 +4211,12 @@ namespace Blocks
             long relativeY = y - cy * chunkSizeY;
             long relativeZ = z - cz * chunkSizeZ;
             bool addedUpdate;
+            long curEditNum = chunkData.editNum;
             chunkData.SetState(relativeX, relativeY, relativeZ, state, stateType, out addedUpdate);
+            if (stateType == BlockState.Lighting && chunkData.editNum != curEditNum)
+            {
+                AddLightingUpdates((int)chunkData.to1D(relativeX, relativeY, relativeZ));
+            }
             // if we aren't generating (so we don't trickle updates infinately) and we modified the block, add a block update call to this block's neighbors
             if (!generating && addedUpdate)
             {
@@ -4342,11 +4394,52 @@ namespace Blocks
                 {
                     world.AddBlockUpdateToNeighbors(x, y, z);
                     chunkData.AddBlockUpdate(relativeX, relativeY, relativeZ);
-                    Debug.Log("added update");
+                    //Debug.Log("added update");
                 }
 
                 // we are all done with fiddling, allow other render threads to update us now
                 //this.threadRenderingMe = -1;
+            }
+        }
+
+        object chunkSaveLock = new object();
+        long editNumWrittenToDisk = -5;
+        public bool WriteToDisk()
+        {
+            if (editNumWrittenToDisk != chunkData.editNum && !generating)
+            {
+                lock(chunkSaveLock)
+                {
+                    if (editNumWrittenToDisk != chunkData.editNum && !generating)
+                    {
+                        string rootDir = World.currentWorldDir;
+                        DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
+                        if (!rootInfo.Exists)
+                        {
+                            Directory.CreateDirectory(rootInfo.FullName);
+                        }
+                        string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
+                        string chunksDir = cleanedRootDir + "/chunks";
+                        DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
+                        if (!chunksDirInfo.Exists)
+                        {
+                            Directory.CreateDirectory(chunksDirInfo.FullName);
+                        }
+                        string chunkName = cx + "." + cy + "." + cz + ".dat";
+                        chunkData.WriteToRLEFile(chunksDir + "/" + chunkName);
+                        Debug.Log("Writing chunk " + cx + " " + cy + " " + cz + " to " + chunksDir + "/" + chunkName);
+                        editNumWrittenToDisk = chunkData.editNum;
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                return false;
             }
         }
 
@@ -4376,6 +4469,61 @@ namespace Blocks
 
         public List<Chunk> attachedChunks = new List<Chunk>();
 
+
+
+        public static int[] ToRunLengthEncodedData(int[] originalData)
+        {
+            int[] result = new int[originalData.Length*2]; // worst case it is twice as long (if every value is distinct)
+
+            // first two values are size, then a 0
+            result[0] = originalData.Length;
+            result[1] = 0;
+            int resultI = 2;
+            int curValue = 0;
+            int curCount = 0;
+            for (int i = 0; i < originalData.Length; i++)
+            {
+                if (originalData[i] == curValue)
+                {
+                    curCount += 1;
+                }
+                else if(curCount > 0)
+                {
+                    result[resultI] = curValue;
+                    result[resultI+1] = curCount;
+                    curValue = originalData[i];
+                    curCount = 1;
+                    resultI = resultI + 2;
+                }
+            }
+
+            int[] actualResult = new int[resultI];
+            for (int i = 0; i < resultI; i++)
+            {
+                actualResult[i] = result[i];
+            }
+            return actualResult;
+        }
+
+        public static int[] FromRunLengthEncodedData(int[] rleData)
+        {
+            // first two values are size, then a zero
+            int originalSize = rleData[0];
+            int[] result = new int[originalSize];
+            int iInResult = 0;
+            for (int i = 2; i < rleData.Length; i+=2)
+            {
+                int val = rleData[i];
+                int count = rleData[i + 1];
+                for (int j = 0; j < count; j++)
+                {
+                    result[iInResult] = val;
+                    iInResult += 1;
+                }
+            }
+            return result;
+        }
+
         public ChunkData(bool fillWithWildcard = false)
         {
             data = new int[chunkSizeX * chunkSizeY * chunkSizeZ * 4];
@@ -4397,23 +4545,24 @@ namespace Blocks
             this.blocksNeedUpdatingNextFrame = new IntegerSet(chunkSizeX * chunkSizeY * chunkSizeZ);
         }
 
-        public void WriteToFile(string path)
-        {
-            // convert ints to bytes
-            byte[] byteData = new byte[sizeof(int) * data.Length];
-            System.Buffer.BlockCopy(data, 0, byteData, 0, byteData.Length); // size is in number of bytes
 
+        public void WriteToRLEFile(string path)
+        {
+            int[] rleData = ToRunLengthEncodedData(data);
+            // convert ints to bytes
+            byte[] byteData = new byte[sizeof(int) * rleData.Length];
+            System.Buffer.BlockCopy(rleData, 0, byteData, 0, byteData.Length); // size is in number of bytes
             // write to file
             File.WriteAllBytes(path, byteData);
-
         }
 
-        public void ReadFromFile(string path)
+        public void ReadFromRLEFile(string path)
         {
             // read from file
             byte[] byteData = File.ReadAllBytes(path);
-            data = new int[byteData.Length / sizeof(int)];
-            System.Buffer.BlockCopy(byteData, 0, data, 0, data.Length * sizeof(int)); // size is in number of bytes
+            int[] rleData = new int[byteData.Length / sizeof(int)];
+            System.Buffer.BlockCopy(byteData, 0, rleData, 0, rleData.Length * sizeof(int)); // size is in number of bytes
+            this.data = FromRunLengthEncodedData(rleData);
             this.needToBeUpdated = true;
         }
 
@@ -4429,7 +4578,7 @@ namespace Blocks
                 {
                     bool skipAhead = false;
                     // if base generation and something else has already filled this in, skip ahead
-                    if (priority == 0 && chunkData[i] != BlockValue.Wildcard)
+                    if (priority == 0 && (chunkData[i] != BlockValue.Wildcard && chunkData[i] != BlockValue.Air))
                     {
                         skipAhead = true;
                     }
@@ -4438,8 +4587,6 @@ namespace Blocks
                     {
                         chunkData[i] = data[i];
                         blocksNeedUpdatingNextFrame.Add(i / 4);
-                        chunk.blocksNeedUpdatingWithLight.Add(i / 4);
-                        chunk.needToUpdateLighting = true;
                         int localX, localY, localZ;
                         to3D(i / 4, out localX, out localY, out localZ);
                         long wx = chunk.cx * chunkSizeX + localX;
@@ -4467,7 +4614,21 @@ namespace Blocks
                         i += 3;
                     }
                 }
+                // State
                 else if (i % 4 == 1)
+                {
+                    chunkData[i] = data[i];
+                }
+                // Lighting
+                else if(i % 4 == 2)
+                {
+                    if (data[i] != chunkData[i])
+                    {
+                        chunk.AddLightingUpdates(i / 4);
+                    }
+                }
+                // Animation State
+                else if(i % 4 == 3)
                 {
                     chunkData[i] = data[i];
                 }
@@ -4676,6 +4837,12 @@ namespace Blocks
 
         public long blockModifyState = 1;
         protected BlockDataCache blockDataCache;
+
+        public BlockData GetBlockData(LVector3 pos)
+        {
+            return blockDataCache.GetNewBlockData(pos.x, pos.y, pos.z);
+        }
+
         public BlockData GetBlockData(long x, long y, long z)
         {
             return blockDataCache.GetNewBlockData(x, y, z);
@@ -4729,6 +4896,7 @@ namespace Blocks
         public string name;
         public int priority=0;
         public bool madeInGeneration;
+        public string uid;
         public SavedChunk[] savedChunks;
 
         public SavedStructure()
@@ -4736,9 +4904,10 @@ namespace Blocks
 
         }
 
-        public SavedStructure(string name, bool madeInGeneration, SavedChunk[] savedChunks, int priority)
+        public SavedStructure(string name, string uid, bool madeInGeneration, SavedChunk[] savedChunks, int priority)
         {
             this.name = name;
+            this.uid = uid;
             this.madeInGeneration = madeInGeneration;
             this.savedChunks = savedChunks;
             this.priority = priority;
@@ -4747,7 +4916,7 @@ namespace Blocks
     [System.Serializable]
     public class SavedChunk
     {
-        public int[] chunkData;
+        public int[] chunkDataRLE;
         public long cx, cy, cz;
 
         public SavedChunk()
@@ -4757,7 +4926,7 @@ namespace Blocks
 
         public SavedChunk(int[] chunkData, long cx, long cy, long cz)
         {
-            this.chunkData = chunkData;
+            this.chunkDataRLE = ChunkData.ToRunLengthEncodedData(chunkData);
             this.cx = cx;
             this.cy = cy;
             this.cz = cz;
@@ -4768,8 +4937,26 @@ namespace Blocks
     {
         public string name;
         public bool madeInGeneration;
+        public string uid;
         Dictionary<LVector3, ChunkData> ungeneratedChunkPositions;
 
+        public static HashSet<string> allUids;
+
+        public static string getNewUID()
+        {
+            if (allUids == null)
+            {
+                allUids = new HashSet<string>();
+            }
+            string curUID = System.Guid.NewGuid().ToString();
+            while (allUids.Contains(curUID))
+            {
+                curUID = System.Guid.NewGuid().ToString();
+            }
+            allUids.Add(curUID);
+            return curUID;
+
+        }
 
         public int priority;
         public Chunk baseChunk;
@@ -4778,6 +4965,7 @@ namespace Blocks
         {
             this.priority = priority;
             this.name = name;
+            this.uid = getNewUID();
             this.baseChunk = baseChunk;
             this.blockDataCache = new BlockDataCache(this);
             ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
@@ -4787,8 +4975,14 @@ namespace Blocks
 
         public Structure(SavedStructure savedStructure)
         {
+            if (allUids == null)
+            {
+                allUids = new HashSet<string>();
+            }
             name = savedStructure.name;
             priority = savedStructure.priority;
+            uid = savedStructure.uid;
+            allUids.Add(uid);
             this.baseChunk = null;
             this.blockDataCache = new BlockDataCache(this);
             ungeneratedChunkPositions = new Dictionary<LVector3, ChunkData>();
@@ -4797,10 +4991,11 @@ namespace Blocks
             {
                 SavedChunk savedChunk = savedStructure.savedChunks[i];
                 LVector3 savedChunkPos = new LVector3(savedChunk.cx, savedChunk.cy, savedChunk.cz);
-                int[] savedChunkData = savedChunk.chunkData;
+                int[] savedChunkData = ChunkData.FromRunLengthEncodedData(savedChunk.chunkDataRLE);
 
                 ChunkData resSavedChunkData = new ChunkData(savedChunkData);
                 ungeneratedChunkPositions[savedChunkPos] = resSavedChunkData;
+
             }
         }
 
@@ -4810,17 +5005,101 @@ namespace Blocks
             return ungeneratedChunkPositions.Count == 0;
         }
 
+        bool savedToFile = false;
 
+        object saveLock = new object();
+
+
+        public void RemoveFromDisk()
+        {
+            string rootDir = World.currentWorldDir;
+            DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
+            if (!rootInfo.Exists)
+            {
+                Directory.CreateDirectory(rootInfo.FullName);
+            }
+            string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
+            string savedStructuresDir = cleanedRootDir + "/savedStructures";
+            DirectoryInfo savedStructuresDirInfo = new DirectoryInfo(savedStructuresDir);
+            if (!savedStructuresDirInfo.Exists)
+            {
+                Directory.CreateDirectory(savedStructuresDirInfo.FullName);
+            }
+            string filePath = savedStructuresDir + "/" + uid + ".dat";
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        public bool WriteToDisk()
+        {
+            if (!savedToFile)
+            {
+                lock (saveLock)
+                {
+                    if (!savedToFile && ungeneratedChunkPositions.Count > 0)
+                    {
+                        Debug.Log("savivng structure " + uid);
+                        string rootDir = World.currentWorldDir;
+                        DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
+                        if (!rootInfo.Exists)
+                        {
+                            Directory.CreateDirectory(rootInfo.FullName);
+                        }
+                        string cleanedRootDir = rootInfo.FullName.Replace("\\", "/");
+                        string savedStructuresDir = cleanedRootDir + "/savedStructures";
+                        DirectoryInfo savedStructuresDirInfo = new DirectoryInfo(savedStructuresDir);
+                        if (!savedStructuresDirInfo.Exists)
+                        {
+                            Directory.CreateDirectory(savedStructuresDirInfo.FullName);
+                        }
+                        WriteToFile(savedStructuresDir + "/" + uid + ".dat");
+                        savedToFile = true;
+                        return true;
+                    }
+                    else if(ungeneratedChunkPositions.Count == 0)
+                    {
+                        RemoveFromDisk();
+                        return false;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public void WriteToFile(string filePath)
+        {
+            File.WriteAllText(filePath, Newtonsoft.Json.JsonConvert.SerializeObject(ToSavedStructure()));
+        }
 
         public SavedStructure ToSavedStructure()
         {
             List<SavedChunk> savedChunks = new List<SavedChunk>();
-            foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositions)
+            // for multithreaded accesss
+            List<KeyValuePair<LVector3, ChunkData>> ungeneratedChunkPositionsCopy = new List<KeyValuePair<LVector3, ChunkData>>();
+            lock (ungeneratedChunkPositions)
+            {
+                foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositions)
+                {
+                    ungeneratedChunkPositionsCopy.Add(savedChunk);
+                }
+            }
+
+            foreach (KeyValuePair<LVector3, ChunkData> savedChunk in ungeneratedChunkPositionsCopy)
             {
                 savedChunks.Add(new SavedChunk(savedChunk.Value.GetRawData(), savedChunk.Key.x, savedChunk.Key.y, savedChunk.Key.z));
             }
 
-            return new SavedStructure(name, madeInGeneration, savedChunks.ToArray(), priority);
+
+            return new SavedStructure(name, uid, madeInGeneration, savedChunks.ToArray(), priority);
         }
 
 
@@ -4842,8 +5121,22 @@ namespace Blocks
             {
                 ChunkData chunkData = ungeneratedChunkPositions[chunkPos];
                 chunkData.CopyIntoChunk(chunk, priority);
-                ungeneratedChunkPositions.Remove(chunkPos);
+                lock(ungeneratedChunkPositions)
+                {
+                    ungeneratedChunkPositions.Remove(chunkPos);
+                }
             }
+
+
+            if (ungeneratedChunkPositions.Count == 0)
+            {
+                RemoveFromDisk();
+            }
+            else
+            {
+                savedToFile = false;
+            }
+
             return ungeneratedChunkPositions.Count == 0;
         }
 
@@ -5311,6 +5604,9 @@ namespace Blocks
 
         ChunkProperties chunkProperties;
 
+
+
+
         [System.Serializable]
         public class BlockInventory
         {
@@ -5508,6 +5804,8 @@ namespace Blocks
         bool allowedToGenerate = true;
         public void Save(string rootDir)
         {
+            long curTime = PhysicsUtils.millis();
+            Debug.Log("starting save ");
             DirectoryInfo rootInfo = new DirectoryInfo(rootDir);
             if (!rootInfo.Exists)
             {
@@ -5524,30 +5822,60 @@ namespace Blocks
             List<Chunk> curAllChunks = new List<Chunk>(allChunks);
             foreach (Chunk chunk in curAllChunks)
             {
-                string chunkName = chunk.cx + "." + chunk.cy + "." + chunk.cz + ".dat";
-                chunk.chunkData.WriteToFile(chunksDir + "/" + chunkName);
+                if(chunk.WriteToDisk())
+                {
+                }
             }
+            Debug.Log("done with saving chunks in " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             string configPath = cleanedRootDir + "/blocksConfig.json";
             File.WriteAllText(configPath, BlockValue.SaveIdConfigToJsonString());
 
+            Debug.Log("done with saving id configs " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             string inventoriesPath = cleanedRootDir + "/blockInventories.json";
             File.WriteAllText(inventoriesPath, Newtonsoft.Json.JsonConvert.SerializeObject(GetBlockInventories()));
 
+            Debug.Log("done with saving block inventories in " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             string entityInfosPath = cleanedRootDir + "/entityInfos.json";
             File.WriteAllText(entityInfosPath, Newtonsoft.Json.JsonConvert.SerializeObject(GetEntityInfos()));
 
+            Debug.Log("done with saving entity infos " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             string structurePath = cleanedRootDir + "/generatingStructures.json";
 
+            Debug.Log("done with saving generating structures " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             List<SavedStructure> savedStructures = new List<SavedStructure>();
-            foreach (Structure structure in unfinishedStructures)
+            int numSaved = 0;
+
+            List<Structure> copiedStructures = new List<Structure>();
+            lock (unfinishedStructures)
             {
-                savedStructures.Add(structure.ToSavedStructure());
+                foreach (Structure structure in unfinishedStructures)
+                {
+                    copiedStructures.Add(structure);
+                }
             }
 
-            SavedStructureCollection savedStructuresCollection = new SavedStructureCollection(savedStructures.ToArray());
+            foreach (Structure structure in copiedStructures)
+            {
+                if(structure.WriteToDisk())
+                {
+                    numSaved += 1;
+                }
+                //savedStructures.Add(structure.ToSavedStructure());
+            }
 
-            File.WriteAllText(structurePath, Newtonsoft.Json.JsonConvert.SerializeObject(savedStructuresCollection));
 
+
+            //SavedStructureCollection savedStructuresCollection = new SavedStructureCollection(savedStructures.ToArray());
+
+            //File.WriteAllText(structurePath, Newtonsoft.Json.JsonConvert.SerializeObject(savedStructuresCollection));
+
+            Debug.Log("done with saving " + numSaved + " unsaved structures " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
 
             if (worldGenOptions == null)
             {
@@ -5558,8 +5886,12 @@ namespace Blocks
             string worldGenOptionsPath = cleanedRootDir + "/worldGenOptions.json";
             File.WriteAllText(worldGenOptionsPath, Newtonsoft.Json.JsonConvert.SerializeObject(worldGenOptions));
 
+            Debug.Log("done with saving world gen options " + (PhysicsUtils.millis() - curTime));
+            curTime = PhysicsUtils.millis();
             allowedToGenerate = true;
         }
+
+
 
         public void Load(string rootDir)
         {
@@ -5602,7 +5934,11 @@ namespace Blocks
             DirectoryInfo chunksDirInfo = new DirectoryInfo(chunksDir);
 
             // clear structures
-            unfinishedStructures.Clear();
+            lock(unfinishedStructures)
+            {
+
+                unfinishedStructures.Clear();
+            }
 
             FastSimpleBlockLookup newCustomBlocks = new FastSimpleBlockLookup(100000);
             foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
@@ -5639,6 +5975,11 @@ namespace Blocks
             chunkCache.Clear();
             ungeneratedBiomeDatas.Clear();
             lastChunk = null;
+
+
+            string savedStructuresDir = cleanedRootDir + "/savedStructures";
+            DirectoryInfo savedStructuresDirInfo = new DirectoryInfo(savedStructuresDir);
+            /*
             string generatingStructuresPath = cleanedRootDir + "/generatingStructures.json";
             if (!File.Exists(generatingStructuresPath))
             {
@@ -5651,6 +5992,26 @@ namespace Blocks
                 {
                     Structure savedStructure = new Structure(structure);
                     unfinishedStructures.Add(savedStructure);
+                }
+            }
+            */
+
+            // load saved structures
+            if (savedStructuresDirInfo.Exists)
+            {
+                string[] savedStructuresFiles = Directory.GetFiles(savedStructuresDirInfo.FullName, "*.dat", SearchOption.TopDirectoryOnly);
+                foreach (string savedStructuresFile in savedStructuresFiles)
+                {
+                    FileInfo fInfo = new FileInfo(savedStructuresFile);
+                    if (fInfo.Exists)
+                    {
+                        SavedStructure savedStructure = Newtonsoft.Json.JsonConvert.DeserializeObject<SavedStructure>(File.ReadAllText(fInfo.FullName));
+                        Structure structure = new Structure(savedStructure);
+                        lock(unfinishedStructures)
+                        {
+                            unfinishedStructures.Add(structure);
+                        }
+                    }
                 }
             }
 
@@ -5676,7 +6037,7 @@ namespace Blocks
                             {
                                 Chunk spruce = GetOrGenerateChunk(cx, cy, cz);
                                 spruce.generating = false;
-                                spruce.chunkData.ReadFromFile(fInfo.FullName);
+                                spruce.chunkData.ReadFromRLEFile(fInfo.FullName);
                                 World.mainWorld.blocksTouchingSky.GeneratedChunk(spruce);
                                 spruce.touchingSkyChunk = blocksTouchingSky.GetOrCreateSkyChunk(cx, cz);
                             }
@@ -5684,6 +6045,8 @@ namespace Blocks
                     }
                 }
             }
+
+
 
 
             // it is important we load config  before loading inventories since inventories are stored by block id and block id mapping to blocks can vary so the config sets up the proper mapping for block ids to blocks
@@ -6067,6 +6430,7 @@ namespace Blocks
         ////BlockValue.LargeSharpRock
     };
 
+
         public bool AllowedtoPlaceBlock(BlockValue block, AxisDir axisPlacedOn, LVector3 pos)
         {
             BlockOrItem customBlock;
@@ -6082,6 +6446,15 @@ namespace Blocks
                 }
             }
             return true;
+        }
+
+
+        public BlockTileEntity CreateTileEntity(BlockStack blockStack, Vector3 position)
+        {
+            GameObject blockEntity = GameObject.Instantiate(blocksWorld.blockTileEntityPrefab);
+            blockEntity.transform.position = position;
+            blockEntity.GetComponent<BlockTileEntity>().blockStack = blockStack;
+            return blockEntity.GetComponent<BlockTileEntity>();
         }
 
         BlockEntity CreateBlockEntity(BlockValue block, Vector3 position)
@@ -6269,7 +6642,10 @@ namespace Blocks
 
         public void AddUnfinishedStructure(Structure structure)
         {
-            unfinishedStructures.Add(structure);
+            lock(unfinishedStructures)
+            {
+                unfinishedStructures.Add(structure);
+            }
         }
 
 
@@ -7505,6 +7881,12 @@ namespace Blocks
                 for(int i = 0; i < chunksHere.Count; i++)
                 {
                     Chunk chunk = chunksHere[i];
+
+                    if (chunk == null)
+                    {
+                        Debug.LogWarning("warning: null chunk");
+                        continue;
+                    }
                     if (chunk.cx == pos[0] && chunk.cy == pos[1] && chunk.cz == pos[2])
                     {
                         if (Thread.CurrentThread == helperThread)
@@ -7783,7 +8165,10 @@ namespace Blocks
             return chunk;
         }
 
-
+        public void AddBlockUpdate(LVector3 pos)
+        {
+            AddBlockUpdate(pos.x, pos.y, pos.z);
+        }
         public void AddBlockUpdate(long i, long j, long k, bool alsoToNeighbors = false)
         {
             long chunkX = divWithFloorForChunkSizeX(i);
@@ -7821,7 +8206,10 @@ namespace Blocks
                 chunk.SetTouchingAir(i, j, k, value);
             }
         }
-
+        public void AddBlockUpdateToNeighbors(LVector3 pos)
+        {
+            AddBlockUpdateToNeighbors(pos.x, pos.y, pos.z);
+        }
         public void AddBlockUpdateToNeighbors(long i, long j, long k)
         {
             AddBlockUpdate(i - 1, j, k, alsoToNeighbors: false);
@@ -8054,13 +8442,33 @@ namespace Blocks
         public bool playerMovedChunks = false;
         long frameId = 0;
         public long frameTimeStart = 0;
-        public void Tick()
+        public void Tick(bool onlyGenerate)
         {
-            frameId += 1;
-            foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
+            if (!onlyGenerate)
             {
-                block.Value.OnTickStart();
+                foreach (KeyValuePair<BlockValue, BlockOrItem> block in customBlocks)
+                {
+                    block.Value.OnTickStart();
+                }
+
+                List<Tuple<Chunk, long>> allChunksHere2 = GetChunksCloserThanRenderDist(true, maxDist: 100000);
+
+                foreach (Tuple<Chunk, long> chunkAndDist in allChunksHere2)
+                {
+                    if (!chunkAndDist.a.generating)
+                    {
+                        int maxTickStepsf = 10000000;
+                        chunkAndDist.a.Tick(frameId, false, true, ref maxTickStepsf);
+                    }
+                }
+
+                return;
             }
+            
+
+
+            bool allowTick = !onlyGenerate;
+            frameId += 1;
             // what direction is checked first: goes in a weird order after that
             globalPreference = (globalPreference + 1) % 4;
             List<Tuple<Chunk, long>> allChunksHere = GetChunksCloserThanRenderDist(false);
@@ -8088,26 +8496,26 @@ namespace Blocks
                 LVector3 playerPos = LVector3.FromUnityVector3(playerPosition);
 
                 Chunk playerChunk = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z);
-                RunTick(playerChunk, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunk, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkBelow = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y-chunkSizeY, playerPos.z);
-                RunTick(playerChunkBelow, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkBelow, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
                 Chunk playerChunkAbove = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y + chunkSizeY, playerPos.z);
-                RunTick(playerChunkAbove, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkAbove, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkX = GetOrGenerateChunkAtPos(playerPos.x + chunkSizeX, playerPos.y, playerPos.z);
-                RunTick(playerChunkX, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkX, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkX2 = GetOrGenerateChunkAtPos(playerPos.x - chunkSizeX, playerPos.y, playerPos.z);
-                RunTick(playerChunkX2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkX2, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkZ = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z+chunkSizeZ);
-                RunTick(playerChunkZ, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkZ, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
                 Chunk playerChunkZ2 = GetOrGenerateChunkAtPos(playerPos.x, playerPos.y, playerPos.z- chunkSizeZ);
-                RunTick(playerChunkZ2, true, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(playerChunkZ2, true, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
 
 
 
@@ -8175,6 +8583,7 @@ namespace Blocks
             }
             int chunkI = 0;
             bool bailed = false;
+            maxGenerating = 1;
             for (int i = 0; i < allChunksHere.Count; i++)
             {
                 Chunk chunk = allChunksHere[i].a;
@@ -8182,7 +8591,7 @@ namespace Blocks
                 {
                     continue;
                 }
-                if (maxGenerating == 0)
+                if (maxGenerating <= numGenerated)
                 {
                     allowGenerate = false;
                 }
@@ -8193,7 +8602,7 @@ namespace Blocks
                     break;
                 }
                 chunkI += 1;
-                RunTick(chunk, allowGenerate, true, ref maxTickSteps, ref numGenerated, maxGenerating);
+                RunTick(chunk, allowGenerate, allowTick, ref maxTickSteps, ref numGenerated, maxGenerating);
             }
             if (!bailed)
             {
@@ -8217,7 +8626,14 @@ namespace Blocks
                 }
                 List<Structure> leftoverStructures = new List<Structure>();
                 Priority_Queue.SimplePriorityQueue<Structure, int> chunkStructures = new Priority_Queue.SimplePriorityQueue<Structure, int>();
-                foreach (Structure structure in unfinishedStructures)
+
+                List<Structure> copiedStructures;
+                lock(unfinishedStructures)
+                {
+                    copiedStructures = new List<Structure>(unfinishedStructures);
+                }
+
+                foreach (Structure structure in copiedStructures)
                 {
                     if (structure.CanAddToChunk(chunk))
                     {
@@ -8239,8 +8655,11 @@ namespace Blocks
 
                 World.mainWorld.blocksTouchingSky.GeneratedChunk(chunk);
 
+                lock(unfinishedStructures)
+                {
 
-                unfinishedStructures = leftoverStructures;
+                    unfinishedStructures = leftoverStructures;
+                }
 
             }
             if (chunk.chunkData.needToBeUpdated)
@@ -9075,6 +9494,7 @@ namespace Blocks
         public TimeSeries renderFpsTimeSeries;
         public TimeSeries fpsTimeSeries;
         public TimeSeries ticksPerFrameTimeSeries;
+        public TimeSeries lightingTicksPerFrameTimeSeries;
         public TimeSeries generationsPerFrameTimeSeries;
         public TimeSeries rendersPerFrameTimeSeries;
         public TimeSeries drawCallsTimeSeries;
@@ -9083,6 +9503,7 @@ namespace Blocks
 
         public Camera mainCameraPlayer;
         public int lightingTicksThisFrame = 0;
+        public int ticksThisFrame = 0;
         public int generationsThisFrame = 0;
         public int rendersThisFrame = 0;
         public int drawCallsThisFrame = 0;
@@ -9125,6 +9546,7 @@ namespace Blocks
         public GameObject loggingNodePrefab;
 
         public GameObject blockEntityPrefab;
+        public GameObject blockTileEntityPrefab;
         public GameObject blockRenderPrefab;
         public GameObject blockRenderCanvas;
         public GameObject blockRenderFrontCanvas;
@@ -9148,9 +9570,9 @@ namespace Blocks
 
         int[] worldData;
 
-        public const int chunkSizeX = 64;
+        public const int chunkSizeX = 32;
         public const int chunkSizeY = 128;
-        public const int chunkSizeZ = 64;
+        public const int chunkSizeZ = 32;
 
         public const int biomeDataSizeX = 16;
         public const int biomeDataSizeY = 16;
@@ -9767,6 +10189,7 @@ namespace Blocks
             triMaterialWithTransparency.SetBuffer("cubeOffsets", cubeOffsets);
             triMaterialWithTransparency.SetBuffer("cubeNormals", cubeNormals);
             triMaterialWithTransparency.SetBuffer("uvOffsets", uvOffsets);
+            Debug.LogWarning("Setting values to the breaking thing");
             breakingMaterial.SetBuffer("cubeOffsets", cubeOffsets);
             breakingMaterial.SetBuffer("cubeNormals", cubeNormals);
             breakingMaterial.SetBuffer("uvOffsets", breakingUVOffsets);
@@ -10004,11 +10427,11 @@ namespace Blocks
                        {
                            if (doProfile && profileType == ProfileType.Tick)
                            {
-                               world.Tick();
+                               world.Tick(true);
                            }
                            else
                            {
-                               world.Tick();
+                               world.Tick(true);
                            }
                        }
                    }
@@ -10020,6 +10443,46 @@ namespace Blocks
              
                }
            });
+
+
+
+            Thread savingThread = new Thread(() =>
+            {
+                while (threadKeepGoing)
+                {
+                    int numWroteChunks = 0;
+                    List<Tuple<Chunk, long>> allChunksHere = world.GetChunksCloserThanRenderDist(false, int.MaxValue);
+                    foreach (Tuple<Chunk, long> chunk in allChunksHere)
+                    {
+                        if(chunk.a.WriteToDisk())
+                        {
+                            numWroteChunks += 1;
+                        }
+                    }
+                    int numWroteStructures = 0;
+                    List<Structure> unfinishedStructuresCopy;
+                    List<Structure> unfinishedStructuresTmp = world.unfinishedStructures;
+                    if (unfinishedStructuresTmp == null) // this ensures we check to see if it is null first, relevant because threading
+                    {
+                        break;
+                    }
+                    unfinishedStructuresCopy = new List<Structure>(unfinishedStructuresTmp);
+                    foreach (Structure structure in unfinishedStructuresCopy)
+                    {
+                        if (structure.WriteToDisk())
+                        {
+                            numWroteStructures += 1;
+                        }
+                    }
+                    Debug.Log("Got through all, wrote " + numWroteStructures + " structures and " + numWroteChunks + " chunks");
+                    if (numWroteStructures == 0 && numWroteChunks == 0)
+                    {
+                        Thread.Sleep(1000);
+                    }
+                }
+            });
+
+            savingThread.Start();
 
             if (World.DO_CPU_RENDER)
             {
@@ -10040,7 +10503,11 @@ namespace Blocks
                                     int maxDist = -1;
                                     if (myThreadI <= 1) // dedicate first thread to only rendering chunks nearby players
                                     {
-                                        maxDist = 1;
+                                        //maxDist = 1;
+                                    }
+                                    if (myThreadI <= 0)
+                                    {
+                                        //maxDist = 0;
                                     }
                                     List<Tuple<Chunk, long>> allChunksHere = world.GetChunksCloserThanRenderDist(false, maxDist: maxDist);
 
@@ -10054,14 +10521,17 @@ namespace Blocks
                                         {
                                             break;
                                         }
-                                        if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
+                                        if (okToRunTicks && (chunk.a.chunkData.needToBeUpdated || chunk.a.needToUpdateLighting) && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
                                         {
+                                            bool foundSomething = false;
                                             // it is probably good to render, double check that someone hasn't changed that (by getting the lock before us)
                                             lock (chunk.a.chunkRenderer.renderingLock)
                                             {
-                                                if (okToRunTicks && chunk.a.chunkData.needToBeUpdated && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
+                                                if (okToRunTicks && (chunk.a.chunkData.needToBeUpdated || chunk.a.needToUpdateLighting) && chunk.a.threadRenderingMe == -1 && chunk.a.chunkRenderer.renderStatus != ChunkRenderer.RenderStatus.HasTriangles && chunk.a.chunkRenderer.prevMesh == null)
                                                 {
                                                     chunk.a.threadRenderingMe = myThreadI;
+                                                    chunk.a.chunkData.needToBeUpdated = true;
+                                                    foundSomething = true;
                                                 }
                                                 // someone else got the lock before us, don't render, skip to the next chunk
                                                 else
@@ -10070,16 +10540,16 @@ namespace Blocks
                                                 }
                                             }
 
-                                            if (chunk.a.threadRenderingMe != myThreadI)
+                                            if (!foundSomething)
                                             {
-                                                continue;
+                                                Debug.LogWarning("continue didn't work, pls halp");
                                             }
 
                                             string stringVal = "thread " + myThreadI + " with " + chunk.a.threadRenderingMe + " is start rendering chunk " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " with render status " + chunk.a.chunkRenderer.renderStatus + " and num times rendered " + chunk.a.numTimesRendered;
 
                                             if (chunk.a.threadRenderingMe != myThreadI)
                                             {
-                                                Debug.Log("hmm issue " + chunk.a.threadRenderingMe + " ??");
+                                                Debug.LogWarning("hmm issue " + chunk.a.threadRenderingMe + " ??");
                                                 continue;
                                             }
 
@@ -10088,7 +10558,7 @@ namespace Blocks
                                             {
                                                 long curTime = PhysicsUtils.millis();
                                                 int numLightings = chunk.a.UpdateLightingForAllBlocks();
-                                                if (PhysicsUtils.millis() - curTime > 100)
+                                                if (PhysicsUtils.millis() - curTime > 200)
                                                 {
                                                     Debug.Log("thread " + myThreadI + " doing lighting update " + numUpdates + " for chunk  " + chunk.a.cx + " " + chunk.a.cy + " " + chunk.a.cz + " with " + numLightings + " blocks updated lighting took " + (PhysicsUtils.millis() - curTime));
                                                 }
@@ -10168,11 +10638,18 @@ namespace Blocks
         public int allBuffersMadeCount;
         bool okToRunTicks = true;
 
+
+        DoEveryMS doTick = new DoEveryMS(100);
         long millisAtStartOfLastUpdateFrame = 0;
         // Update is called once per frame
         void Update()
         {
-            
+            float millisPerTick = 1000.0f / ticksPerSecond;
+            doTick.ms = (int)millisPerTick;
+            if (doTick.Do())
+            {
+                world.Tick(false);
+            }
 
             long curMillis = PhysicsUtils.millis();
             long passedMillis = curMillis - millisAtStartOfLastUpdateFrame;
@@ -10220,7 +10697,6 @@ namespace Blocks
                     ay = 5;
                 }
             }
-            float millisPerTick = 1000.0f / ticksPerSecond;
             if (millis() - lastTick > millisPerTick)
             {
                 lastTick = millis();
@@ -10834,20 +11310,24 @@ namespace Blocks
             Chunk chunkIn = world.GetChunk(cx, cy, cz);
             if (chunkIn != null)
             {
-                chunkIn.SetNeighborsAsTouchingAir(x, y, z);
+                //chunkIn.SetNeighborsAsTouchingAir(x, y, z);
+                Debug.Log("Not in chunk");
             }
 
+            LVector3 pos = new LVector3(x, y, z);
             int brokenState = (int)Mathf.Clamp(Mathf.Round(howBroken * 8), 0.0f, 8.0f);
             blockBreakingBuffer.SetData(new int[] { (int)(x - cx * chunkSizeX), (int)(y - cy * chunkSizeY), (int)(z - cz * chunkSizeZ), brokenState });
             if (Camera.current != uiCamera)
             {
+                Debug.Log("drawing thing at " + x + " " + y + " " + z + " with howBroken=" + howBroken);
                 breakingMaterial.SetBuffer("DrawingThings", blockBreakingBuffer);
                 breakingMaterial.SetMatrix("localToWorld", renderTransform.localToWorldMatrix);
                 //breakingMaterial.SetInt("ptCloudWidth", chunkSize);
                 breakingMaterial.SetFloat("ptCloudScale", worldScale);
                 breakingMaterial.SetVector("ptCloudOffset", new Vector4(0, 0, 0, 0));
                 breakingMaterial.SetPass(0);
-                Graphics.DrawProceduralNow(MeshTopology.Triangles, 1 * (36));
+                //Graphics.DrawProceduralNow(breakingMaterial, new Bounds(pos.BlockCentertoUnityVector3(), 10000.0f * new Vector3(worldScale, worldScale, worldScale)), MeshTopology.Triangles, 1*36, 1*36, Camera.current);
+                Graphics.DrawProceduralNow(MeshTopology.Triangles, 1 * (36), 1);
             }
             renderTransform.transform.position -= offset;
         }
@@ -10949,14 +11429,11 @@ namespace Blocks
         LVector3 blockBreaking;
         long millisAtStartOfLastRenderFrame;
 
+        List<Tuple<LVector3, float>> blocksBreakingThisFrame = new List<Tuple<LVector3, float>>();
+
         public void OnRenderObject()
         {
             world.Render();
-            while (blocksBreaking.Count > 0)
-            {
-                Tuple<LVector3, float> blockBreaking = blocksBreaking.Dequeue();
-                ActuallyRenderBlockBreaking(blockBreaking.a.x, blockBreaking.a.y, blockBreaking.a.z, 1.0f - blockBreaking.b);
-            }
 
             if (Camera.current == World.mainWorld.blocksWorld.mainCameraPlayer)
             {
@@ -10968,7 +11445,8 @@ namespace Blocks
                 millisAtStartOfLastRenderFrame = curMillis;
 
                 generationsPerFrameTimeSeries.Push(generationsThisFrame);
-                ticksPerFrameTimeSeries.Push(lightingTicksThisFrame);
+                ticksPerFrameTimeSeries.Push(ticksThisFrame);
+                lightingTicksPerFrameTimeSeries.Push(lightingTicksThisFrame);
                 rendersPerFrameTimeSeries.Push(rendersThisFrame);
                 drawCallsTimeSeries.Push(drawCallsThisFrame);
                 drawDataMovedToMemoryTimeSeries.Push(drawDataMovedToGPUMemoryThisFrame);
@@ -10982,6 +11460,14 @@ namespace Blocks
                     //Debug.Log("draw calls this frame = " + drawCallsThisFrame + " and allBuffersMade count = " + BlocksMesh.allBuffersMade.Count);
                 }
 
+                lightingTicksThisFrame = 0;
+                ticksThisFrame = 0;
+                generationsThisFrame = 0;
+                rendersThisFrame = 0;
+                drawCallsThisFrame = 0;
+                drawDataMovedToGPUMemoryThisFrame = 0;
+                trianglesDrawnThisFrame = 0;
+
                 if (BlocksMesh.buffersNotRenderedThisFrame.Count > 0)
                 {
                     for (int i =0; i < BlocksMesh.buffersNotRenderedThisFrame.Count; i++)
@@ -10994,16 +11480,32 @@ namespace Blocks
                     }
                 }
 
-                lightingTicksThisFrame = 0;
-                generationsThisFrame = 0;
-                rendersThisFrame = 0;
-                drawCallsThisFrame = 0;
-                drawDataMovedToGPUMemoryThisFrame = 0;
-                trianglesDrawnThisFrame = 0;
                 BlocksMesh.buffersNotRenderedThisFrame.Clear();
                 BlocksMesh.buffersNotRenderedThisFrame.AddRange(BlocksMesh.allBuffersMade);
             }
+            
+            if (Camera.current == uiCamera)
+            {
+                blocksBreakingThisFrame.Clear();
+
+                // Move them from the queue into the list (we need to do this since this code is executed multiple times per frame, once for each camera)
+                while (blocksBreaking.Count > 0)
+                {
+                    Tuple<LVector3, float> blockBreaking = blocksBreaking.Dequeue();
+                    blocksBreakingThisFrame.Add(blockBreaking);
+                }
+            }
+
+
+            // Actually render the blocks breaking this frame
+            for (int i = 0; i < blocksBreakingThisFrame.Count; i++)
+            {
+                Tuple<LVector3, float> blockBreaking = blocksBreakingThisFrame[i];
+                ActuallyRenderBlockBreaking(blockBreaking.a.x, blockBreaking.a.y, blockBreaking.a.z, 1.0f - blockBreaking.b);
+            }
         }
+
+
 
         bool cleanedUp = false;
         void CleanupRendering()

@@ -14,8 +14,9 @@ namespace Blocks
         public float feetWidth = 0.2f;
         public float speed = 5.0f;
         float gravity = 37.0f;
+        float maxWaterSpeed = 5.0f;
         float jumpSpeed = 14.0f;
-
+        public bool applyGravity = true;
 
 
         string id_ = "";
@@ -33,6 +34,19 @@ namespace Blocks
             {
                 id_ = value;
             }
+        }
+
+        public Vector3 GetVel()
+        {
+            return vel;
+        }
+        public void SetVel(Vector3 vel)
+        {
+            this.vel = vel;
+        }
+        public void SetYVel(float yVel)
+        {
+            this.vel = new Vector3(this.vel.x, yVel, this.vel.z);
         }
 
         public float reachRange = 6.0f;
@@ -180,7 +194,7 @@ namespace Blocks
         bool IsInWater(Vector3 pos)
         {
             LVector3 bPos = LVector3.FromUnityVector3(pos);
-            return bPos.BlockV == Example_pack.Example.Water || bPos.BlockV == Example_pack.Example.WaterNoFlow;
+            return bPos.BlockV == Example_pack.Example.Water || bPos.BlockV == Example_pack.Example.WaterNoFlow || bPos.BlockV == Example_pack.Example.Lava;
         }
         bool TouchingWater()
         {
@@ -212,6 +226,11 @@ namespace Blocks
             BlockEntity[] entities = FindObjectsOfType<BlockEntity>();
             foreach (BlockEntity blockEntity in entities)
             {
+                if (!blockEntity.CanIGrabU(this))
+                {
+                    continue;
+                }
+                /*
                 if (!blockEntity.enabled)
                 {
                     continue;
@@ -220,6 +239,7 @@ namespace Blocks
                 {
                     continue;
                 }
+                */
                 Vector3 grabFromPos = transform.position - Vector3.up * this.heightBelowHead / 3.0f;
                 if (inventory.CanAddBlock(blockEntity.Stack))
                 {
@@ -233,7 +253,12 @@ namespace Blocks
                         }
                         else
                         {
-                            blockEntity.transform.position += (grabFromPos - blockEntity.transform.position).normalized * moveDist;
+                            blockEntity.pullingSpeed += Time.deltaTime*4.0f;
+                            if (blockEntity.pullingSpeed > 5.0f)
+                            {
+                                blockEntity.pullingSpeed = 5.0f;
+                            }
+                            blockEntity.transform.position += (grabFromPos - blockEntity.transform.position).normalized * moveDist* blockEntity.pullingSpeed;
                         }
                     }
                 }
@@ -345,6 +370,7 @@ namespace Blocks
                 transform.position += new Vector3(0, 0.1f, 0);
             }
 
+            
             bool touchingWater = TouchingWater();
             if (!IsTouchingGround())
             {
@@ -360,12 +386,39 @@ namespace Blocks
                     }
                     else if (!jumping)
                     {
-                        vel -= Vector3.up * gravity * Time.deltaTime * 0.1f;
+                        if (applyGravity)
+                        {
+                            vel -= Vector3.up * gravity * Time.deltaTime * 0.1f;
+                        }
+                    }
+                    // Limit speed in water
+                    if (Mathf.Abs(vel.y) > maxWaterSpeed)
+                    {
+                        vel = new Vector3(vel.x, Mathf.Sign(vel.y) * maxWaterSpeed, vel.z);
                     }
                 }
                 else
                 {
-                    vel -= Vector3.up * gravity * Time.deltaTime;
+                    if (applyGravity)
+                    {
+                        vel -= Vector3.up * gravity * Time.deltaTime;
+                    }
+                    // flying (in creative mode)
+                    else
+                    {
+                        if (jumping)
+                        {
+                            vel = new Vector3(vel.x, speed, vel.z);
+                        }
+                        else if(usingShift)
+                        {
+                            vel = new Vector3(vel.x, -speed, vel.z);
+                        }
+                        else
+                        {
+                            vel = new Vector3(vel.x, 0, vel.z);
+                        }
+                    }
                 }
             }
             else

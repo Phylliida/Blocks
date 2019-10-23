@@ -360,6 +360,11 @@ public class Lava : Block
         return Example.Lava;
     }
 
+    public override int ConstantLightEmitted()
+    {
+        return 15;
+    }
+
     public override void OnTick(BlockData block)
     {
         block.lightProduced = 15;
@@ -613,6 +618,429 @@ public class BallTrackHorizontalFull : Block
     }
 }
 
+
+public class AutoMiner : Block
+{
+    public override void OnTick(BlockData block)
+    {
+        block.needsAnotherTick = true;
+        using (BlockData blockBelow = GetBlockDataNotRelative(block.pos.x, block.pos.y - 1, block.pos.z))
+        {
+            if (blockBelow.block == Example.IronOre)
+            {
+                block.state += 1;
+
+                if (block.state > 30)
+                {
+                    using (BlockData blockGoingInto = GetBlockDataRelative(block, 0, 0, 1))
+                    {
+                        if (blockGoingInto.block == Example.ConveyerBelt)
+                        {
+                            if(ConveyerBelt.TryAddItem(blockGoingInto, Example.IronOre, block.pos.BlockCentertoUnityVector3()))
+                            {
+                                block.state = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.AutoMiner;
+    }
+}
+
+public class ConveyerBeltData
+{
+    public long whenLastUpdated = -1;
+    public LVector3 pos;
+    public Inventory inventory;
+    public ConveyerBeltData(LVector3 pos)
+    {
+        if (World.mainWorld.BlockHasInventory(pos, out inventory))
+        {
+
+        }
+        else
+        {
+            Debug.LogWarning("Warning: this conveyer belt at pos " + pos + " does not have an inventory, something went wrong");
+        }
+        this.pos = pos;
+    }
+
+    public void Tick()
+    {
+
+    }
+
+    public BlockTileEntity[,] tileEntities = new BlockTileEntity[2,4];
+}
+
+
+public class ConveyerBelt : Block
+{
+    public override int InventorySpace()
+    {
+        return 8;
+    }
+
+    public static int subTick = 0;
+    public static int numSubticks = 20;
+    public static long currentTick = -1;
+    public override void OnTickStart()
+    {
+        currentTick += 1;
+        if (datas == null)
+        {
+            datas = new Dictionary<LVector3, ConveyerBeltData>();
+        }
+        subTick = (subTick + 1) % numSubticks;
+    }
+
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        if (!datas.ContainsKey(pos))
+        {
+            datas[pos] = new ConveyerBeltData(pos);
+        }
+        return Example.ConveyerBelt;
+    }
+
+
+    BlockData GetBlockGoingInto(BlockData block)
+    {
+        return GetBlockDataRelative(block, 0, 0, 1);
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        if (!datas.ContainsKey(block.pos))
+        {
+            datas[block.pos] = new ConveyerBeltData(block.pos);
+        }
+
+        block.needsAnotherTick = true;
+        if (datas.ContainsKey(block.pos))
+        {
+            ConveyerBeltData myData = datas[block.pos];
+
+            // only update if we haven't been updated yet (because we will automatically call tick on the things we depend on so they execute before us)
+            if (myData.whenLastUpdated < currentTick)
+            {
+                //Debug.Log("calling OnTick on conveyer belt " + block.pos + " with currentTick " + currentTick);
+                // set this before callilng tick on our dependencies, this ensures that if they call us we won't go into an infinite loop
+                myData.whenLastUpdated = currentTick;
+
+                // update the conveyer belts we are going into first
+                using (BlockData blockGoingInto = GetBlockGoingInto(block))
+                {
+                    if(blockGoingInto.block == Example.ConveyerBelt)
+                    {
+                        //Debug.Log("calling OnTick on dependent conveyer belt " + blockGoingInto.pos);
+                        OnTick(blockGoingInto);
+                    }
+                }
+
+
+                // move along conveyer belt if we are at the last subtick before the cycle
+                if (subTick == 0)
+                {
+                    //Debug.Log("doing move along");
+                    MoveUp(block);
+                }
+
+                // update positions of tile entities (move them along the conveyer)
+                for (int x = 0; x < 2; x++)
+                {
+                    for (int z = 0; z < 4; z++)
+                    {
+                        if (myData.tileEntities[x,z] != null)
+                        {
+                            Vector3 posToMoveTo = TileEntityPosToWorldPos(block, x, z);
+                            subTick += 1;
+                            Vector3 nextPosToMoveTo = TileEntityPosToWorldPos(block, x, z);
+                            subTick -= 1;
+                            // don't move it backwards along the conveyer belt, only forwards
+                            if (Vector3.Distance(myData.tileEntities[x, z].transform.position, posToMoveTo) < Vector3.Distance(myData.tileEntities[x, z].transform.position, nextPosToMoveTo))
+                            {
+                                myData.tileEntities[x, z].transform.position = posToMoveTo;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Assumes that you already called Tick (which then calls MoveUp) on any conveyer belts that this will flow into (otherwise you'll get gaps since it'll have to wait)
+    /// </summary>
+    /// <param name="block"></param>
+    public void MoveUp(BlockData block)
+    {
+        ConveyerBeltData myData = GetConveyerBeltData(block);
+        using (BlockData blockMoveInto = GetBlockGoingInto(block))
+        {
+            ConveyerBeltData blockMoveIntoData = null;
+            bool goingIntoConveyerBelt = false;
+            if (blockMoveInto.block == Example.ConveyerBelt)
+            {
+                goingIntoConveyerBelt = true;
+                blockMoveIntoData = GetConveyerBeltData(blockMoveInto);
+            }
+            for (int z = 3; z >= 0; z--)
+            {
+                for (int x = 0; x < 2; x++)
+                {
+                    if (myData.tileEntities[x, z] != null)
+                    {
+                        ConveyerBeltData dataMoveInto;
+                        BlockData blockDataMoveInto;
+                        int moveToX = x;
+                        int moveToZ = z + 1;
+                        // move to next conveyer (if available)
+                        if (z == 3)
+                        {
+                            if (goingIntoConveyerBelt)
+                            {
+                                BlockData.BlockRotation relativeRotation = block.GetRelativeRotationOf(blockMoveInto);
+
+                                // same rotation as us, just go into it
+                                if (relativeRotation == BlockData.BlockRotation.Degrees0)
+                                {
+                                    moveToX = x;
+                                    moveToZ = 0;
+                                }
+                                // 90 degrees angle, we go into x = 1
+                                else if(relativeRotation == BlockData.BlockRotation.Degrees90)
+                                {
+                                    moveToX = 1;
+                                    if (x == 0)
+                                    {
+                                        moveToZ = 1;
+                                    }
+                                    else
+                                    {
+                                        moveToZ = 2;
+                                    }
+                                }
+                                // going in opposite direction as us, we can't move
+                                else if(relativeRotation == BlockData.BlockRotation.Degrees180)
+                                {
+                                    continue;
+                                }
+                                // 270 degrees angle, we go into x = 0
+                                else if (relativeRotation == BlockData.BlockRotation.Degrees270)
+                                {
+                                    moveToX = 0;
+                                    if (x == 0)
+                                    {
+                                        moveToZ = 2;
+                                    }
+                                    else
+                                    {
+                                        moveToZ = 1;
+                                    }
+                                }
+                                else
+                                {
+                                    Debug.LogWarning("unknown rotation of " + relativeRotation);
+                                }
+                            }
+                            else
+                            {
+                                continue;
+                            }
+
+                            dataMoveInto = blockMoveIntoData;
+                            blockDataMoveInto = blockMoveInto;
+                        }
+                        // move along conveyer (if available)
+                        else
+                        {
+                            dataMoveInto = myData;
+                            blockDataMoveInto = block;
+                        }
+
+
+                        int moveToInventoryI = TileEntityPosToInventoryPos(moveToX, moveToZ);
+
+                        int inventoryI = TileEntityPosToInventoryPos(x, z);
+                        BlockValue blockValue = myData.inventory.blocks[inventoryI].Block;
+                        // if spot we want to move to is empty
+                        // dataMoveInto != null will be true if z == 3 and the block we are moving into is not a conveyer belt
+                        if (dataMoveInto.tileEntities[moveToX, moveToZ] == null)
+                        {
+                            // move tile entity and block stack to there 
+                            dataMoveInto.tileEntities[moveToX, moveToZ] = myData.tileEntities[x, z];
+                            dataMoveInto.inventory.blocks[moveToInventoryI] = myData.inventory.blocks[inventoryI];
+                            // update tile entity position
+                            dataMoveInto.tileEntities[moveToX, moveToZ].transform.position = TileEntityPosToWorldPos(blockDataMoveInto, moveToX, moveToZ);
+
+                            // clear tile entity and block stack in current spot (since they have been moved to the moveTo spot) 
+                            myData.inventory.blocks[inventoryI] = null;
+                            myData.tileEntities[x, z] = null;
+                        }
+                    }
+                }
+            }
+        }  
+    }
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        // clean up tile entities
+        if (datas.ContainsKey(block.pos))
+        {
+            ConveyerBeltData myData = datas[block.pos];
+            for (int z = 3; z >= 0; z--)
+            {
+                for (int x = 0; x < 2; x++)
+                {
+                    if (myData.tileEntities[x, z] != null)
+                    {
+                        GameObject.Destroy(myData.tileEntities[x, z].gameObject);
+                        myData.tileEntities[x, z] = null;
+                    }
+                }
+            }
+        }
+
+        // turn stuff in the conveyer belt into block entities (empty out the inventory)
+        Inventory myInventory;
+        if (world.BlockHasInventory(block.pos, out myInventory))
+        {
+            myInventory.ThrowAllBlocks(block.pos.BlockCentertoUnityVector3());
+        }
+
+        // create the conveyer belt entity we just mined
+        CreateBlockEntity(Example.ConveyerBelt, positionOfBlock);
+
+        destroyBlock = true;
+    }
+
+
+    static Dictionary<LVector3, ConveyerBeltData> datas;
+
+
+    public static Vector3 TileEntityPosToWorldPos(BlockData block, int tileEntityPosX, int tileEntityPosZ)
+    {
+        int xOffset = tileEntityPosX;
+        int zOffset = tileEntityPosZ;
+
+        float minX = 0.25f;
+        float maxX = 0.75f;
+
+
+        float xOff = (xOffset) * (maxX - minX) + minX;
+
+
+        Quaternion rotation = Quaternion.Euler(0, -PhysicsUtils.RotationToDegrees(block.rotation), 0);
+
+        Vector3 localPos = new Vector3(xOff, 0.12f, zOffset / 4.0f + subTick / (4.0f * numSubticks));
+
+        localPos = (rotation * (localPos - Vector3.one * 0.5f)) + Vector3.one * 0.5f;
+        return block.pos.LocalToWorldPos(localPos);
+    }
+
+
+    public static int TileEntityPosToInventoryPos(int x, int z)
+    {
+        return x * 4 + z;
+    }
+
+    public static void InventoryPosToTileEntityPos(int i, out int x, out int z)
+    {
+        x = i / 4;
+        z = i % 4;
+    }
+
+
+    public static ConveyerBeltData GetConveyerBeltData(BlockData block)
+    {
+        if (!datas.ContainsKey(block.pos))
+        {
+            datas[block.pos] = new ConveyerBeltData(block.pos);
+        }
+        return datas[block.pos];
+    }
+
+    static bool TryAddItem(BlockData block, BlockValue itemAdding, int posX, int posZ)
+    {
+        ConveyerBeltData myData = GetConveyerBeltData(block);
+
+        if (myData.tileEntities[posX, posZ] == null)
+        {
+            int inventoryPos = TileEntityPosToInventoryPos(posX, posZ);
+            BlockStack myBlockStack = new BlockStack(itemAdding, 1);
+            BlockTileEntity tileEntity = World.mainWorld.CreateTileEntity(myBlockStack, TileEntityPosToWorldPos(block, posX, posZ));
+            myData.tileEntities[posX, posZ] = tileEntity;
+            myData.inventory.blocks[inventoryPos] = myBlockStack;
+            return true;
+        }
+        return false;
+    }
+
+    public static bool TryAddItem(BlockData block, BlockValue itemAdding, Vector3 itemPos)
+    {
+        int closestX = -1;
+        int closestZ = -1;
+        float closestDist = float.MaxValue;
+        ConveyerBeltData myData = GetConveyerBeltData(block);
+        for (int i = 0; i < myData.inventory.blocks.Length; i++)
+        {
+            int x, z;
+            InventoryPosToTileEntityPos(i, out x, out z);
+
+            if (myData.tileEntities[x, z] == null)
+            {
+                Vector3 tileEntityPos = TileEntityPosToWorldPos(block, x, z);
+
+
+                float dist = Vector3.Distance(itemPos, tileEntityPos);
+
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestX = x;
+                    closestZ = z;
+                }
+            }
+        }
+        // found the closest pos to stick it, (try to, it'll success but this just prevents us from having to duplicate code to minimize bugs) stick it there
+        if (closestDist != float.MaxValue)
+        {
+            return TryAddItem(block, itemAdding, closestX, closestZ);
+        }
+        return false;
+    }
+
+    public override void BlockStackAbove(BlockData block, BlockStack blockStack, Vector3 blockStackPos, out BlockStack consumedBlockStack)
+    {
+        consumedBlockStack = blockStack.Copy();
+        if (blockStack != null && blockStack.count > 0 && blockStack.block != Example.Air)
+        {
+            //Debug.Log("got block stack above with " + blockStack.count + " " + BlockValue.IdToBlockName(blockStack.block));
+            bool inserted = true;
+            while (inserted)
+            {
+                inserted = false;
+                if (consumedBlockStack.count > 0)
+                {
+                    if(TryAddItem(block, blockStack.Block, blockStackPos))
+                    {
+                        //Debug.Log("nomming some block stack above with " + blockStack.count + " " + BlockValue.IdToBlockName(blockStack.block));
+                        consumedBlockStack.count -= 1;
+                        inserted = true;
+                    }
+                }
+            }
+        }
+    }
+}
 
 public class RedstoneTorch : Block
 {
@@ -2387,6 +2815,53 @@ public class SimpleItem : Item
 
 }
 
+
+public class Cheese : Block
+{
+    public override BlockValue PlaceMe(AxisDir facePlacedOn, LVector3 pos)
+    {
+        return Example.Cheese;
+    }
+
+
+    public override void DropBlockOnDestroy(BlockData block, BlockStack thingBreakingWith, Vector3 positionOfBlock, Vector3 posOfOpening, out bool destroyBlock)
+    {
+        CreateBlockEntity(Example.Cheese, positionOfBlock);
+        destroyBlock = true;
+    }
+
+    public override int ConstantLightEmitted()
+    {
+        return 6;
+    }
+
+    public override void OnTick(BlockData block)
+    {
+        block.lightProduced = 6;
+
+        block.needsAnotherTick = false;
+        foreach (BlockData neighbor in Get26Neighbors(block))
+        {
+            if (neighbor.block == Example.Grass)
+            {
+                if (rand() < 0.003f)
+                {
+                    neighbor.block = Example.Cheese;
+                }
+                else
+                {
+                    block.needsAnotherTick = true;
+                }
+            }
+        }
+    }
+
+    public override float TimeNeededToBreak(BlockData block, BlockStack thingBreakingWith)
+    {
+        return 0.1f;
+    }
+}
+
 public class ExamplePack : BlocksPack {
 
     // Use this for initialization
@@ -2426,15 +2901,20 @@ public class ExamplePack : BlocksPack {
         //AddCustomBlock(Example.Water, new Water(), 64);
         //AddCustomBlock(Example.WaterNoFlow, new Water(), 64);
         AddCustomBlock(Example.Water, new WaterNewWithPressure(), 64);
-        AddCustomBlock(Example.WaterNoFlow, new SimpleWater(), 64);
+        AddCustomBlock(Example.WaterNoFlow, new SimpleBlock(Example.WaterNoFlow, 0.2f), 64);
         AddCustomBlock(Example.Lava, new Lava(), 64);
         AddCustomBlock(Example.BallTrackZFull, new BallTrackHorizontalFull(), 64);
         AddCustomBlock(Example.BallTrackTurnFull, new BallTrackTurnFull(), 64);
         AddCustomBlock(Example.BallTrackZEmpty, new SimpleBlock(Example.BallTrackZEmpty, 0.2f), 64);
         AddCustomBlock(Example.BallTrackTurnEmpty, new SimpleBlock(Example.BallTrackTurnEmpty, 0.2f), 64);
-        //AddCustomBlock(Example.RedstoneTorch, new RedstoneTorch(), 64);
-        //AddCustomBlock(Example.RedstoneTorchOnSide, new RedstoneTorch(), 64);
-        //AddCustomBlock(Example.Redstone, new Redstone(), 64);
+        AddCustomBlock(Example.Cheese, new Cheese(), 64);
+
+        AddCustomBlock(Example.AutoMiner, new AutoMiner(), 64);
+        AddCustomBlock(Example.ConveyerBelt, new ConveyerBelt(), 64);
+
+        AddCustomBlock(Example.RedstoneTorch, new RedstoneTorch(), 64);
+        AddCustomBlock(Example.RedstoneTorchOnSide, new RedstoneTorch(), 64);
+        AddCustomBlock(Example.Redstone, new Redstone(), 64);
         //AddCustomBlock(Example.BallTrackEmpty, new SimpleBlock(0.2f, new Tuple<BlockValue, float>(Example.Shovel, 0.2f)), 64);
 
 

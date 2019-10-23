@@ -1,0 +1,15 @@
+{
+    "ambientocclusion": false,
+    "textures": {
+        "inventory": "ConveyerBeltInventory.png",
+        "belt": "ConveyerBelt.png"
+    },
+    "elements": [
+        {   
+            "from": [ 0, 0, 0 ],
+            "to": [ 16, 1, 16 ],
+            "shade": false,
+            "texture": "belt"
+        }
+    ]
+}

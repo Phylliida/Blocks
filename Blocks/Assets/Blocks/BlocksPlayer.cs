@@ -33,10 +33,15 @@ namespace Blocks
 
         bool showingHotbarOnly = true;
         public int hotbarSize = 8;
+        public int inventorySizePlayer = 16;
+        public float flySpeed = 10.0f;
+        public float walkSpeed = 5.0f;
+        float lastTimePressedSpace = 0;
+        float doubleTapSpaceForFlyMaxDelay = 0.4f;
         public void Start()
         {
             menuManager = FindObjectOfType<MenuManager>();
-            body.inventorySize = 16;
+            body.inventorySize = inventorySizePlayer;
             body.inventory = new Inventory(body.inventorySize);
             inventoryGui.playerUsing = this;
             inventoryGui.inventory = inventory;
@@ -301,7 +306,15 @@ namespace Blocks
 
                         if (World.mainWorld.DropBlockOnDestroy(hitResults.hitBlock.BlockV, hitResults.hitBlock, inventory.blocks[inventoryGui.selection], hitResults.hitBlock.BlockCentertoUnityVector3(), hitResults.blockBeforeHit.BlockCentertoUnityVector3()))
                         {
-                            World.mainWorld[hitResults.hitBlock] = 0;
+                            using (BlockData block = World.mainWorld.GetBlockData(hitResults.hitBlock))
+                            {
+                                block.block = BlockValue.Air;
+                                block.state = 0;
+                                block.animationState = 0;
+                                block.connectivityFlags = 0;
+                            }
+                            World.mainWorld.AddBlockUpdate(hitResults.hitBlock);
+                            World.mainWorld.AddBlockUpdateToNeighbors(hitResults.hitBlock);
                         }
                     }
                 }
@@ -323,7 +336,7 @@ namespace Blocks
                     {
                         if (middleClickedOnBlock.block == Example.Redstone)
                         {
-                            middleClickedOnBlock.connectivityFlags = redstoneState;
+                            //middleClickedOnBlock.connectivityFlags = redstoneState;
                         }
                         else
                         {
@@ -385,6 +398,31 @@ namespace Blocks
                                 int lightProduced;
                                 BlockValue blockPlacing = World.mainWorld.PrePlaceBlock(inventory.blocks[inventoryGui.selection].block, hitResults.blockBeforeHit, hitResults.axisHitFrom, out lightProduced);
                                 BlockData.BlockRotation rotation = PhysicsUtils.AxisToRotation(hitResults.axisHitFrom);
+
+                                if (hitResults.axisHitFrom == AxisDir.YPlus || hitResults.axisHitFrom == AxisDir.YMinus)
+                                {
+                                    AxisDir[] axes = new AxisDir[] { AxisDir.XPlus, AxisDir.XMinus, AxisDir.ZPlus, AxisDir.ZMinus };
+
+                                    Vector3[] vecs = new Vector3[] { new Vector3(1, 0, 0), new Vector3(-1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 0, -1) };
+
+                                    float maxDot = float.MinValue;
+                                    AxisDir maxAxis = hitResults.axisHitFrom;
+
+                                    for (int i = 0; i < axes.Length; i++)
+                                    {
+                                        float dotVal = Vector3.Dot(transform.forward, vecs[i]);
+
+                                        if (dotVal > maxDot)
+                                        {
+                                            maxDot = dotVal;
+                                            maxAxis = axes[i];
+                                        }
+                                    }
+
+                                    rotation = PhysicsUtils.AxisToRotation(maxAxis);
+
+                                }
+
                                 using (BlockData dat = World.mainWorld.GetBlockData(hitResults.blockBeforeHit.x, hitResults.blockBeforeHit.y, hitResults.blockBeforeHit.z))
                                 {
                                     dat.lightProduced = 0;
@@ -392,13 +430,21 @@ namespace Blocks
                                     dat.lightProduced = lightProduced;
                                     dat.rotation = rotation;
                                 }
+
+                                Debug.Log("placing with " + lightProduced + " produced light");
                                 Chunk hitChunk = World.mainWorld.GetChunkAtPos(hitResults.blockBeforeHit.x, hitResults.blockBeforeHit.y, hitResults.blockBeforeHit.z);
                                 if (hitChunk != null)
                                 {
+                                    World.mainWorld.AddBlockUpdate(hitResults.blockBeforeHit);
+                                    World.mainWorld.AddBlockUpdateToNeighbors(hitResults.blockBeforeHit);
                                     hitChunk.AddLightingUpdatesToBlock(hitResults.blockBeforeHit);
                                     hitChunk.AddLightingUpdatesToNeighbors(hitResults.blockBeforeHit);
                                     hitChunk.needToUpdateLighting = true;
                                     hitChunk.chunkData.needToBeUpdated = true;
+                                }
+                                else
+                                {
+                                    Debug.LogWarning("hit chunk is null??");
                                 }
                                 inventory.blocks[inventoryGui.selection].count -= 1;
                                 if (inventory.blocks[inventoryGui.selection].count <= 0)
@@ -429,6 +475,35 @@ namespace Blocks
             }
 
             body.jumping = Input.GetKey(KeyCode.Space);
+
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                // Toggle flying if double tap space
+                if (Time.time - lastTimePressedSpace < doubleTapSpaceForFlyMaxDelay && World.mainWorld.blocksWorld.creativeMode)
+                {
+                    // Need two taps to toggle again
+                    lastTimePressedSpace = -doubleTapSpaceForFlyMaxDelay;
+                    body.applyGravity = !body.applyGravity;
+                }
+                else
+                {
+                    lastTimePressedSpace = Time.time;
+                }
+            }
+
+            if (!World.mainWorld.blocksWorld.creativeMode)
+            {
+                body.applyGravity = true;
+            }
+
+            if (body.applyGravity)
+            {
+                body.speed = walkSpeed;
+            }
+            else
+            {
+                body.speed = flySpeed;
+            }
 
 
             Vector3 desiredMove = Vector3.zero;

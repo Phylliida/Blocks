@@ -1,3 +1,38 @@
+Todo:
+
+- Redo Pathing (clean code)
+- Loading bar during world gen
+- Rock texture and breaking is annoying: maybe make something like an anvil?
+- Better Lava texture, perhaps with lava particles?
+- Fog at render dist
+- Day night cycle
+- Transparency for things like water
+- Rivers/Biome gen preview
+- More biomes
+- River Wyrm
+- Lua scripting
+Bugs:
+
+- Lighting bug: Place block that produces lots of light on lots of blocks that produce low amounts of light, then remove it and some of the higher light levels stay around
+- Follow champion doesn't keep following: once reached it stops
+- Pathing makes game lag
+- Multiple threads for rendering makes redstone stometimes not be connected
+- Can fall very fast in lava and water: should probably clamp max fall speed
+- When in lava and water, should make "in water" effects
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Ideas:
 
 

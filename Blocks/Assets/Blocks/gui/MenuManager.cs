@@ -533,6 +533,12 @@ namespace Blocks
                 }
             }
 
+
+            if (CurrentMenu == MenuStatus.Hotbar)
+            {
+                HideAllMenus();
+            }
+
         }
 
         public enum MenuStatus

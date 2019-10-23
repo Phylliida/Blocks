@@ -1,4 +1,5 @@
 ﻿using Blocks;
+using Blocks.ExtensionMethods;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -6,6 +7,7 @@ using UnityEngine;
 
 namespace Blocks
 {
+
     public enum PathingFlags
     {
         Visited = (1 << 30),
@@ -140,7 +142,7 @@ namespace Blocks
                     return true;
                 }
                 // jumping, see if we can make the jump
-                else // if(blockFrom.pos.y < blockTo.pos.y) // this condition is implied and c# things we haven't covered all the cases if we write it
+                else // if(blockFrom.pos.y < blockTo.pos.y) // this condition is implied and c# thinks we haven't covered all the cases if we write it
                 {
                     // we can't jump that high
                     if (yDist > jumpHeight)
@@ -326,7 +328,7 @@ namespace Blocks
         /// </summary>
         DefaultCheckAirBlocks = (1 << 0),
         /// <summary>
-        /// Pathing will try to see if we can start a chunk from any air blocks via calling IsValidToStartPathingRegion on them, no spawning from other pathing regions is required
+        /// Pathing will try to see if we can start a chunk from any solid blocks via calling IsValidToStartPathingRegion on them, no spawning from other pathing regions is required
         /// </summary>
         DefaultCheckSolidBlocks = (1 << 1),
         /// <summary>
@@ -353,7 +355,33 @@ namespace Blocks
     {
         public abstract bool IsValidToStartPathingRegion(PathNode block, GetRelativeBlock getRelativeBlock, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeNewRegion);
 
-        public abstract bool IsValidToExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeOrConnectToRegion);
+
+
+        /// <summary>
+        /// Return true if it is okay to expand this pathing region from prevBlock to block
+        /// </summary>
+        /// <param name="block"></param>
+        /// <param name="prevBlock"></param>
+        /// <param name="getRelativeBlock"></param>
+        /// <param name="getRelativeBlockToPrev"></param>
+        /// <param name="mobilityCriteria"></param>
+        /// <returns></returns>
+        public abstract bool IsValidToExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria);
+
+        /// <summary>
+        /// Tell us what positions to further expand this region. This method will only be called if IsValidToExpandPathingRegion(block, prevBlock, ...) returned true
+        /// Sometimes IsValidToExpandPathingRegion will return true and this method still won't be called, in the case of connecting two regions together
+        /// </summary>
+        /// <param name="block"></param>
+        /// <param name="prevBlock"></param>
+        /// <param name="getRelativeBlock"></param>
+        /// <param name="getRelativeBlockToPrev"></param>
+        /// <param name="mobilityCriteria"></param>
+        /// <param name="tryToExpand"></param>
+        /// <param name="tryToExpandCustom"></param>
+        /// <param name="tryToMakeOrConnectToRegion"></param>
+        /// <returns></returns>
+        public abstract void ExpandPathingRegion(PathNode block, PathNode prevBlock, GetRelativeBlock getRelativeBlock, GetRelativeBlock getRelativeBlockToPrev, MobilityCriteria mobilityCriteria, TryToExpand tryToExpand, TryToExpandCustom tryToExpandCustom, TryToMakeNewRegion tryToMakeOrConnectToRegion);
 
         public abstract RegionSettingsFlags GetSettings();
 
@@ -370,8 +398,8 @@ namespace Blocks
         {
             if (pathingRegions.Count == 0)
             {
-                pathingRegions[PathingRegionType2.Walking] = new WalkingRegion();
-                pathingRegions[PathingRegionType2.Falling] = new FallingRegion();
+                //pathingRegions[PathingRegionType2.Walking] = new WalkingRegion();
+                //pathingRegions[PathingRegionType2.Falling] = new FallingRegion();
 
                 foreach (KeyValuePair<PathingRegionType2, CustomRegion> cur in pathingRegions)
                 {
@@ -408,6 +436,9 @@ namespace Blocks
         public PatchingNodeBlockChunkData data;
         public Chunk chunk;
         public World world;
+
+
+
         public PathingChunk3(Chunk chunk, MobilityCriteria mobilityCriteria)
         {
             this.locationSpec = new PathingNodeBlockChunk(chunk.world,
@@ -424,14 +455,23 @@ namespace Blocks
         }
 
 
+        public GetRelativeBlock GetRelativeBlockGetter(PathNode relativeTo)
+        {
+            long relativeX = relativeTo.pos.x - locationSpec.minX;
+            long relativeY = relativeTo.pos.y - locationSpec.minY;
+            long relativeZ = relativeTo.pos.z - locationSpec.minZ;
+
+            return GetRelativeBlockGetter(relativeX, relativeY, relativeZ);
+        }
+
         HashSet<Chunk> chunksDependingOn = new HashSet<Chunk>();
-        public GetRelativeBlock GetRelativeBlockGetter(long x, long y, long z)
+        public GetRelativeBlock GetRelativeBlockGetter(long relX, long relY, long relZ)
         {
             return (rx, ry, rz) =>
             {
-                long curX = rx + x;
-                long curY = ry + y;
-                long curZ = rz + z;
+                long curX = rx + relX;
+                long curY = ry + relY;
+                long curZ = rz + relZ;
 
                 if (curX < 0 || curX >= locationSpec.xWidth ||
                   curY < 0 || curY >= locationSpec.yWidth ||
@@ -470,39 +510,122 @@ namespace Blocks
             return result;
         }
 
+        // TODO: make sure data is setup properly before calling this
+
         void TryToStartNode(CustomRegion customRegion, long relX, long relY, long relZ)
         {
-            List<PathNode> nodesToExpandTo = new List<PathNode>();
-            List<Tuple<CustomRegion, PathNode>> customRegionsToMake = new List<Tuple<CustomRegion, PathNode>>();
+            Queue<PathNode> nodesToExpandTo = new Queue<PathNode>();
+            Queue<PathNode> nodesToConnectToOutsidePathingChunk = new Queue<PathNode>();
+            Queue<Tuple<CustomRegion, PathNode>> customRegionsToMake = new Queue<Tuple<CustomRegion, PathNode>>();
+            Queue<Tuple<CustomRegion, PathNode>> customRegionsToMakeOutside = new Queue<Tuple<CustomRegion, PathNode>>();
             PathNode curNode = new PathNode(new LVector3(relX + locationSpec.minX, relY + locationSpec.minY, relZ + locationSpec.minZ), null);
             if (customRegion.IsValidToStartPathingRegion(curNode, GetRelativeBlockGetter(relX, relY, relZ), mobilityCriteria,
                 // Try to expand
                 (expandFlags) =>
                 {
-                    nodesToExpandTo.AddRange(ExpandFlagsToNodes(expandFlags, curNode));
+                    nodesToExpandTo.EnqueueRange(ExpandFlagsToNodes(expandFlags, curNode));
                 },
                 // Try to expand custom
                 (rx, ry, rz) =>
                 {
-                    // if rx = 1, what we actually want is wx + 1
                     long offsetX = rx - relX;
                     long offsetY = ry - relY;
                     long offsetZ = rz - relZ;
-                    nodesToExpandTo.Add(new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode));
+                    nodesToExpandTo.Enqueue(new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode));
                 },
                 // Try to make new custom region
                 (regionType, canTraverseInto, canTraverseFrom, rx, ry, rz) =>
                 {
-                    // if rx = 1, what we actually want is wx + 1
                     long offsetX = rx - relX;
                     long offsetY = ry - relY;
                     long offsetZ = rz - relZ;
                     PathNode customRegionNode = new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode);
-                    customRegionsToMake.Add(new Tuple<CustomRegion, PathNode>(Pathing3.pathingRegions[regionType], customRegionNode));
+                    customRegionsToMake.Enqueue(new Tuple<CustomRegion, PathNode>(Pathing3.pathingRegions[regionType], customRegionNode));
                 })
             )
+            // Returned true, we can start a pathing region here
             {
+                bool didSomething = true;
+                while (didSomething)
+                {
+                    didSomething = false;
+                    // Keep expanding while we can
+                    while (nodesToExpandTo.Count > 0)
+                    {
+                        PathNode nodeToExpandTo = nodesToExpandTo.Dequeue();
 
+                        bool validToExpand = customRegion.IsValidToExpandPathingRegion(nodeToExpandTo, nodeToExpandTo.prevNode, GetRelativeBlockGetter(nodeToExpandTo), GetRelativeBlockGetter(nodeToExpandTo.prevNode), mobilityCriteria);
+
+                        if (!validToExpand)
+                        {
+                            continue;
+                        }
+
+
+                        // Expand to something in this pathing chunk
+                        if (this.locationSpec.ContainsPosition(nodeToExpandTo.pos))
+                        {
+
+
+                            long posRelX = nodeToExpandTo.pos.x - locationSpec.minX;
+                            long posRelY = nodeToExpandTo.pos.y - locationSpec.minY;
+                            long posRelZ = nodeToExpandTo.pos.z - locationSpec.minZ;
+
+                            ushort regionOfNodeToExpandTo = data[(int)posRelX, (int)posRelY, (int)posRelZ];
+
+                            // Connect to existing region
+                            if (regionOfNodeToExpandTo != 0)
+                            {
+
+                            }
+                            else
+                            {
+                                customRegion.ExpandPathingRegion(nodeToExpandTo, nodeToExpandTo.prevNode, GetRelativeBlockGetter(nodeToExpandTo), GetRelativeBlockGetter(nodeToExpandTo.prevNode), mobilityCriteria,
+                                    // Try to expand
+                                    (expandFlags) =>
+                                    {
+                                        nodesToExpandTo.EnqueueRange(ExpandFlagsToNodes(expandFlags, nodeToExpandTo));
+                                    },
+                                    // Try to expand custom
+                                    (rx, ry, rz) =>
+                                    {
+                                        long offsetX = rx - relX;
+                                        long offsetY = ry - relY;
+                                        long offsetZ = rz - relZ;
+                                        nodesToExpandTo.Enqueue(new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode));
+                                    },
+                                    // Try to make new custom region
+                                    (regionType, canTraverseInto, canTraverseFrom, rx, ry, rz) =>
+                                    {
+                                        long offsetX = rx - relX;
+                                        long offsetY = ry - relY;
+                                        long offsetZ = rz - relZ;
+                                        PathNode customRegionNode = new PathNode(new LVector3(curNode.pos.x + offsetX, curNode.pos.y + offsetY, curNode.pos.z + offsetZ), curNode);
+                                        customRegionsToMake.Enqueue(new Tuple<CustomRegion, PathNode>(Pathing3.pathingRegions[regionType], customRegionNode));
+                                    }
+                                );
+                            }
+                        }
+                        // Expand to something outside this pathing chunk
+                        else
+                        {
+                            nodesToConnectToOutsidePathingChunk.Enqueue(nodeToExpandTo);
+                        }
+                    }
+                    // If we run out of things to expand to, try making the new regions now
+                    while (customRegionsToMake.Count > 0)
+                    {
+
+                    }
+                }
+            }
+            // Returned false, we cannot start a pathing region here
+            else
+            {
+                if (nodesToExpandTo.Count > 0 || customRegionsToMake.Count > 0)
+                {
+                    Debug.LogWarning("IsValidToStartPathingRegion returned false, yet tried to expand, this is invalid, doing nothing");
+                }
             }
         }
 
@@ -555,8 +678,7 @@ namespace Blocks
 
     }
 
-
-
+    /*
     public class WalkingRegion : CustomRegion
     {
         public override RegionSettingsFlags GetSettings()
@@ -570,11 +692,11 @@ namespace Blocks
             if (mobilityCriteria.CanStandOn(getRelativeBlock))
             {
                 int yStandOnPrev;
-                /*
-                int offsetX = (int)(prevBlock.pos.x - block.pos.x); // if block is at 4, prev is at 2, offset will be 2-4 = -2 This means that adding offset will give us what we want, since 0 will become -2 which is correct relative to block
-                int offsetY = (int)(prevBlock.pos.y - block.pos.y);
-                int offsetZ = (int)(prevBlock.pos.z - block.pos.z);
-                */
+                
+                //int offsetX = (int)(prevBlock.pos.x - block.pos.x); // if block is at 4, prev is at 2, offset will be 2-4 = -2 This means that adding offset will give us what we want, since 0 will become -2 which is correct relative to block
+                //int offsetY = (int)(prevBlock.pos.y - block.pos.y);
+                //int offsetZ = (int)(prevBlock.pos.z - block.pos.z);
+                
 
                 if (mobilityCriteria.TryGetRelativeBlockYAboveThatWeCanStandOn(getRelativeBlockToPrev, mobilityCriteria.jumpHeight, out yStandOnPrev))
                 {
@@ -687,6 +809,7 @@ namespace Blocks
             return isValid;
         }
     }
+    */
 
 
 
@@ -5166,6 +5289,11 @@ namespace Blocks
         public bool ContainsPosition(long wx, long wy, long wz)
         {
             return (wx >= minX && wx <= maxX && wy >= minY && wy <= maxY && wz >= minZ && wz <= maxZ);
+        }
+
+        public bool ContainsPosition(LVector3 pos)
+        {
+            return ContainsPosition(pos.x, pos.y, pos.z);
         }
 
         public override string ToString()
