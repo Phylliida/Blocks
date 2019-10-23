@@ -35,6 +35,9 @@ Bugs:
 
 Ideas:
 
+Earthquake: open more openings to below but maybe break buildings 
+
+
 
 -Heavy things: requires 2 or more power instead of 1, but can still pass it on
 -Less/no caves?
@@ -459,6 +462,13 @@ Jungle: rocks are mostly hard to find because buried by roots and biomass, and t
 Template crafting table: put materials there for what it is supposed to craft, then it'll bring it (worker or machinery) and as soon as template is filled out it'll craft it
 	also we could put stuff that doesn't have crafting result, then they need that many things to move to next step
 	
+
+
+Above area: eventually have sister types that can fly or you can build high
+
+Stuff deep in lava: hotter so you need more heat resistance molts to go deeper and hard to swim through cause molten rock so you need strength 
+
+
 	
 	
 initially queen moves around same as champion
@@ -730,7 +740,7 @@ giant aphids: same branch of tree of life of player species: size of rabbit, dri
     player species can protect them, bring them to new trees, enemy colonies might try to raid and steal these
  
  
- 
+Sisters have “molts” where you can evolve them in phases to upgrade their abilities: to molt takes resources, initially fairly simple easy to obtain things but it becomes harder to obtain things as your molts advance, you get various new abilities via the molts
 
  
  
@@ -746,6 +756,10 @@ Something below the world:
     islands of metal and crystal stuff that floats on the lava
     giant stalagmaties that hang from the bedrock
     
+
+
+
+
     nothing down there is edible, because they are all metalic or made of crystals too
         tend to have a ton of hit points and armor (not all hostile but might be some hostile ones) because made out of hefty materials
         plantlike things that can only grow in metal, if they are exposed to water they will rust, if they rust to much they will die
